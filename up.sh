@@ -143,23 +143,17 @@ section "4/7  Build & Deploy Contracts"
 cd "$SOROBAN_CORE_PATH"
 info "Building contracts..."
 stellar contract build
-stellar contract build --package token-contract
 
 WASM_DIR="target/wasm32v1-none/release"
 [ -f "$WASM_DIR/channel_auth_contract.wasm" ] || error "channel_auth_contract.wasm not found"
 [ -f "$WASM_DIR/privacy_channel.wasm" ] || error "privacy_channel.wasm not found"
 
-info "Deploying token contract..."
-TOKEN_ID=$(stellar contract deploy \
-  --wasm "$WASM_DIR/token_contract.wasm" \
+info "Deploying native XLM SAC (Stellar Asset Contract)..."
+TOKEN_ID=$(stellar contract asset deploy \
+  --asset native \
   --network local \
-  --source-account admin \
-  -- \
-  --admin "$ADMIN_PK" \
-  --decimal 7 \
-  --name "Test XLM" \
-  --symbol TXLM)
-info "Token:           $TOKEN_ID"
+  --source-account admin)
+info "XLM SAC:         $TOKEN_ID"
 
 info "Deploying channel-auth contract..."
 AUTH_ID=$(stellar contract deploy \
@@ -211,7 +205,7 @@ NETWORK=local
 NETWORK_FEE=1000000000
 CHANNEL_CONTRACT_ID=$CHANNEL_ID
 CHANNEL_AUTH_ID=$AUTH_ID
-CHANNEL_ASSET_CODE=TXLM
+CHANNEL_ASSET_CODE=XLM
 CHANNEL_ASSET_CONTRACT_ID=$TOKEN_ID
 
 PROVIDER_SK=$PROVIDER_SK
@@ -275,7 +269,7 @@ SEED_MNEMONIC=$MNEMONIC_CHROME
 SEED_NETWORK=custom
 SEED_CHANNEL_CONTRACT_ID=$CHANNEL_ID
 SEED_CHANNEL_NAME=Local Channel
-SEED_ASSET_CODE=TXLM
+SEED_ASSET_CODE=XLM
 SEED_ASSET_ISSUER=
 SEED_PROVIDERS=Local Provider=http://localhost:3000
 EOF
@@ -286,7 +280,7 @@ SEED_MNEMONIC=$MNEMONIC_BRAVE
 SEED_NETWORK=custom
 SEED_CHANNEL_CONTRACT_ID=$CHANNEL_ID
 SEED_CHANNEL_NAME=Local Channel
-SEED_ASSET_CODE=TXLM
+SEED_ASSET_CODE=XLM
 SEED_ASSET_ISSUER=
 SEED_PROVIDERS=Local Provider=http://localhost:3000
 EOF
@@ -297,7 +291,7 @@ SEED_FILE=.env.seed.local BUILD_DIR=dist/chrome "$DENO_BIN" task build
 info "Building Brave extension (dist/brave/)..."
 SEED_FILE=.env.seed.local.brave BUILD_DIR=dist/brave "$DENO_BIN" task build
 
-info "Deriving wallet addresses and minting TXLM..."
+info "Deriving wallet addresses and funding via Friendbot..."
 derive_address() {
   local mnemonic="$1"
   "$DENO_BIN" eval "
@@ -316,14 +310,9 @@ BRAVE_ADDR=$(derive_address "$MNEMONIC_BRAVE")
 info "Chrome wallet: $CHROME_ADDR"
 info "Brave wallet:  $BRAVE_ADDR"
 
-cd "$SOROBAN_CORE_PATH"
 for WALLET_ADDR in "$CHROME_ADDR" "$BRAVE_ADDR"; do
-  # Fund the Stellar account via friendbot
   curl -s "http://localhost:8000/friendbot?addr=$WALLET_ADDR" >/dev/null 2>&1 || true
-  # Mint 1000 TXLM (7 decimals = 10_000_000_000)
-  stellar contract invoke --network local --id "$TOKEN_ID" --source-account admin -- \
-    mint --to "$WALLET_ADDR" --amount 10000000000 >/dev/null 2>&1
-  info "Funded $WALLET_ADDR with 1000 TXLM"
+  info "Funded $WALLET_ADDR via Friendbot"
 done
 
 # ============================================================
@@ -332,7 +321,7 @@ section "7/7  Done"
 
 echo ""
 echo "Contract IDs:"
-echo "  Token:           $TOKEN_ID"
+echo "  XLM SAC:         $TOKEN_ID"
 echo "  Channel Auth:    $AUTH_ID"
 echo "  Privacy Channel: $CHANNEL_ID"
 echo ""

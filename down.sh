@@ -22,22 +22,26 @@ warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 
 # --- Stop provider-platform process ---
 PID_FILE="$SCRIPT_DIR/.provider.pid"
+killed=false
+
 if [ -f "$PID_FILE" ]; then
   PID=$(cat "$PID_FILE")
   if kill -0 "$PID" 2>/dev/null; then
     kill "$PID" 2>/dev/null
     info "Stopped provider-platform (PID $PID)"
-  else
-    warn "Provider process $PID was not running"
+    killed=true
   fi
   rm "$PID_FILE"
-else
-  # Try to find it by port
-  PID=$(lsof -ti :3000 2>/dev/null || true)
-  if [ -n "$PID" ]; then
-    kill "$PID" 2>/dev/null
-    info "Stopped process on port 3000 (PID $PID)"
-  fi
+fi
+
+# Fallback: kill any deno processes listening on port 3000
+if [ "$killed" = false ]; then
+  for pid in $(lsof -ti :3000 2>/dev/null || true); do
+    if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
+      kill "$pid" 2>/dev/null
+      info "Stopped deno process on port 3000 (PID $pid)"
+    fi
+  done
 fi
 
 # --- Stop PostgreSQL ---
