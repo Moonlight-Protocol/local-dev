@@ -54,6 +54,7 @@ services:
     volumes:
       - shared-config:/config:ro
       - ./provider-entrypoint.sh:/app/entrypoint.sh:ro
+    entrypoint: ["sh", "/app/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
 
@@ -75,7 +76,7 @@ services:
       - sh
       - -c
       - |
-        cp /src/*.ts /src/deno.json /src/deno.lock . 2>/dev/null
+        cp /src/*.ts /src/deno.json . && cp /src/deno.lock . 2>/dev/null || true
         deno install
         echo "Waiting for provider..."
         for i in $(seq 1 60); do

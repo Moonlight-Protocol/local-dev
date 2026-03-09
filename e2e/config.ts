@@ -54,12 +54,10 @@ export function loadConfig(): Config {
 
   const channelContractId = (env["CHANNEL_CONTRACT_ID"] ??
     Deno.env.get("CHANNEL_CONTRACT_ID")) as ContractId;
-  const channelAuthId = (env["CHANNEL_AUTH_CONTRACT_ID"] ??
-    env["CHANNEL_AUTH_ID"] ??
-    Deno.env.get("CHANNEL_AUTH_CONTRACT_ID")) as ContractId;
-  const channelAssetContractId = (env["TOKEN_CONTRACT_ID"] ??
-    env["CHANNEL_ASSET_CONTRACT_ID"] ??
-    Deno.env.get("TOKEN_CONTRACT_ID")) as ContractId;
+  const channelAuthId = (env["CHANNEL_AUTH_ID"] ??
+    Deno.env.get("CHANNEL_AUTH_ID")) as ContractId;
+  const channelAssetContractId = (env["CHANNEL_ASSET_CONTRACT_ID"] ??
+    Deno.env.get("CHANNEL_ASSET_CONTRACT_ID")) as ContractId;
 
   if (!channelContractId || !channelAuthId || !channelAssetContractId) {
     throw new Error(

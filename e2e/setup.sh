@@ -92,6 +92,8 @@ stellar contract invoke \
 info "Provider registered."
 
 # --- Write provider env ---
+# Note: DATABASE_URL is set as an env var on the provider container in docker-compose,
+# not here, because it depends on the db service hostname.
 cat > "$CONFIG_DIR/provider.env" <<EOF
 PORT=3000
 MODE=development
@@ -123,10 +125,11 @@ MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 EOF
 
 # --- Write shared config for test runner ---
+# Uses the same key names as provider.env and up.sh
 cat > "$CONFIG_DIR/contracts.env" <<EOF
-TOKEN_CONTRACT_ID=$TOKEN_ID
-CHANNEL_AUTH_CONTRACT_ID=$AUTH_ID
 CHANNEL_CONTRACT_ID=$CHANNEL_ID
+CHANNEL_AUTH_ID=$AUTH_ID
+CHANNEL_ASSET_CONTRACT_ID=$TOKEN_ID
 PROVIDER_PK=$PROVIDER_PK
 TREASURY_PK=$TREASURY_PK
 EOF
