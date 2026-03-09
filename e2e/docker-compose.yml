@@ -1,0 +1,92 @@
+services:
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --limits unlimited
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: >
+        curl -sf http://localhost:8000/soroban/rpc -X POST
+        -H "Content-Type: application/json"
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+        | grep -q healthy
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: provider_platform_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  setup:
+    image: ${STELLAR_CLI_IMAGE:-stellar-cli:local}
+    depends_on:
+      stellar:
+        condition: service_healthy
+    volumes:
+      - ./setup.sh:/setup.sh:ro
+      - ${WASM_DIR:-.}/wasms:/wasms:ro
+      - shared-config:/config
+    entrypoint: ["bash", "/setup.sh"]
+    environment:
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+
+  provider:
+    image: ${PROVIDER_IMAGE:-provider-platform:local}
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    ports:
+      - "3000:3000"
+    volumes:
+      - shared-config:/config:ro
+      - ./provider-entrypoint.sh:/app/entrypoint.sh:ro
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+
+  test-runner:
+    image: denoland/deno:latest
+    depends_on:
+      provider:
+        condition: service_started
+    volumes:
+      - shared-config:/config:ro
+      - .:/src:ro
+    working_dir: /app
+    environment:
+      PROVIDER_URL: http://provider:3000
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp /src/*.ts /src/deno.json /src/deno.lock . 2>/dev/null
+        deno install
+        echo "Waiting for provider..."
+        for i in $(seq 1 60); do
+          if deno eval "try { await fetch('$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+            echo "Provider is ready."
+            break
+          fi
+          if [ "$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
+          sleep 2
+        done
+        deno run --allow-all main.ts
+
+volumes:
+  shared-config:

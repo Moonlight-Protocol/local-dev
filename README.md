@@ -11,13 +11,15 @@ Run the full Moonlight stack locally: Stellar network, smart contracts, privacy 
 | Stellar CLI | `cargo install --locked stellar-cli --features opt` |
 | Deno | `curl -fsSL https://deno.land/install.sh \| sh` |
 
-## Directory Layout
+## Repos
 
 ```
 ~/repos/
-├── local-dev/              # This repo (setup scripts)
+├── local-dev/              # This repo (setup scripts, E2E infrastructure)
 ├── browser-wallet/         # Chrome extension
-├── soroban-core/           # Smart contracts (channel-auth, privacy-channel, token)
+├── soroban-core/           # Smart contracts (channel-auth, privacy-channel)
+├── moonlight-sdk/          # Privacy SDK (JSR: @moonlight/moonlight-sdk)
+├── colibri/                # Soroban contract toolkit (JSR: @colibri/core)
 └── provider-platform/      # Privacy provider server
 ```
 
@@ -30,7 +32,7 @@ WALLET_PATH=~/repos/browser-wallet \
 ./up.sh
 ```
 
-## Usage
+## Local Dev
 
 ### Start everything
 
@@ -42,8 +44,8 @@ This runs through 7 stages:
 1. Checks prerequisites (Docker, Stellar CLI, Deno, Cargo)
 2. Starts a local Stellar network via Docker
 3. Generates accounts (admin, provider, treasury) and funds them via Friendbot
-4. Builds and deploys contracts (token, channel-auth, privacy-channel)
-5. Registers the provider and mints test tokens
+4. Builds and deploys contracts (channel-auth, privacy-channel)
+5. Registers the provider on the channel-auth contract
 6. Starts the provider platform (PostgreSQL, migrations, server)
 7. Builds wallet extensions for Chrome and Brave with dev seeds
 
@@ -55,8 +57,6 @@ After it finishes, load `browser-wallet/dist/chrome/` or `dist/brave/` as unpack
 ./down.sh
 ```
 
-Stops the provider platform and the local Stellar Docker container.
-
 ### Rebuild wallet extensions
 
 ```bash
@@ -65,17 +65,28 @@ Stops the provider platform and the local Stellar Docker container.
 
 Rebuilds the Chrome and Brave wallet extensions without restarting the network or provider.
 
-## Verify it works
+### Run E2E tests
 
-1. Open the wallet extension, it auto-unlocks with the seeded password
-2. Provider shows as connected (green dot)
-3. Deposit tokens via the Ramp tab
-4. Send tokens to the other wallet (copy the MLXDR address from the Brave wallet)
-5. Withdraw tokens back to a Stellar account
+```bash
+cd e2e && deno task e2e
+```
+
+Runs the full 8-step E2E test (fund, auth, deposit, receive, send, withdraw) against the local stack.
+
+## E2E in CI
+
+See [e2e/README.md](e2e/README.md) for the Docker compose setup that runs E2E tests in CI without any host dependencies.
+
+```bash
+cd e2e && docker compose up --abort-on-container-exit
+```
+
+## Releases and Versioning
+
+See [RELEASES.md](RELEASES.md) for the versioning strategy and release workflows across all modules.
 
 ## Troubleshooting
 
 - **Friendbot timeout**: The local Stellar node can take a few minutes on first start. Re-run `./up.sh`, it will pick up where it left off.
 - **Provider connection fails**: Check `provider.log` in this directory for errors.
-- **"Transaction simulation failed"**: The wallet account may need tokens. The setup script mints 1000 TXLM to each wallet, but if you're using a different mnemonic you'll need to mint manually.
 - **Contract deployment fails**: Make sure the local Stellar container is running (`docker ps`).
