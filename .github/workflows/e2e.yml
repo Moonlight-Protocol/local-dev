@@ -1,0 +1,84 @@
+name: E2E Tests
+
+on:
+  repository_dispatch:
+    types: [module-release]
+  workflow_dispatch:
+    inputs:
+      contracts_version:
+        description: "soroban-core release tag (e.g. v0.1.0)"
+        required: false
+        default: "latest"
+      provider_version:
+        description: "provider-platform image tag (e.g. 0.2.0)"
+        required: false
+        default: "latest"
+      stellar_cli_version:
+        description: "stellar-cli image tag (e.g. 0.1.0)"
+        required: false
+        default: "latest"
+
+env:
+  REGISTRY: ghcr.io
+  ORG: ${{ github.repository_owner }}
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve versions
+        id: versions
+        run: |
+          # repository_dispatch: use payload version for the triggering module, latest for the rest
+          # workflow_dispatch: use inputs
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            MODULE="${{ github.event.client_payload.module }}"
+            VERSION="${{ github.event.client_payload.version }}"
+            case "$MODULE" in
+              soroban-core)       echo "contracts=$VERSION" >> "$GITHUB_OUTPUT" ;;
+              *)                  echo "contracts=latest" >> "$GITHUB_OUTPUT" ;;
+            esac
+            case "$MODULE" in
+              provider-platform)  echo "provider=$VERSION" >> "$GITHUB_OUTPUT" ;;
+              *)                  echo "provider=latest" >> "$GITHUB_OUTPUT" ;;
+            esac
+            case "$MODULE" in
+              stellar-cli)        echo "stellar_cli=$VERSION" >> "$GITHUB_OUTPUT" ;;
+              *)                  echo "stellar_cli=latest" >> "$GITHUB_OUTPUT" ;;
+            esac
+          else
+            echo "contracts=${{ inputs.contracts_version || 'latest' }}" >> "$GITHUB_OUTPUT"
+            echo "provider=${{ inputs.provider_version || 'latest' }}" >> "$GITHUB_OUTPUT"
+            echo "stellar_cli=${{ inputs.stellar_cli_version || 'latest' }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download contract wasms
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.versions.outputs.contracts }}
+        run: |
+          mkdir -p e2e/wasms
+          if [ "$VERSION" = "latest" ]; then
+            gh release download --repo ${{ github.repository_owner }}/soroban-core -p '*.wasm' -D e2e/wasms/
+          else
+            gh release download "$VERSION" --repo ${{ github.repository_owner }}/soroban-core -p '*.wasm' -D e2e/wasms/
+          fi
+          ls -la e2e/wasms/
+
+      - name: Run E2E tests
+        env:
+          STELLAR_CLI_IMAGE: ${{ env.REGISTRY }}/${{ env.ORG }}/stellar-cli:${{ steps.versions.outputs.stellar_cli }}
+          PROVIDER_IMAGE: ${{ env.REGISTRY }}/${{ env.ORG }}/provider-platform:${{ steps.versions.outputs.provider }}
+        working-directory: e2e
+        run: docker compose up --abort-on-container-exit --exit-code-from test-runner

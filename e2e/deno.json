@@ -1,0 +1,11 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "e2e": "deno run --allow-all main.ts"
+  },
+  "imports": {
+    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.6.2",
+    "@colibri/core": "jsr:@colibri/core@^0.16.1",
+    "stellar-sdk": "npm:@stellar/stellar-sdk@14.2.0"
+  }
+}
