@@ -128,9 +128,7 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 
 ## Gaps
 
-| Gap | Impact | Effort | Priority |
-|-----|--------|--------|----------|
-| Testnet provider deploy in CI | Currently manual `flyctl deploy` | Low — add step to provider-platform release.yml after E2E | High |
+No known gaps.
 
 ## CI Workflows Reference
 
@@ -140,5 +138,6 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 | soroban-core | `release.yml` | Tag push (`v*`) | Builds WASMs, publishes GitHub Release, dispatches E2E |
 | provider-platform | `auto-tag.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
 | provider-platform | `release.yml` | Tag push (`v*`) | Builds Docker image, pushes to GHCR, dispatches E2E, deploys to Fly.io |
+| provider-platform | `deploy-testnet.yml` | Push to `dev` | Auto-deploys to Fly.io (testnet) via blue/green |
 | local-dev | `e2e.yml` | Repository dispatch from soroban-core or provider-platform | Runs Docker Compose E2E with resolved versions |
 | local-dev | `release-stellar-cli.yml` | Tag push (`stellar-cli-v*`) | Publishes stellar-cli Docker image to GHCR |
