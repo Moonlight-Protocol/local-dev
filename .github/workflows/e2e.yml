@@ -63,7 +63,7 @@ jobs:
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          password: ${{ secrets.E2E_TRIGGER_TOKEN }}
 
       - name: Download contract wasms
         env:
