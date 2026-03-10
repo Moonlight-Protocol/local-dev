@@ -20,7 +20,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  ORG: ${{ github.repository_owner }}
+  ORG: moonlight-protocol
 
 jobs:
   e2e:
@@ -72,9 +72,9 @@ jobs:
         run: |
           mkdir -p e2e/wasms
           if [ "$VERSION" = "latest" ]; then
-            gh release download --repo ${{ github.repository_owner }}/soroban-core -p '*.wasm' -D e2e/wasms/
+            gh release download --repo ${{ env.ORG }}/soroban-core -p '*.wasm' -D e2e/wasms/
           else
-            gh release download "$VERSION" --repo ${{ github.repository_owner }}/soroban-core -p '*.wasm' -D e2e/wasms/
+            gh release download "$VERSION" --repo ${{ env.ORG }}/soroban-core -p '*.wasm' -D e2e/wasms/
           fi
           ls -la e2e/wasms/
 
