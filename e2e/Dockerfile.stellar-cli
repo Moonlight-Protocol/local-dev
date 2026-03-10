@@ -4,7 +4,7 @@ FROM rust:1.86-bookworm
 RUN rustup target add wasm32v1-none
 
 # Install Stellar CLI
-RUN cargo install --locked stellar-cli --features opt
+RUN cargo install --locked stellar-cli
 
 # Verify installation
 RUN stellar version
