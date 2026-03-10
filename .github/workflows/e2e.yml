@@ -83,4 +83,12 @@ jobs:
           STELLAR_CLI_IMAGE: ${{ env.REGISTRY }}/${{ env.ORG }}/stellar-cli:${{ steps.versions.outputs.stellar_cli }}
           PROVIDER_IMAGE: ${{ env.REGISTRY }}/${{ env.ORG }}/provider-platform:${{ steps.versions.outputs.provider }}
         working-directory: e2e
-        run: docker compose up --abort-on-container-exit --exit-code-from test-runner
+        run: |
+          docker compose up -d
+          # Wait for test-runner to finish and capture its exit code
+          docker wait e2e-test-runner-1
+          EXIT_CODE=$?
+          echo "--- test-runner logs ---"
+          docker compose logs test-runner
+          docker compose down
+          exit $EXIT_CODE

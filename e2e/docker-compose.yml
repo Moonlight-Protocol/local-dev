@@ -22,7 +22,7 @@ services:
       POSTGRES_PASSWORD: devpass
       POSTGRES_DB: provider_platform_db
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin"]
+      test: ["CMD-SHELL", "pg_isready -U admin -d provider_platform_db"]
       interval: 5s
       timeout: 5s
       retries: 5
