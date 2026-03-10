@@ -11,37 +11,62 @@
 | colibri | Auto-publish to JSR on version bump | N/A | `deno.json` | JSR (@colibri/core) |
 | stellar-cli (local-dev) | Release on tag | N/A | Tag `stellar-cli-v*` | GHCR Docker image |
 
-## Branch Strategy (Consistent Across Repos)
+## Branch Strategy
+
+Trunk-based development. PRs merge to the primary branch (`main` or `dev` depending on repo).
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Release-ready. Auto-tagging triggers on version bumps. |
-| `dev` | Integration branch. Feature branches merge here first. |
+| `main` / `dev` | Primary branch. PRs merge here. Auto-tagging triggers on version bumps. |
 | `feat/`, `fix/`, `chore/` | Feature branches. Named per convention, include ClickUp ID when applicable. |
+
+## Versioning and Releases
+
+**Version bumps are deliberate.** Not every PR is a release. The flow:
+
+1. Merge features and fixes freely — no version bump, nothing releases
+2. When ready to release, bump the version in a PR (either standalone or bundled with the last fix)
+3. Merge → auto-tag creates a git tag → release pipeline fires
+
+This gives full control over release timing without extra tooling. No release-please or similar automation needed — the auto-tag workflow already watches the version file and only acts on changes.
+
+### Cross-Repo Changes
+
+When changes span multiple repos (e.g., new contract fields + matching provider-platform update), intermediate E2E failures are expected and harmless:
+
+1. First repo releases → E2E runs with new artifact + old artifact from other repo → **fails**
+2. Second repo releases → E2E runs with both new artifacts → **passes** → deploy
+
+The E2E workflow always resolves non-triggering modules to `latest` (most recent release). The last repo to release triggers the passing run. **Order does not matter.**
+
+Failed intermediate releases exist as GitHub artifacts but never reach testnet — the E2E gate blocks deployment.
 
 ## Release Pipeline
 
 ```
-feature branch → dev → main
-                         ↓
-                       auto-tag
-                         ↓
-                   ┌─────┴─────┐
-                   │           │
-             soroban-core  provider-platform
-             (build WASMs)  (build Docker image)
-                   │           │
-                   └─────┬─────┘
-                         ↓
-                    E2E gate (Docker Compose)
-                         ↓
-              ┌──────────┴──────────┐
-              │                     │
-        provider-platform      contracts
-        auto-deploy to Fly.io  manual deploy via local script
+feature PR → primary branch (no version bump = no release)
+                    │
+            version bump PR → primary branch
+                    ↓
+                  auto-tag
+                    ↓
+              ┌─────┴─────┐
+              │           │
+        soroban-core  provider-platform
+        (build WASMs)  (build Docker image)
+              │           │
+              └─────┬─────┘
+                    ↓
+               E2E gate (Docker Compose)
+              uses latest from each repo
+                    ↓
+         ┌──────────┴──────────┐
+         │                     │
+   provider-platform      contracts
+   auto-deploy to Fly.io  manual deploy via local script
 ```
 
-`main` → testnet is sufficient for current team size and pace. A `dev` → staging environment would add overhead without much value until there are parallel workstreams needing independent testing.
+`main` → testnet is sufficient for current team size and pace. A staging environment would add overhead without much value until there are parallel workstreams needing independent testing.
 
 ## Deploy by Module
 
@@ -119,6 +144,9 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 
 ## Key Decisions
 
+- **Trunk-based development.** PRs merge to the primary branch. No long-lived integration branches.
+- **Deliberate version bumps.** Merging a PR does not release. Bumping the version in the version file triggers the release pipeline.
+- **Cross-repo failures are expected.** When coupled changes span repos, intermediate E2E failures are noise. The last release triggers the passing run.
 - **No staging environment.** `main` → testnet is the only deploy target. Revisit when team or workstreams grow.
 - **E2E gate is mandatory.** Every release must pass cross-repo E2E before reaching testnet.
 - **Contracts don't use CI for deploy.** Deploys are stateful and infrequent — a local script is the right tool.
