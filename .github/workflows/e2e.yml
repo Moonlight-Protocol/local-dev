@@ -29,6 +29,8 @@ jobs:
       packages: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
 
       - name: Resolve versions
         id: versions
@@ -65,7 +67,7 @@ jobs:
 
       - name: Download contract wasms
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.E2E_TRIGGER_TOKEN }}
           VERSION: ${{ steps.versions.outputs.contracts }}
         run: |
           mkdir -p e2e/wasms
