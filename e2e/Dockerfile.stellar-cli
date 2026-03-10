@@ -3,6 +3,9 @@ FROM rust:1.89-bookworm
 # Install wasm target for contract builds
 RUN rustup target add wasm32v1-none
 
+# Install system dependencies for stellar-cli
+RUN apt-get update && apt-get install -y libdbus-1-dev pkg-config && rm -rf /var/lib/apt/lists/*
+
 # Install Stellar CLI
 RUN cargo install --locked stellar-cli
 
