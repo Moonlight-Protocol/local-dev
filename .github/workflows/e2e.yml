@@ -1,6 +1,8 @@
 name: E2E Tests
 
 on:
+  pull_request:
+    branches: [main]
   repository_dispatch:
     types: [module-release]
   workflow_dispatch:
@@ -85,9 +87,7 @@ jobs:
         working-directory: e2e
         run: |
           docker compose up -d
-          # Wait for test-runner to finish and capture its exit code
-          docker wait e2e-test-runner-1
-          EXIT_CODE=$?
+          EXIT_CODE=$(docker wait e2e-test-runner-1)
           echo "--- test-runner logs ---"
           docker compose logs test-runner
           docker compose down
