@@ -1,5 +1,5 @@
 import { Keypair } from "stellar-sdk";
-import { MoonlightOperation } from "@moonlight/moonlight-sdk";
+import { MoonlightOperation, type MoonlightTracer } from "@moonlight/moonlight-sdk";
 import { fromDecimals, type Ed25519PublicKey } from "@colibri/core";
 import type { Config } from "./config.ts";
 import { setupAccount, getLatestLedger } from "./account.ts";
@@ -12,13 +12,14 @@ export async function deposit(
   amount: number,
   jwt: string,
   config: Config,
+  tracer?: MoonlightTracer,
 ): Promise<void> {
   const keypair = Keypair.fromSecret(secretKey);
   const totalAmount = fromDecimals(amount + DEPOSIT_FEE, 7);
   const depositAmount = fromDecimals(amount, 7);
 
   // 1. Setup UTXO account and reserve 1 UTXO
-  const { accountHandler } = await setupAccount(secretKey, config, 1);
+  const { accountHandler } = await setupAccount(secretKey, config, 1, tracer);
   const reserved = accountHandler.reserveUTXOs(1);
   if (!reserved || reserved.length === 0) {
     throw new Error("Failed to reserve UTXO for deposit");

@@ -1,11 +1,26 @@
 {
   "nodeModulesDir": "auto",
   "tasks": {
-    "e2e": "deno run --allow-all main.ts"
+    "e2e": "OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf deno run --allow-all main.ts",
+    "verify-otel": "deno run --allow-all verify-otel.ts"
   },
   "imports": {
-    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.6.2",
+    "@moonlight/moonlight-sdk": "../../moonlight-sdk/mod.ts",
     "@colibri/core": "jsr:@colibri/core@^0.16.1",
-    "stellar-sdk": "npm:@stellar/stellar-sdk@14.2.0"
+    "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
+    "stellar-sdk": "npm:@stellar/stellar-sdk@14.2.0",
+    "@stellar/stellar-sdk": "npm:@stellar/stellar-sdk@^14.2.0",
+    "@stellar/stellar-sdk/contract": "npm:@stellar/stellar-sdk@^14.2.0/contract",
+    "@fifo/convee": "jsr:@fifo/convee@^0.5.0",
+    "@noble/curves": "jsr:@noble/curves@^1.8.0",
+    "@noble/curves/p256": "jsr:@noble/curves@^1.8.0/p256",
+    "@noble/curves/abstract/modular": "jsr:@noble/curves@^1.8.0/abstract/modular",
+    "@noble/hashes": "jsr:@noble/hashes@^1.6.1",
+    "@noble/hashes/sha256": "jsr:@noble/hashes@^1.6.1/sha256",
+    "@noble/hashes/hkdf": "jsr:@noble/hashes@^1.6.1/hkdf",
+    "@noble/secp256k1": "jsr:@noble/secp256k1",
+    "tslib": "npm:tslib@2.5.0",
+    "buffer": "npm:buffer@6.0.3",
+    "asn1js": "npm:asn1js@3.0.5"
   }
 }

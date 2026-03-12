@@ -1,5 +1,6 @@
 import {
   ChannelReadMethods,
+  type MoonlightTracer,
   PrivacyChannel,
   StellarDerivator,
   UtxoBasedStellarAccount,
@@ -13,6 +14,7 @@ export async function setupAccount(
   secretKey: string,
   config: Config,
   minFreeUtxos: number,
+  tracer?: MoonlightTracer,
 ): Promise<{
   accountHandler: UtxoBasedStellarAccount;
   channelClient: PrivacyChannel;
@@ -27,6 +29,7 @@ export async function setupAccount(
     config.channelContractId,
     config.channelAuthId,
     config.channelAssetContractId,
+    tracer ? { tracer } : undefined,
   );
 
   const accountHandler = new UtxoBasedStellarAccount({
@@ -34,6 +37,7 @@ export async function setupAccount(
     derivator: stellarDerivator,
     options: {
       batchSize: 50,
+      tracer,
       fetchBalances(publicKeys: Uint8Array[]) {
         return channelClient.read({
           method: ChannelReadMethods.utxo_balances,

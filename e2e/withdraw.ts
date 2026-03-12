@@ -1,4 +1,4 @@
-import { MoonlightOperation } from "@moonlight/moonlight-sdk";
+import { MoonlightOperation, type MoonlightTracer } from "@moonlight/moonlight-sdk";
 import { fromDecimals, type Ed25519PublicKey } from "@colibri/core";
 import type { Config } from "./config.ts";
 import { setupAccount, getLatestLedger } from "./account.ts";
@@ -12,13 +12,14 @@ export async function withdraw(
   amount: number,
   jwt: string,
   config: Config,
+  tracer?: MoonlightTracer,
 ): Promise<void> {
   const feeBigInt = fromDecimals(WITHDRAW_FEE, 7);
   const amountBigInt = fromDecimals(amount, 7);
   const totalToSpend = amountBigInt + feeBigInt;
 
   // 1. Setup account
-  const { accountHandler } = await setupAccount(secretKey, config, 1);
+  const { accountHandler } = await setupAccount(secretKey, config, 1, tracer);
 
   // 2. Select UTXOs to spend
   const selection = accountHandler.selectUTXOsForTransfer(
