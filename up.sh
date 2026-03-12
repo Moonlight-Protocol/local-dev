@@ -25,7 +25,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/7  Prerequisites"
+section "1/8  Prerequisites"
 # ============================================================
 
 # --- Docker ---
@@ -65,7 +65,37 @@ info "Deno: $($DENO_BIN --version | head -1)"
 [ -d "$WALLET_PATH" ] || error "browser-wallet not found at $WALLET_PATH"
 
 # ============================================================
-section "2/7  Local Stellar Network"
+section "2/8  Jaeger (Tracing)"
+# ============================================================
+
+JAEGER_CONTAINER="jaeger-local"
+if docker ps --format '{{.Names}}' | grep -q "^${JAEGER_CONTAINER}$"; then
+  warn "Jaeger already running"
+else
+  docker rm -f "$JAEGER_CONTAINER" 2>/dev/null || true
+  docker run -d --name "$JAEGER_CONTAINER" \
+    -p 16686:16686 \
+    -p 4317:4317 \
+    -p 4318:4318 \
+    -e COLLECTOR_OTLP_ENABLED=true \
+    jaegertracing/jaeger:latest > "$SCRIPT_DIR/jaeger.log" 2>&1
+  info "Jaeger started (UI: http://localhost:16686, log: $SCRIPT_DIR/jaeger.log)"
+fi
+
+info "Waiting for Jaeger to be ready..."
+for i in $(seq 1 30); do
+  if curl -sf http://localhost:16686/api/services >/dev/null 2>&1; then
+    info "Jaeger is ready."
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    warn "Jaeger may not be ready yet. Check: docker logs $JAEGER_CONTAINER"
+  fi
+  sleep 1
+done
+
+# ============================================================
+section "3/8  Local Stellar Network"
 # ============================================================
 
 stellar container start local 2>/dev/null || warn "Local network may already be running"
@@ -99,7 +129,7 @@ for i in $(seq 1 180); do
 done
 
 # ============================================================
-section "3/7  Accounts"
+section "4/8  Accounts"
 # ============================================================
 
 generate_or_reuse() {
@@ -137,7 +167,7 @@ info "Provider: $PROVIDER_PK"
 info "Treasury: $TREASURY_PK"
 
 # ============================================================
-section "4/7  Build & Deploy Contracts"
+section "5/8  Build & Deploy Contracts"
 # ============================================================
 
 cd "$SOROBAN_CORE_PATH"
@@ -186,7 +216,7 @@ stellar contract invoke \
 info "Provider registered."
 
 # ============================================================
-section "5/7  Provider Platform"
+section "6/8  Provider Platform"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
@@ -226,13 +256,17 @@ MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 EOF
 
 info "Starting PostgreSQL..."
-docker compose up -d
+docker compose up -d db
 
 info "Running migrations..."
 "$DENO_BIN" task db:migrate
 
 info "Starting provider-platform (background)..."
 PROVIDER_LOG="$SCRIPT_DIR/provider.log"
+OTEL_DENO=true \
+OTEL_SERVICE_NAME=provider-platform \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
 nohup "$DENO_BIN" task serve > "$PROVIDER_LOG" 2>&1 &
 PROVIDER_PID=$!
 echo "$PROVIDER_PID" > "$SCRIPT_DIR/.provider.pid"
@@ -251,7 +285,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "6/7  Wallet Extensions"
+section "7/8  Wallet Extensions"
 # ============================================================
 
 cd "$WALLET_PATH"
@@ -316,7 +350,7 @@ for WALLET_ADDR in "$CHROME_ADDR" "$BRAVE_ADDR"; do
 done
 
 # ============================================================
-section "7/7  Done"
+section "8/8  Done"
 # ============================================================
 
 echo ""
@@ -326,6 +360,7 @@ echo "  Channel Auth:    $AUTH_ID"
 echo "  Privacy Channel: $CHANNEL_ID"
 echo ""
 echo "Provider running at http://localhost:3000 (PID $PROVIDER_PID)"
+echo "Jaeger UI at http://localhost:16686"
 echo ""
 echo "Load extensions:"
 echo "  Chrome: chrome://extensions  → Load unpacked → $WALLET_PATH/dist/chrome/"

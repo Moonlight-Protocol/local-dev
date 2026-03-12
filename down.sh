@@ -44,6 +44,12 @@ if [ "$killed" = false ]; then
   done
 fi
 
+# --- Stop Jaeger ---
+if docker ps -a --format '{{.Names}}' | grep -q "^jaeger-local$"; then
+  docker rm -f jaeger-local >/dev/null 2>&1
+  info "Stopped Jaeger"
+fi
+
 # --- Stop PostgreSQL ---
 if [ -f "$PROVIDER_PLATFORM_PATH/docker-compose.yml" ]; then
   info "Stopping PostgreSQL..."
@@ -70,6 +76,7 @@ for f in \
   "$WALLET_PATH/.env.seed.local" \
   "$WALLET_PATH/.env.seed.local.brave" \
   "$SCRIPT_DIR/provider.log" \
+  "$SCRIPT_DIR/jaeger.log" \
 ; do
   if [ -f "$f" ]; then
     rm "$f"

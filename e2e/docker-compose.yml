@@ -1,4 +1,18 @@
 services:
+  jaeger:
+    image: jaegertracing/jaeger:latest
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:16686/api/services || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
   stellar:
     image: stellar/quickstart:latest
     command: --local --limits unlimited
@@ -49,6 +63,8 @@ services:
         condition: service_healthy
       setup:
         condition: service_completed_successfully
+      jaeger:
+        condition: service_healthy
     ports:
       - "3000:3000"
     volumes:
@@ -57,12 +73,18 @@ services:
     entrypoint: ["sh", "/app/entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "provider-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
 
   test-runner:
     image: denoland/deno:latest
     depends_on:
       provider:
         condition: service_started
+      jaeger:
+        condition: service_healthy
     volumes:
       - shared-config:/config:ro
       - .:/src:ro
@@ -72,6 +94,12 @@ services:
       STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
       FRIENDBOT_URL: http://stellar:8000/friendbot
+      JAEGER_QUERY_URL: http://jaeger:16686
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "moonlight-e2e"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+      E2E_OTEL_EXPECTED: "true"
     entrypoint:
       - sh
       - -c
