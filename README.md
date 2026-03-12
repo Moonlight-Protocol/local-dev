@@ -40,14 +40,15 @@ WALLET_PATH=~/repos/browser-wallet \
 ./up.sh
 ```
 
-This runs through 7 stages:
+This runs through 8 stages:
 1. Checks prerequisites (Docker, Stellar CLI, Deno, Cargo)
-2. Starts a local Stellar network via Docker
-3. Generates accounts (admin, provider, treasury) and funds them via Friendbot
-4. Builds and deploys contracts (channel-auth, privacy-channel)
-5. Registers the provider on the channel-auth contract
-6. Starts the provider platform (PostgreSQL, migrations, server)
-7. Builds wallet extensions for Chrome and Brave with dev seeds
+2. Starts Jaeger for distributed tracing (UI at http://localhost:16686)
+3. Starts a local Stellar network via Docker
+4. Generates accounts (admin, provider, treasury) and funds them via Friendbot
+5. Builds and deploys contracts (channel-auth, privacy-channel)
+6. Registers the provider on the channel-auth contract
+7. Starts the provider platform (PostgreSQL, migrations, server)
+8. Builds wallet extensions for Chrome and Brave with dev seeds
 
 After it finishes, load `browser-wallet/dist/chrome/` or `dist/brave/` as unpacked extensions.
 
@@ -71,7 +72,15 @@ Rebuilds the Chrome and Brave wallet extensions without restarting the network o
 cd e2e && deno task e2e
 ```
 
-Runs the full 8-step E2E test (fund, auth, deposit, receive, send, withdraw) against the local stack.
+Runs the full E2E test (fund, auth, deposit, receive, send, withdraw) against the local stack. Traces are exported to Jaeger automatically.
+
+```bash
+# Verify traces were captured
+deno task verify-otel
+
+# Open Jaeger UI to inspect traces
+open http://localhost:16686
+```
 
 ## E2E in CI
 
@@ -90,3 +99,4 @@ See [RELEASES.md](RELEASES.md) for the versioning strategy and release workflows
 - **Friendbot timeout**: The local Stellar node can take a few minutes on first start. Re-run `./up.sh`, it will pick up where it left off.
 - **Provider connection fails**: Check `provider.log` in this directory for errors.
 - **Contract deployment fails**: Make sure the local Stellar container is running (`docker ps`).
+- **No traces in Jaeger**: Check `jaeger.log` and ensure `OTEL_DENO=true` is set (automatic with `deno task e2e`).
