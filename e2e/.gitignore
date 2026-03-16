@@ -1,2 +1,3 @@
 node_modules/
 wasms/
+e2e-trace-ids.json

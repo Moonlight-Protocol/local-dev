@@ -1,11 +1,13 @@
 {
   "nodeModulesDir": "auto",
   "tasks": {
-    "e2e": "deno run --allow-all main.ts"
+    "e2e": "OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf deno run --allow-all main.ts",
+    "verify-otel": "deno run --allow-all verify-otel.ts"
   },
   "imports": {
-    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.6.2",
     "@colibri/core": "jsr:@colibri/core@^0.16.1",
+    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.7.0",
+    "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
     "stellar-sdk": "npm:@stellar/stellar-sdk@14.2.0"
   }
 }
