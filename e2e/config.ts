@@ -12,6 +12,7 @@ export interface Config {
   channelAssetContractId: ContractId;
   networkConfig: NetworkConfig;
   networkId: StellarNetworkId;
+  providerSecretKey?: string;
 }
 
 function loadEnvFile(path: string): Record<string, string> {
@@ -73,6 +74,8 @@ export function loadConfig(): Config {
     allowHttp: true,
   });
 
+  const providerSecretKey = env["PROVIDER_SK"] ?? Deno.env.get("PROVIDER_SK");
+
   return {
     networkPassphrase,
     rpcUrl,
@@ -84,5 +87,6 @@ export function loadConfig(): Config {
     channelAssetContractId,
     networkConfig,
     networkId: networkPassphrase as StellarNetworkId,
+    providerSecretKey,
   };
 }
