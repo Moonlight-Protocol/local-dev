@@ -1,16 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Local E2E — Down
-# Stops all services, removes accounts, and cleans up generated files.
+# Local Dev — Down
+# Stops all local-dev services and cleans up.
+# Does NOT touch shared services (Stellar, Jaeger) or local-dev resources.
 #
 # Usage: ./down.sh
 
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$HOME/repos/provider-platform}"
-WALLET_PATH="${WALLET_PATH:-$HOME/repos/browser-wallet}"
+CONSOLE_PATH="${CONSOLE_PATH:-$HOME/repos/provider-console}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
+
+# Ports & names (must match up.sh)
+PROVIDER_PORT=3010
+CONSOLE_PORT=3020
+PG_CONTAINER="provider-platform-db"
+ACCT_ADMIN="admin2"
+ACCT_PROVIDER="provider2"
+ACCT_TREASURY="treasury2"
 
 # Colors
 GREEN='\033[0;32m'
@@ -34,49 +43,58 @@ if [ -f "$PID_FILE" ]; then
   rm "$PID_FILE"
 fi
 
-# Fallback: kill any deno processes listening on port 3000
 if [ "$killed" = false ]; then
-  for pid in $(lsof -ti :3000 2>/dev/null || true); do
+  for pid in $(lsof -ti :"$PROVIDER_PORT" 2>/dev/null || true); do
     if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
       kill "$pid" 2>/dev/null
-      info "Stopped deno process on port 3000 (PID $pid)"
+      info "Stopped deno process on port $PROVIDER_PORT (PID $pid)"
     fi
   done
 fi
 
-# --- Stop Jaeger ---
-if docker ps -a --format '{{.Names}}' | grep -q "^jaeger-local$"; then
-  docker rm -f jaeger-local >/dev/null 2>&1
-  info "Stopped Jaeger"
+# --- Stop provider-console process ---
+CONSOLE_PID_FILE="$SCRIPT_DIR/.console.pid"
+console_killed=false
+
+if [ -f "$CONSOLE_PID_FILE" ]; then
+  PID=$(cat "$CONSOLE_PID_FILE")
+  if kill -0 "$PID" 2>/dev/null; then
+    kill "$PID" 2>/dev/null
+    info "Stopped provider-console (PID $PID)"
+    console_killed=true
+  fi
+  rm "$CONSOLE_PID_FILE"
 fi
 
-# --- Stop PostgreSQL ---
-if [ -f "$PROVIDER_PLATFORM_PATH/docker-compose.yml" ]; then
-  info "Stopping PostgreSQL..."
-  docker compose -f "$PROVIDER_PLATFORM_PATH/docker-compose.yml" down 2>/dev/null || warn "docker compose down failed"
+if [ "$console_killed" = false ]; then
+  for pid in $(lsof -ti :"$CONSOLE_PORT" 2>/dev/null || true); do
+    if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
+      kill "$pid" 2>/dev/null
+      info "Stopped deno process on port $CONSOLE_PORT (PID $pid)"
+    fi
+  done
 fi
 
-# --- Stop local Stellar network ---
+# --- Stop PostgreSQL container ---
+if docker ps -a --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
+  docker rm -f "$PG_CONTAINER" >/dev/null 2>&1
+  info "Stopped PostgreSQL ($PG_CONTAINER)"
+fi
+
+# --- Remove Stellar accounts ---
 if command -v stellar >/dev/null 2>&1; then
-  info "Stopping local Stellar network..."
-  stellar container stop local 2>/dev/null || warn "Local network was not running"
-
-  for name in admin provider treasury; do
+  for name in "$ACCT_ADMIN" "$ACCT_PROVIDER" "$ACCT_TREASURY"; do
     if stellar keys address "$name" >/dev/null 2>&1; then
       stellar keys rm "$name" 2>/dev/null && info "Removed account: $name" || warn "Could not remove account: $name"
     fi
   done
-else
-  warn "Stellar CLI not found, skipping network cleanup"
 fi
 
 # --- Clean up generated files ---
 for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
-  "$WALLET_PATH/.env.seed.local" \
-  "$WALLET_PATH/.env.seed.local.brave" \
   "$SCRIPT_DIR/provider.log" \
-  "$SCRIPT_DIR/jaeger.log" \
+  "$SCRIPT_DIR/console.log" \
 ; do
   if [ -f "$f" ]; then
     rm "$f"
@@ -85,4 +103,4 @@ for f in \
 done
 
 echo ""
-info "Down. Everything stopped and cleaned up."
+info "Down. local-dev services stopped (shared Stellar & Jaeger left running)."
