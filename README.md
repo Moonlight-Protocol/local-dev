@@ -82,6 +82,28 @@ deno task verify-otel
 open http://localhost:16686
 ```
 
+### Run testnet E2E
+
+Runs the same E2E flow against the live testnet provider and verifies traces in Grafana Cloud.
+
+```bash
+cd testnet
+
+# Run E2E against testnet
+OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e \
+  OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-ca-east-0.grafana.net/otlp \
+  OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+  OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64 of stackId:token>" \
+  deno run --allow-all main.ts
+
+# Verify traces arrived in Grafana Cloud Tempo
+TEMPO_URL=https://tempo-prod-13-prod-ca-east-0.grafana.net/tempo \
+  TEMPO_AUTH="Basic <base64 of tempoInstanceId:token>" \
+  deno run --allow-all verify-otel.ts
+```
+
+The verify script uses trace-by-ID lookups (deterministic) for all SDK and provider request-path checks, and a targeted TraceQL search for background service spans only.
+
 ## E2E in CI
 
 See [e2e/README.md](e2e/README.md) for the Docker compose setup that runs E2E tests in CI without any host dependencies.
