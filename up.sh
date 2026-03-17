@@ -1,16 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Local E2E — Up
-# Installs dependencies, deploys contracts, starts all services, and builds
-# wallet extensions. One command to get everything running.
+# Local Dev — Up
+# Spins up a parallel local stack using different ports to avoid collisions
+# with the primary local-dev instance. Reuses Stellar network & Jaeger.
+#
+# Ports: PostgreSQL 5442, Provider 3010, Console 3020
+# Shared: Stellar RPC 8000, Jaeger 4317/4318/16686
 #
 # Usage: ./up.sh
 
 SOROBAN_CORE_PATH="${SOROBAN_CORE_PATH:-$HOME/repos/soroban-core}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$HOME/repos/provider-platform}"
-WALLET_PATH="${WALLET_PATH:-$HOME/repos/browser-wallet}"
+CONSOLE_PATH="${CONSOLE_PATH:-$HOME/repos/provider-console}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Ports (offset from local-dev defaults to prevent collisions)
+STELLAR_RPC_PORT=8000       # shared with local-dev
+JAEGER_OTLP_PORT=4318       # shared with local-dev
+PG_PORT=5442
+PROVIDER_PORT=3010
+CONSOLE_PORT=3020
+
+# Container / account names (suffixed to avoid conflicts)
+PG_CONTAINER="provider-platform-db"
+ACCT_ADMIN="admin2"
+ACCT_PROVIDER="provider2"
+ACCT_TREASURY="treasury2"
 
 # Colors
 RED='\033[0;31m'
@@ -25,14 +41,12 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/8  Prerequisites"
+section "1/7  Prerequisites"
 # ============================================================
 
-# --- Docker ---
-command -v docker >/dev/null 2>&1 || error "Docker not found. Install from https://docs.docker.com/get-docker/"
+command -v docker >/dev/null 2>&1 || error "Docker not found."
 info "Docker: $(docker --version)"
 
-# --- Rust / Cargo ---
 if ! command -v cargo >/dev/null 2>&1; then
   info "Installing Rust..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -41,7 +55,6 @@ fi
 rustup target add wasm32v1-none 2>/dev/null || true
 info "Rust: $(rustc --version)"
 
-# --- Stellar CLI ---
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 if ! command -v stellar >/dev/null 2>&1; then
   info "Installing Stellar CLI..."
@@ -49,7 +62,6 @@ if ! command -v stellar >/dev/null 2>&1; then
 fi
 info "Stellar CLI: $(stellar version)"
 
-# --- Deno ---
 DENO_BIN="${DENO_BIN:-deno}"
 command -v "$DENO_BIN" >/dev/null 2>&1 || DENO_BIN="$HOME/.deno/bin/deno"
 if ! command -v "$DENO_BIN" >/dev/null 2>&1; then
@@ -59,77 +71,25 @@ if ! command -v "$DENO_BIN" >/dev/null 2>&1; then
 fi
 info "Deno: $($DENO_BIN --version | head -1)"
 
-# --- Repos ---
 [ -d "$SOROBAN_CORE_PATH" ] || error "soroban-core not found at $SOROBAN_CORE_PATH"
 [ -d "$PROVIDER_PLATFORM_PATH" ] || error "provider-platform not found at $PROVIDER_PLATFORM_PATH"
-[ -d "$WALLET_PATH" ] || error "browser-wallet not found at $WALLET_PATH"
+[ -d "$CONSOLE_PATH" ] || error "provider-console not found at $CONSOLE_PATH"
 
 # ============================================================
-section "2/8  Jaeger (Tracing)"
+section "2/7  Stellar Network (shared)"
 # ============================================================
 
-JAEGER_CONTAINER="jaeger-local"
-if docker ps --format '{{.Names}}' | grep -q "^${JAEGER_CONTAINER}$"; then
-  warn "Jaeger already running"
+# Verify the shared Stellar network is running
+if curl -sf "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' 2>/dev/null | grep -q "healthy"; then
+  info "Stellar RPC on port $STELLAR_RPC_PORT is healthy (shared with local-dev)."
 else
-  docker rm -f "$JAEGER_CONTAINER" 2>/dev/null || true
-  docker run -d --name "$JAEGER_CONTAINER" \
-    -p 16686:16686 \
-    -p 4317:4317 \
-    -p 4318:4318 \
-    -e COLLECTOR_OTLP_ENABLED=true \
-    jaegertracing/jaeger:latest > "$SCRIPT_DIR/jaeger.log" 2>&1
-  info "Jaeger started (UI: http://localhost:16686, log: $SCRIPT_DIR/jaeger.log)"
+  error "Stellar RPC not running on port $STELLAR_RPC_PORT. Start local-dev first or run: stellar container start local"
 fi
 
-info "Waiting for Jaeger to be ready..."
-for i in $(seq 1 30); do
-  if curl -sf http://localhost:16686/api/services >/dev/null 2>&1; then
-    info "Jaeger is ready."
-    break
-  fi
-  if [ "$i" -eq 30 ]; then
-    warn "Jaeger may not be ready yet. Check: docker logs $JAEGER_CONTAINER"
-  fi
-  sleep 1
-done
-
 # ============================================================
-section "3/8  Local Stellar Network"
-# ============================================================
-
-stellar container start local 2>/dev/null || warn "Local network may already be running"
-
-info "Waiting for Stellar RPC to be ready..."
-for i in $(seq 1 60); do
-  if curl -sf http://localhost:8000/soroban/rpc -X POST \
-    -H "Content-Type: application/json" \
-    -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' 2>/dev/null | grep -q "healthy"; then
-    info "RPC is ready."
-    break
-  fi
-  if [ "$i" -eq 60 ]; then
-    error "RPC did not become ready after 60s. Check: docker logs stellar-local"
-  fi
-  sleep 1
-done
-
-info "Waiting for Friendbot to be ready (this can take a few minutes on first start)..."
-for i in $(seq 1 180); do
-  # Use a dummy address to check if friendbot is responding (expect 400 = already funded, or 200)
-  local_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/friendbot?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" 2>/dev/null || echo "000")
-  if [ "$local_code" = "200" ] || [ "$local_code" = "400" ]; then
-    info "Friendbot is ready."
-    break
-  fi
-  if [ "$i" -eq 180 ]; then
-    error "Friendbot did not become ready after 180s. Check: docker logs stellar-local"
-  fi
-  sleep 1
-done
-
-# ============================================================
-section "4/8  Accounts"
+section "3/7  Accounts"
 # ============================================================
 
 generate_or_reuse() {
@@ -140,34 +100,33 @@ generate_or_reuse() {
     stellar keys generate "$name" --network local
     info "Created account: $name"
   fi
-  # Always fund via friendbot
   local addr
   addr=$(stellar keys address "$name")
   local http_code
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:8000/friendbot?addr=$addr" 2>/dev/null || echo "000")
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=$addr" 2>/dev/null || echo "000")
   if [ "$http_code" = "200" ] || [ "$http_code" = "400" ]; then
     info "Funded: $name"
   else
-    error "Could not fund $name (HTTP $http_code) — is the local network running?"
+    error "Could not fund $name (HTTP $http_code)"
   fi
 }
 
-generate_or_reuse admin
-generate_or_reuse provider
-generate_or_reuse treasury
+generate_or_reuse "$ACCT_ADMIN"
+generate_or_reuse "$ACCT_PROVIDER"
+generate_or_reuse "$ACCT_TREASURY"
 
-ADMIN_PK=$(stellar keys address admin)
-PROVIDER_PK=$(stellar keys address provider)
-PROVIDER_SK=$(stellar keys show provider)
-TREASURY_PK=$(stellar keys address treasury)
-TREASURY_SK=$(stellar keys show treasury)
+ADMIN_PK=$(stellar keys address "$ACCT_ADMIN")
+PROVIDER_PK=$(stellar keys address "$ACCT_PROVIDER")
+PROVIDER_SK=$(stellar keys show "$ACCT_PROVIDER")
+TREASURY_PK=$(stellar keys address "$ACCT_TREASURY")
+TREASURY_SK=$(stellar keys show "$ACCT_TREASURY")
 
 info "Admin:    $ADMIN_PK"
 info "Provider: $PROVIDER_PK"
 info "Treasury: $TREASURY_PK"
 
 # ============================================================
-section "5/8  Build & Deploy Contracts"
+section "4/7  Build & Deploy Contracts"
 # ============================================================
 
 cd "$SOROBAN_CORE_PATH"
@@ -182,14 +141,18 @@ info "Deploying native XLM SAC (Stellar Asset Contract)..."
 TOKEN_ID=$(stellar contract asset deploy \
   --asset native \
   --network local \
-  --source-account admin)
+  --source-account "$ACCT_ADMIN") || {
+  # SAC may already be deployed (shared network) — fetch its ID
+  TOKEN_ID=$(stellar contract asset id --asset native --network local)
+  warn "SAC already deployed: $TOKEN_ID"
+}
 info "XLM SAC:         $TOKEN_ID"
 
 info "Deploying channel-auth contract..."
 AUTH_ID=$(stellar contract deploy \
   --wasm "$WASM_DIR/channel_auth_contract.wasm" \
   --network local \
-  --source-account admin \
+  --source-account "$ACCT_ADMIN" \
   -- \
   --admin "$ADMIN_PK")
 info "Channel Auth:    $AUTH_ID"
@@ -198,7 +161,7 @@ info "Deploying privacy-channel contract..."
 CHANNEL_ID=$(stellar contract deploy \
   --wasm "$WASM_DIR/privacy_channel.wasm" \
   --network local \
-  --source-account admin \
+  --source-account "$ACCT_ADMIN" \
   -- \
   --admin "$ADMIN_PK" \
   --auth_contract "$AUTH_ID" \
@@ -209,29 +172,58 @@ info "Registering provider..."
 stellar contract invoke \
   --network local \
   --id "$AUTH_ID" \
-  --source-account admin \
+  --source-account "$ACCT_ADMIN" \
   -- \
   add_provider \
   --provider "$PROVIDER_PK"
 info "Provider registered."
 
 # ============================================================
-section "6/8  Provider Platform"
+section "5/7  PostgreSQL (port $PG_PORT)"
+# ============================================================
+
+if docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
+  warn "PostgreSQL container '$PG_CONTAINER' already running"
+else
+  docker rm -f "$PG_CONTAINER" 2>/dev/null || true
+  docker run -d --name "$PG_CONTAINER" \
+    -p "${PG_PORT}:5432" \
+    -e POSTGRES_USER=admin \
+    -e POSTGRES_PASSWORD=devpass \
+    -e POSTGRES_DB=provider_platform_db \
+    postgres:18 >/dev/null
+  info "PostgreSQL started on port $PG_PORT"
+fi
+
+info "Waiting for PostgreSQL to be ready..."
+for i in $(seq 1 30); do
+  if docker exec "$PG_CONTAINER" pg_isready -U admin >/dev/null 2>&1; then
+    info "PostgreSQL is ready."
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    error "PostgreSQL did not become ready after 30s."
+  fi
+  sleep 1
+done
+
+# ============================================================
+section "6/7  Provider Platform (port $PROVIDER_PORT)"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
 
-# Write .env
 cat > .env <<EOF
-# Generated by local-e2e/up.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
-PORT=3000
+# Generated by local-dev/up.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
+PORT=$PROVIDER_PORT
 MODE=development
 LOG_LEVEL=TRACE
 SERVICE_DOMAIN=localhost
 
-DATABASE_URL=postgresql://admin:devpass@localhost:5432/provider_platform_db
+DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/provider_platform_db
 
 NETWORK=local
+STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
 NETWORK_FEE=1000000000
 CHANNEL_CONTRACT_ID=$CHANNEL_ID
 CHANNEL_AUTH_ID=$AUTH_ID
@@ -255,9 +247,6 @@ MEMPOOL_VERIFIER_INTERVAL_MS=10000
 MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 EOF
 
-info "Starting PostgreSQL..."
-docker compose up -d db
-
 info "Running migrations..."
 "$DENO_BIN" task db:migrate
 
@@ -265,17 +254,16 @@ info "Starting provider-platform (background)..."
 PROVIDER_LOG="$SCRIPT_DIR/provider.log"
 OTEL_DENO=true \
 OTEL_SERVICE_NAME=provider-platform \
-OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 \
+OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:${JAEGER_OTLP_PORT}" \
 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
 nohup "$DENO_BIN" task serve > "$PROVIDER_LOG" 2>&1 &
 PROVIDER_PID=$!
 echo "$PROVIDER_PID" > "$SCRIPT_DIR/.provider.pid"
 info "Provider running (PID $PROVIDER_PID, log: $PROVIDER_LOG)"
 
-# Wait for provider to be ready
 for i in $(seq 1 15); do
-  if curl -sf http://localhost:3000/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF >/dev/null 2>&1; then
-    info "Provider is ready."
+  if curl -sf "http://localhost:${PROVIDER_PORT}/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" >/dev/null 2>&1; then
+    info "Provider is ready on port $PROVIDER_PORT."
     break
   fi
   if [ "$i" -eq 15 ]; then
@@ -285,86 +273,60 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "7/8  Wallet Extensions"
+section "7/7  Provider Console (port $CONSOLE_PORT)"
 # ============================================================
 
-cd "$WALLET_PATH"
+cd "$CONSOLE_PATH"
 
-info "Generating mnemonics..."
-generate_mnemonic() {
-  "$DENO_BIN" eval "import bip39 from 'npm:bip39@3.1.0'; console.log(bip39.generateMnemonic());"
-}
-MNEMONIC_CHROME=$(generate_mnemonic)
-MNEMONIC_BRAVE=$(generate_mnemonic)
-
-cat > .env.seed.local <<EOF
-SEED_PASSWORD=localdev
-SEED_MNEMONIC=$MNEMONIC_CHROME
-SEED_NETWORK=custom
-SEED_CHANNEL_CONTRACT_ID=$CHANNEL_ID
-SEED_CHANNEL_NAME=Local Channel
-SEED_ASSET_CODE=XLM
-SEED_ASSET_ISSUER=
-SEED_PROVIDERS=Local Provider=http://localhost:3000
+# Write runtime config pointing to provider-platform
+cat > public/config.js <<EOF
+// Runtime configuration — generated by local-dev/up.sh
+window.__CONSOLE_CONFIG__ = {
+  apiBaseUrl: "http://localhost:${PROVIDER_PORT}/api/v1",
+  environment: "development",
+};
 EOF
 
-cat > .env.seed.local.brave <<EOF
-SEED_PASSWORD=localdev
-SEED_MNEMONIC=$MNEMONIC_BRAVE
-SEED_NETWORK=custom
-SEED_CHANNEL_CONTRACT_ID=$CHANNEL_ID
-SEED_CHANNEL_NAME=Local Channel
-SEED_ASSET_CODE=XLM
-SEED_ASSET_ISSUER=
-SEED_PROVIDERS=Local Provider=http://localhost:3000
-EOF
+info "Building console..."
+"$DENO_BIN" task build
 
-info "Building Chrome extension (dist/chrome/)..."
-SEED_FILE=.env.seed.local BUILD_DIR=dist/chrome "$DENO_BIN" task build
+info "Starting provider-console (background)..."
+CONSOLE_LOG="$SCRIPT_DIR/console.log"
+PORT=$CONSOLE_PORT \
+API_BASE_URL="http://localhost:${PROVIDER_PORT}" \
+nohup "$DENO_BIN" task serve > "$CONSOLE_LOG" 2>&1 &
+CONSOLE_PID=$!
+echo "$CONSOLE_PID" > "$SCRIPT_DIR/.console.pid"
+info "Console running (PID $CONSOLE_PID, log: $CONSOLE_LOG)"
 
-info "Building Brave extension (dist/brave/)..."
-SEED_FILE=.env.seed.local.brave BUILD_DIR=dist/brave "$DENO_BIN" task build
-
-info "Deriving wallet addresses and funding via Friendbot..."
-derive_address() {
-  local mnemonic="$1"
-  "$DENO_BIN" eval "
-    import { Keypair } from 'npm:@stellar/stellar-sdk@13';
-    import * as bip39 from 'npm:bip39@3.1.0';
-    import { derivePath } from 'npm:ed25519-hd-key@1.3.0';
-    const seed = bip39.mnemonicToSeedSync('$mnemonic');
-    const { key } = derivePath(\"m/44'/148'/0'\", seed.toString('hex'));
-    const kp = Keypair.fromRawEd25519Seed(key);
-    console.log(kp.publicKey());
-  "
-}
-
-CHROME_ADDR=$(derive_address "$MNEMONIC_CHROME")
-BRAVE_ADDR=$(derive_address "$MNEMONIC_BRAVE")
-info "Chrome wallet: $CHROME_ADDR"
-info "Brave wallet:  $BRAVE_ADDR"
-
-for WALLET_ADDR in "$CHROME_ADDR" "$BRAVE_ADDR"; do
-  curl -s "http://localhost:8000/friendbot?addr=$WALLET_ADDR" >/dev/null 2>&1 || true
-  info "Funded $WALLET_ADDR via Friendbot"
+for i in $(seq 1 10); do
+  if curl -sf "http://localhost:${CONSOLE_PORT}/" >/dev/null 2>&1; then
+    info "Console is ready on port $CONSOLE_PORT."
+    break
+  fi
+  if [ "$i" -eq 10 ]; then
+    warn "Console may not be ready yet. Check $CONSOLE_LOG"
+  fi
+  sleep 1
 done
 
 # ============================================================
-section "8/8  Done"
-# ============================================================
-
+echo ""
+echo "========================================"
+echo "  local-dev is ready!"
+echo "========================================"
 echo ""
 echo "Contract IDs:"
 echo "  XLM SAC:         $TOKEN_ID"
 echo "  Channel Auth:    $AUTH_ID"
 echo "  Privacy Channel: $CHANNEL_ID"
 echo ""
-echo "Provider running at http://localhost:3000 (PID $PROVIDER_PID)"
-echo "Jaeger UI at http://localhost:16686"
-echo ""
-echo "Load extensions:"
-echo "  Chrome: chrome://extensions  → Load unpacked → $WALLET_PATH/dist/chrome/"
-echo "  Brave:  brave://extensions   → Load unpacked → $WALLET_PATH/dist/brave/"
+echo "Services:"
+echo "  Provider Platform: http://localhost:$PROVIDER_PORT (PID $PROVIDER_PID)"
+echo "  Provider Console:  http://localhost:$CONSOLE_PORT (PID $CONSOLE_PID)"
+echo "  PostgreSQL:        localhost:$PG_PORT (container: $PG_CONTAINER)"
+echo "  Stellar RPC:       http://localhost:$STELLAR_RPC_PORT (shared)"
+echo "  Jaeger UI:         http://localhost:16686 (shared)"
 echo ""
 echo "To stop everything:"
 echo "  ./down.sh"
