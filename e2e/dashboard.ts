@@ -110,8 +110,10 @@ export async function dashboardE2E({ config, providerSecretKey }: DashboardTestC
   await withE2ESpan("dashboard.mempool", async () => {
     console.log("  [dashboard] GET /dashboard/mempool...");
     const res = await fetchDashboard(providerUrl, token, "/dashboard/mempool");
-    assertField(res, "data.stats.totalSlots");
-    assertField(res, "data.stats.totalBundles");
+    assertField(res, "data.platformVersion");
+    assertField(res, "data.live.totalSlots");
+    assertField(res, "data.live.totalBundles");
+    assertField(res, "data.averages.sampleCount");
     assertField(res, "data.config.slotCapacity");
     console.log("  [dashboard] Mempool OK");
   });
