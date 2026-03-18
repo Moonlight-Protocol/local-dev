@@ -75,7 +75,7 @@ async function main() {
     await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash);
 
   const deployEvents = extractEvents(authDeployTx);
-  const initResult = verifyEvent(deployEvents, "ContractInitialized", true);
+  const initResult = verifyEvent(deployEvents, "contract_initialized", true);
   if (initResult.found) console.log("  ContractInitialized event verified");
 
   // Step 2: Deploy Channel (Privacy Channel)
@@ -99,7 +99,7 @@ async function main() {
     server, admin, NETWORK_PASSPHRASE, channelAuthId, provider.publicKey(),
   );
   const addEvents = extractEvents(addTx);
-  const addResult = verifyEvent(addEvents, "ProviderAdded", true);
+  const addResult = verifyEvent(addEvents, "provider_added", true);
   if (addResult.found) console.log("  ProviderAdded event verified");
 
   // Write provider.env (read by provider-entrypoint.sh)
