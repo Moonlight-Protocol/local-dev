@@ -29,9 +29,30 @@ async function fundAccount(publicKey: string): Promise<void> {
   }
 }
 
+async function waitForFriendbot(): Promise<void> {
+  console.log("[ci-setup] Waiting for Friendbot...");
+  for (let i = 0; i < 180; i++) {
+    try {
+      const res = await fetch(
+        `${FRIENDBOT_URL}?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF`,
+      );
+      if (res.status === 200 || res.status === 400) {
+        console.log("  Friendbot is ready.");
+        return;
+      }
+    } catch {
+      // Not ready yet
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error("Friendbot did not become ready after 180s");
+}
+
 async function main() {
   console.log("[ci-setup] Starting...");
   const server = createServer(RPC_URL);
+
+  await waitForFriendbot();
 
   const admin = Keypair.random();
   const provider = Keypair.random();
