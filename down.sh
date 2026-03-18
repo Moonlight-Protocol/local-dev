@@ -8,14 +8,15 @@ set -euo pipefail
 # Usage: ./down.sh
 
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$HOME/repos/provider-platform}"
-CONSOLE_PATH="${CONSOLE_PATH:-$HOME/repos/provider-console}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 # Ports & names (must match up.sh)
 PROVIDER_PORT=3010
-CONSOLE_PORT=3020
+PROVIDER_CONSOLE_PORT=3020
+COUNCIL_CONSOLE_PORT=3030
+NETWORK_DASHBOARD_PORT=3040
 PG_CONTAINER="provider-platform-db"
 ACCT_ADMIN="admin"
 ACCT_PROVIDER="provider"
@@ -29,51 +30,39 @@ NC='\033[0m'
 info() { echo -e "${GREEN}[INFO]${NC} $*"; }
 warn() { echo -e "${YELLOW}[WARN]${NC} $*"; }
 
-# --- Stop provider-platform process ---
-PID_FILE="$SCRIPT_DIR/.provider.pid"
-killed=false
+# --- Helper: stop a process by PID file or port ---
+stop_process() {
+  local name=$1
+  local pid_file=$2
+  local port=$3
+  local killed=false
 
-if [ -f "$PID_FILE" ]; then
-  PID=$(cat "$PID_FILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    kill "$PID" 2>/dev/null
-    info "Stopped provider-platform (PID $PID)"
-    killed=true
-  fi
-  rm "$PID_FILE"
-fi
-
-if [ "$killed" = false ]; then
-  for pid in $(lsof -ti :"$PROVIDER_PORT" 2>/dev/null || true); do
-    if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
+  if [ -f "$pid_file" ]; then
+    local pid
+    pid=$(cat "$pid_file")
+    if kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null
-      info "Stopped deno process on port $PROVIDER_PORT (PID $pid)"
+      info "Stopped $name (PID $pid)"
+      killed=true
     fi
-  done
-fi
-
-# --- Stop provider-console process ---
-CONSOLE_PID_FILE="$SCRIPT_DIR/.console.pid"
-console_killed=false
-
-if [ -f "$CONSOLE_PID_FILE" ]; then
-  PID=$(cat "$CONSOLE_PID_FILE")
-  if kill -0 "$PID" 2>/dev/null; then
-    kill "$PID" 2>/dev/null
-    info "Stopped provider-console (PID $PID)"
-    console_killed=true
+    rm "$pid_file"
   fi
-  rm "$CONSOLE_PID_FILE"
-fi
 
-if [ "$console_killed" = false ]; then
-  for pid in $(lsof -ti :"$CONSOLE_PORT" 2>/dev/null || true); do
-    if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
-      kill "$pid" 2>/dev/null
-      info "Stopped deno process on port $CONSOLE_PORT (PID $pid)"
-    fi
-  done
-fi
+  if [ "$killed" = false ]; then
+    for pid in $(lsof -ti :"$port" 2>/dev/null || true); do
+      if ps -p "$pid" -o command= 2>/dev/null | grep -q deno; then
+        kill "$pid" 2>/dev/null
+        info "Stopped deno process on port $port (PID $pid)"
+      fi
+    done
+  fi
+}
+
+# --- Stop all processes ---
+stop_process "provider-platform" "$SCRIPT_DIR/.provider.pid" "$PROVIDER_PORT"
+stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_CONSOLE_PORT"
+stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONSOLE_PORT"
+stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
 
 # --- Stop PostgreSQL container ---
 if docker ps -a --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -94,13 +83,18 @@ fi
 for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
   "$SCRIPT_DIR/provider.log" \
-  "$SCRIPT_DIR/console.log" \
+  "$SCRIPT_DIR/provider-console.log" \
+  "$SCRIPT_DIR/council-console.log" \
+  "$SCRIPT_DIR/network-dashboard.log" \
 ; do
   if [ -f "$f" ]; then
     rm "$f"
     info "Removed $f"
   fi
 done
+
+# --- Clean up old pid files (backward compat) ---
+rm -f "$SCRIPT_DIR/.console.pid" "$SCRIPT_DIR/console.log" 2>/dev/null
 
 echo ""
 info "Down. local-dev services stopped (shared Stellar & Jaeger left running)."
