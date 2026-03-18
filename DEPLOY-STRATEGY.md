@@ -72,7 +72,32 @@ feature PR → primary branch (no version bump = no release)
 
 ### soroban-core (Contracts)
 
-**CI**: Auto-tag on `Cargo.toml` version bump → build WASMs → GitHub Release → dispatch E2E.
+**Release pipeline (4 steps):**
+
+**Step 1: Version bump merges to main.** A PR bumps version in the root `Cargo.toml` (workspace version). This is the only trigger — feature PRs without a version bump don't release anything.
+
+**Step 2: Auto-tag (`auto-tag.yml`).** Triggers on push to main when `Cargo.toml` changes. It:
+1. Reads the version from `Cargo.toml` (e.g. `0.1.0`)
+2. Checks if tag `v0.1.0` already exists
+3. If not, creates and pushes the tag
+
+Uses `E2E_TRIGGER_TOKEN` (PAT) with `persist-credentials: true` so the tag push triggers downstream workflows (tags pushed by `GITHUB_TOKEN` don't trigger `on: push: tags`).
+
+**Step 3: Release (`release.yml`).** Triggers on tag push matching `v*`. It:
+1. Installs Rust with `wasm32v1-none` target
+2. Installs `stellar-cli`
+3. Runs `stellar contract build` which compiles both channel-auth and privacy-channel to WASM
+4. Copies `channel_auth_contract.wasm` and `privacy_channel.wasm` to artifacts
+5. Creates a GitHub Release with auto-generated release notes and the two WASMs attached
+6. Dispatches a `module-release` event to the `local-dev` repo to trigger E2E tests
+
+**Step 4: E2E gate.** The `local-dev` repo receives the dispatch, runs the cross-repo E2E with the new WASMs + latest provider-platform. If E2E passes, the release is validated. If it fails, the release exists but testnet deploy doesn't happen (provider-platform's deploy is gated on E2E).
+
+**Key design points:**
+- Release is deliberate — merging features doesn't release, only version bumps do
+- WASMs are built from the tagged commit, so the release always matches the tag
+- The PAT is needed at two points: auto-tag (to trigger `release.yml`) and release (to dispatch E2E to `local-dev`)
+- Contract deployment to testnet is still manual (`local-dev/deploy-testnet/deploy.sh`) because contract IDs need to propagate to provider-platform and wallet configs
 
 **Testnet deploy**: Manual via `local-dev/deploy-testnet/deploy.sh`. Contract deployments are infrequent and stateful (deploy once, reference contract ID everywhere). Upgrading an existing contract vs deploying fresh have different flows that require human judgement — no CI automation.
 
