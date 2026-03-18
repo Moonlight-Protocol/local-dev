@@ -1,0 +1,104 @@
+services:
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --limits unlimited
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test: >
+        curl -sf http://localhost:8000/soroban/rpc -X POST
+        -H "Content-Type: application/json"
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+        | grep -q healthy
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: lifecycle_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d lifecycle_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  setup:
+    image: denoland/deno:latest
+    depends_on:
+      stellar:
+        condition: service_healthy
+    volumes:
+      - ${WASM_DIR:-../e2e}/wasms:/wasms:ro
+      - .:/lifecycle-src:ro
+      - ../e2e:/e2e-src:ro
+      - shared-config:/config
+    working_dir: /app
+    environment:
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      CONFIG_DIR: /config
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp /lifecycle-src/*.ts /lifecycle-src/deno.json . && cp /lifecycle-src/deno.lock . 2>/dev/null || true
+        mkdir -p ../e2e && cp /e2e-src/*.ts /e2e-src/deno.json ../e2e/ && cp /e2e-src/deno.lock ../e2e/ 2>/dev/null || true
+        deno install
+        deno run --allow-all ci-setup.ts
+
+  provider:
+    image: ${PROVIDER_IMAGE:-provider-platform:local}
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - shared-config:/config:ro
+      - ../e2e/provider-entrypoint.sh:/app/entrypoint.sh:ro
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/lifecycle_db
+
+  test-runner:
+    image: denoland/deno:latest
+    depends_on:
+      provider:
+        condition: service_started
+    volumes:
+      - shared-config:/config:ro
+      - .:/lifecycle-src:ro
+      - ../e2e:/e2e-src:ro
+    working_dir: /app
+    environment:
+      PROVIDER_URL: http://provider:3000
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      CONFIG_DIR: /config
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp /lifecycle-src/*.ts /lifecycle-src/deno.json . && cp /lifecycle-src/deno.lock . 2>/dev/null || true
+        mkdir -p ../e2e && cp /e2e-src/*.ts /e2e-src/deno.json ../e2e/ && cp /e2e-src/deno.lock ../e2e/ 2>/dev/null || true
+        deno install
+        echo "Waiting for provider..."
+        for i in $(seq 1 60); do
+          if deno eval "try { await fetch('$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+            echo "Provider is ready."
+            break
+          fi
+          if [ "$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
+          sleep 2
+        done
+        deno run --allow-all ci-test.ts
+
+volumes:
+  shared-config:
