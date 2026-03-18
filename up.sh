@@ -22,11 +22,11 @@ PG_PORT=5442
 PROVIDER_PORT=3010
 CONSOLE_PORT=3020
 
-# Container / account names (suffixed to avoid conflicts)
+# Container / account names
 PG_CONTAINER="provider-platform-db"
-ACCT_ADMIN="admin2"
-ACCT_PROVIDER="provider2"
-ACCT_TREASURY="treasury2"
+ACCT_ADMIN="admin"
+ACCT_PROVIDER="provider"
+ACCT_TREASURY="treasury"
 
 # Colors
 RED='\033[0;31m'
