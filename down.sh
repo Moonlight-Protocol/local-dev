@@ -17,9 +17,9 @@ export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 PROVIDER_PORT=3010
 CONSOLE_PORT=3020
 PG_CONTAINER="provider-platform-db"
-ACCT_ADMIN="admin2"
-ACCT_PROVIDER="provider2"
-ACCT_TREASURY="treasury2"
+ACCT_ADMIN="admin"
+ACCT_PROVIDER="provider"
+ACCT_TREASURY="treasury"
 
 # Colors
 GREEN='\033[0;32m'
