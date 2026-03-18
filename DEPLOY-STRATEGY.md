@@ -10,6 +10,8 @@
 | moonlight-sdk | Auto-publish to JSR on version bump | N/A | `deno.json` | JSR (@moonlight/moonlight-sdk) |
 | colibri | Auto-publish to JSR on version bump | N/A | `deno.json` | JSR (@colibri/core) |
 | stellar-cli (local-dev) | Release on tag | N/A | Tag `stellar-cli-v*` | GHCR Docker image |
+| provider-console | Auto-tag on version bump | Automated (Tigris bucket) | `deno.json` | Tigris static files |
+| council-console | Auto-tag on version bump | Automated (Tigris bucket) | `deno.json` | Tigris static files |
 
 ## Branch Strategy
 
@@ -137,6 +139,50 @@ This is a single app, single URL. No DNS changes, no second app, no wallet confi
 
 **CI**: Auto-publish to JSR on version bump in `deno.json` when pushed to `main`. Both repos have `publish.yml` workflows that detect version changes and run `deno publish`. Colibri supports multi-package publishing across its workspace (`core`, `rpc-streamer`, `sep10`, plugins).
 
+### provider-console
+
+**Release pipeline:**
+
+**Step 1: Version bump merges to main.** A PR bumps version in `deno.json`. Feature PRs without a version bump don't release.
+
+**Step 2: Auto-tag (`auto-version.yml`).** Triggers on push to main when `deno.json` changes. It:
+1. Reads the version from `deno.json` (e.g. `0.2.0`)
+2. Checks if tag `v0.2.0` already exists
+3. If not, creates and pushes the tag
+
+Uses `AUTO_VERSION_TOKEN` (PAT) with `persist-credentials: true` so the tag push bypasses branch protection.
+
+**Step 3: Deploy (`deploy.yml`).** Triggers on tag push matching `v*`. It:
+1. Generates production `config.js` from GitHub secrets (`API_BASE_URL`, `POSTHOG_PROJECT_TOKEN`, Grafana config)
+2. Builds production bundle with esbuild (`deno task build -- --production` — minified, no sourcemaps)
+3. Uploads static files to a public Tigris bucket via `aws s3 sync`
+
+**Hosting**: Static files served directly from Tigris (S3-compatible object storage on Fly.io). No server required.
+- **Bucket**: `provider-console`
+- **URL**: `https://provider-console.fly.storage.tigris.dev/index.html`
+- **Secrets**: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`, `API_BASE_URL`, `POSTHOG_PROJECT_TOKEN`
+
+**Tests**: `test.yml` runs `deno task test` on every PR to main. Tests must pass before merge.
+
+### council-console
+
+Same pattern as provider-console.
+
+**Release pipeline:**
+
+**Step 1: Version bump merges to main.** A PR bumps version in `deno.json`.
+
+**Step 2: Auto-tag (`auto-version.yml`).** Same as provider-console — reads version from `deno.json`, creates tag if it doesn't exist. Uses `AUTO_VERSION_TOKEN` PAT.
+
+**Step 3: Deploy (`deploy.yml`).** Triggers on tag push matching `v*`. Same build + Tigris upload pattern.
+
+**Hosting**: Static files on Tigris.
+- **Bucket**: `council-console`
+- **URL**: `https://council-console.fly.storage.tigris.dev/index.html`
+- **Secrets**: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`, `POSTHOG_PROJECT_TOKEN`, `GRAFANA_OTLP_ENDPOINT`, `GRAFANA_OTLP_AUTH`
+
+**Tests**: `ci.yml` runs tests on every PR to main.
+
 ### stellar-cli image (local-dev)
 
 Tagged in the local-dev repo. CI builds and pushes to GHCR on `stellar-cli-v*` tag push.
@@ -146,6 +192,8 @@ Tagged in the local-dev repo. CI builds and pushes to GHCR on `stellar-cli-v*` t
 - **Provider platform**: Automated deploy via Fly.io after E2E gate.
 - **Contracts**: Deployed via `local-dev/deploy-testnet/deploy.sh`. Generates an ephemeral admin account funded via Friendbot — no persistent keys needed.
 - **Browser wallet**: Built locally with testnet seed files (`.env.seed`, `.env.seed.brave`), loaded manually into Chrome/Brave.
+- **Provider console**: Auto-deployed to Tigris bucket on version bump. Config generated from GitHub secrets at build time.
+- **Council console**: Auto-deployed to Tigris bucket on version bump. Same pattern as provider console.
 
 ### Testnet Deploy Workflow (Contracts)
 
@@ -177,11 +225,7 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 - **Contracts don't use CI for deploy.** Deploys are stateful and infrequent — a local script is the right tool.
 - **Provider-platform uses CI for deploy.** Stateless server, Docker image, Fly.io — straightforward to automate.
 - **Browser wallet has no CI.** Low change frequency doesn't justify it. The E2E tests validate the SDK path the wallet uses.
-
-
-## Gaps
-
-No known gaps.
+- **Console apps use Tigris for hosting.** Static files deployed to public S3-compatible buckets — no server needed.
 
 ## CI Workflows Reference
 
@@ -194,3 +238,9 @@ No known gaps.
 | provider-platform | `deploy-testnet.yml` | Push to `dev` | Auto-deploys to Fly.io (testnet) via blue/green |
 | local-dev | `e2e.yml` | Repository dispatch from soroban-core or provider-platform | Runs Docker Compose E2E with resolved versions |
 | local-dev | `release-stellar-cli.yml` | Tag push (`stellar-cli-v*`) | Publishes stellar-cli Docker image to GHCR |
+| provider-console | `auto-version.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
+| provider-console | `deploy.yml` | Tag push (`v*`) | Builds production bundle, deploys to Tigris bucket |
+| provider-console | `test.yml` | Pull request to `main` | Runs `deno task test` |
+| council-console | `auto-version.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
+| council-console | `deploy.yml` | Tag push (`v*`) | Builds production bundle, deploys to Tigris bucket |
+| council-console | `ci.yml` | Pull request to `main` | Runs tests |
