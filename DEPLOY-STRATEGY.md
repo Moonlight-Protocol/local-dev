@@ -107,6 +107,23 @@ Uses `E2E_TRIGGER_TOKEN` (PAT) with `persist-credentials: true` so the tag push 
 
 ### provider-platform
 
+**Release pipeline:**
+
+**Step 1: Version bump merges to dev.** A PR bumps version in `deno.json`. Feature PRs without a version bump don't release.
+
+**Step 2: Auto-tag (`auto-tag.yml`).** Triggers on push to `dev` when `deno.json` changes. Same pattern as soroban-core — reads version, checks if tag exists, creates if not. Uses `E2E_TRIGGER_TOKEN` PAT.
+
+**Step 3: Release (`release.yml`).** Triggers on tag push matching `v*`. It:
+1. Builds Docker image
+2. Tags with semver (`{{version}}` strips `v` prefix — e.g. tag `v0.5.0` → image `0.5.0`), plus `latest`
+3. Pushes to GHCR
+4. Creates GitHub Release with auto-generated notes
+5. Dispatches `module-release` event to `local-dev` with the image version (without `v` prefix, matching the Docker tag)
+
+**Step 4: E2E gate + deploy.** Same as soroban-core — `local-dev` runs cross-repo E2E. If it passes, provider-platform auto-deploys to Fly.io.
+
+**Important**: The dispatch version must match the Docker image tag (no `v` prefix). The metadata-action's `outputs.version` is used for this.
+
 **CI**: Auto-tag on `deno.json` version bump → Docker image to GHCR → dispatch E2E → deploy to Fly.io.
 
 **Testnet deploy**: Automated via blue/green. After E2E passes, the release workflow runs `fly deploy`, which uses Fly.io's built-in blue/green strategy. Contract IDs and secrets are configured in Fly.io env vars — these change rarely and are set manually when contracts are redeployed.
