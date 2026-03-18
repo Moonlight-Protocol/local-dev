@@ -130,7 +130,7 @@ async function main() {
     Keypair.fromSecret(providerSecretKey).publicKey(),
   );
   const removeEvents = extractEvents(removeTx);
-  const removeResult = verifyEvent(removeEvents, "ProviderRemoved", true);
+  const removeResult = verifyEvent(removeEvents, "provider_removed", true);
   if (removeResult.found) console.log("  ProviderRemoved event verified");
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

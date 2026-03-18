@@ -83,7 +83,7 @@ async function main() {
       );
 
     const deployEvents = extractEvents(authDeployTx);
-    const initResult = verifyEvent(deployEvents, "ContractInitialized", true);
+    const initResult = verifyEvent(deployEvents, "contract_initialized", true);
     if (initResult.found) console.log("  ContractInitialized event verified");
 
     // ── Step 2: Deploy Channel (Privacy Channel) ──────────────────
@@ -124,7 +124,7 @@ async function main() {
     );
 
     const addEvents = extractEvents(addTx);
-    const addResult = verifyEvent(addEvents, "ProviderAdded", true);
+    const addResult = verifyEvent(addEvents, "provider_added", true);
     if (addResult.found) console.log("  ProviderAdded event verified");
 
     // ── Start provider-platform for payment flow ──────────────────
@@ -220,7 +220,7 @@ async function main() {
     );
 
     const removeEvents = extractEvents(removeTx);
-    const removeResult = verifyEvent(removeEvents, "ProviderRemoved", true);
+    const removeResult = verifyEvent(removeEvents, "provider_removed", true);
     if (removeResult.found) console.log("  ProviderRemoved event verified");
 
     // ── Summary ──────────────────────────────────────────────────
