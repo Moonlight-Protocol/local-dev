@@ -1,2 +1,3 @@
 *.pid
 *.log
+e2e/.env
