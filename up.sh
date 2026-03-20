@@ -45,7 +45,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/7  Prerequisites"
+section "1/9  Prerequisites"
 # ============================================================
 
 command -v docker >/dev/null 2>&1 || error "Docker not found."
@@ -82,20 +82,35 @@ info "Deno: $($DENO_BIN --version | head -1)"
 [ -d "$NETWORK_DASHBOARD_PATH" ] || error "network-dashboard not found at $NETWORK_DASHBOARD_PATH"
 
 # ============================================================
-section "2/7  Stellar Network (shared)"
+section "2/9  Stellar Network (shared)"
 # ============================================================
 
-# Verify the shared Stellar network is running
+# Start the shared Stellar network if not already running
 if curl -sf "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" -X POST \
   -H "Content-Type: application/json" \
   -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' 2>/dev/null | grep -q "healthy"; then
-  info "Stellar RPC on port $STELLAR_RPC_PORT is healthy (shared with local-dev)."
+  info "Stellar RPC on port $STELLAR_RPC_PORT is healthy (shared)."
 else
-  error "Stellar RPC not running on port $STELLAR_RPC_PORT. Start local-dev first or run: stellar container start local"
+  info "Stellar RPC not running, starting local network..."
+  stellar container start local 2>/dev/null || true
+
+  info "Waiting for Stellar RPC to be ready..."
+  for i in $(seq 1 60); do
+    if curl -sf "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" -X POST \
+      -H "Content-Type: application/json" \
+      -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}' 2>/dev/null | grep -q "healthy"; then
+      info "Stellar RPC is ready."
+      break
+    fi
+    if [ "$i" -eq 60 ]; then
+      error "Stellar RPC did not become healthy after 60s. Check Docker logs."
+    fi
+    sleep 1
+  done
 fi
 
 # ============================================================
-section "3/7  Accounts"
+section "3/9  Accounts"
 # ============================================================
 
 generate_or_reuse() {
@@ -132,7 +147,7 @@ info "Provider: $PROVIDER_PK"
 info "Treasury: $TREASURY_PK"
 
 # ============================================================
-section "4/7  Build & Deploy Contracts"
+section "4/9  Build & Deploy Contracts"
 # ============================================================
 
 cd "$SOROBAN_CORE_PATH"
@@ -185,7 +200,7 @@ stellar contract invoke \
 info "Provider registered."
 
 # ============================================================
-section "5/7  PostgreSQL (port $PG_PORT)"
+section "5/9  PostgreSQL (port $PG_PORT)"
 # ============================================================
 
 if docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -214,7 +229,7 @@ for i in $(seq 1 30); do
 done
 
 # ============================================================
-section "6/7  Provider Platform (port $PROVIDER_PORT)"
+section "6/9  Provider Platform (port $PROVIDER_PORT)"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
