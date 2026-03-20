@@ -33,15 +33,16 @@ function loadEnvFile(path: string): Record<string, string> {
 }
 
 export function loadConfig(): Config {
-  // In Docker: env vars are set by docker-compose, contract IDs come from /config/contracts.env
-  // Locally: everything comes from the provider-platform .env file
+  // Priority: Docker contracts.env > local e2e/.env > provider-platform .env
   const contractsEnv = loadEnvFile("/config/contracts.env");
+
+  const localEnv = loadEnvFile(new URL("./.env", import.meta.url).pathname);
 
   const providerPlatformPath = Deno.env.get("PROVIDER_PLATFORM_PATH") ??
     `${Deno.env.get("HOME")}/repos/provider-platform`;
   const providerEnv = loadEnvFile(`${providerPlatformPath}/.env`);
 
-  const env = { ...providerEnv, ...contractsEnv };
+  const env = { ...providerEnv, ...localEnv, ...contractsEnv };
 
   const networkPassphrase = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
     "Standalone Network ; February 2017";
