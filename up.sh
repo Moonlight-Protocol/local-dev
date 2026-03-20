@@ -10,11 +10,12 @@ set -euo pipefail
 #
 # Usage: ./up.sh
 
-SOROBAN_CORE_PATH="${SOROBAN_CORE_PATH:-$HOME/repos/soroban-core}"
-PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$HOME/repos/provider-platform}"
-PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$HOME/repos/provider-console}"
-COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$HOME/repos/council-console}"
-NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$HOME/repos/network-dashboard}"
+BASE_DIR="${BASE_DIR:-$HOME/repos}"
+SOROBAN_CORE_PATH="${SOROBAN_CORE_PATH:-$BASE_DIR/soroban-core}"
+PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
+PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$BASE_DIR/provider-console}"
+COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
+NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$BASE_DIR/network-dashboard}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Ports (offset from local-dev defaults to prevent collisions)

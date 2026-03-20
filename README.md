@@ -24,15 +24,16 @@ Clone all repos to `~/repos/`:
 └── network-dashboard/      # Network monitoring dashboard
 ```
 
-Override repo paths with environment variables:
+If your repos live somewhere other than `~/repos/`, set `BASE_DIR`:
 
 ```bash
-SOROBAN_CORE_PATH=~/repos/soroban-core \
-PROVIDER_PLATFORM_PATH=~/repos/provider-platform \
-PROVIDER_CONSOLE_PATH=~/repos/provider-console \
-COUNCIL_CONSOLE_PATH=~/repos/council-console \
-NETWORK_DASHBOARD_PATH=~/repos/network-dashboard \
-./up.sh
+BASE_DIR=~/projects ./up.sh
+```
+
+You can also override individual repo paths:
+
+```bash
+SOROBAN_CORE_PATH=~/other/soroban-core ./up.sh
 ```
 
 ## Local Dev
