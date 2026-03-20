@@ -1,26 +1,27 @@
 # Local Dev
 
-Run the full Moonlight stack locally: Stellar network, smart contracts, privacy provider, and browser wallet extensions.
+Run the full Moonlight stack locally: Stellar network, smart contracts, privacy provider, consoles, and dashboards.
 
 ## Prerequisites
 
 | Tool | Install |
 |------|---------|
 | Docker | [docker.com](https://docs.docker.com/get-docker/) |
-| Rust/Cargo | `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| Stellar CLI | `cargo install --locked stellar-cli --features opt` |
-| Deno | `curl -fsSL https://deno.land/install.sh \| sh` |
+
+Rust/Cargo, Stellar CLI, and Deno are auto-installed by `up.sh` if missing.
 
 ## Repos
+
+Clone all repos to `~/repos/`:
 
 ```
 ~/repos/
 ├── local-dev/              # This repo (setup scripts, E2E infrastructure)
-├── browser-wallet/         # Chrome extension
 ├── soroban-core/           # Smart contracts (channel-auth, privacy-channel)
-├── moonlight-sdk/          # Privacy SDK (JSR: @moonlight/moonlight-sdk)
-├── colibri/                # Soroban contract toolkit (JSR: @colibri/core)
-└── provider-platform/      # Privacy provider server
+├── provider-platform/      # Privacy provider server
+├── provider-console/       # Provider dashboard
+├── council-console/        # Council dashboard
+└── network-dashboard/      # Network monitoring dashboard
 ```
 
 Override repo paths with environment variables:
@@ -28,7 +29,9 @@ Override repo paths with environment variables:
 ```bash
 SOROBAN_CORE_PATH=~/repos/soroban-core \
 PROVIDER_PLATFORM_PATH=~/repos/provider-platform \
-WALLET_PATH=~/repos/browser-wallet \
+PROVIDER_CONSOLE_PATH=~/repos/provider-console \
+COUNCIL_CONSOLE_PATH=~/repos/council-console \
+NETWORK_DASHBOARD_PATH=~/repos/network-dashboard \
 ./up.sh
 ```
 
@@ -40,31 +43,24 @@ WALLET_PATH=~/repos/browser-wallet \
 ./up.sh
 ```
 
-This runs through 8 stages:
-1. Checks prerequisites (Docker, Stellar CLI, Deno, Cargo)
-2. Starts Jaeger for distributed tracing (UI at http://localhost:16686)
-3. Starts a local Stellar network via Docker
-4. Generates accounts (admin, provider, treasury) and funds them via Friendbot
-5. Builds and deploys contracts (channel-auth, privacy-channel)
-6. Registers the provider on the channel-auth contract
-7. Starts the provider platform (PostgreSQL, migrations, server)
-8. Builds wallet extensions for Chrome and Brave with dev seeds
+This runs through 9 stages:
+1. Checks prerequisites (Docker) — auto-installs Rust, Stellar CLI, Deno if missing
+2. Starts a local Stellar network if not already running
+3. Generates accounts (admin, provider, treasury) and funds them via Friendbot
+4. Builds and deploys contracts (SAC, channel-auth, privacy-channel)
+5. Starts PostgreSQL (Docker container on port 5442)
+6. Starts provider-platform (generates `.env`, runs migrations, port 3010)
+7. Builds and starts provider-console (port 3020)
+8. Builds and starts council-console (port 3030)
+9. Builds and starts network-dashboard (port 3040)
 
-After it finishes, load `browser-wallet/dist/chrome/` or `dist/brave/` as unpacked extensions.
+All configuration (`.env` files, `config.js` files) is generated automatically.
 
 ### Stop everything
 
 ```bash
 ./down.sh
 ```
-
-### Rebuild wallet extensions
-
-```bash
-./rebuild.sh
-```
-
-Rebuilds the Chrome and Brave wallet extensions without restarting the network or provider.
 
 ### Run E2E tests
 
@@ -81,28 +77,6 @@ deno task verify-otel
 # Open Jaeger UI to inspect traces
 open http://localhost:16686
 ```
-
-### Run testnet E2E
-
-Runs the same E2E flow against the live testnet provider and verifies traces in Grafana Cloud.
-
-```bash
-cd testnet
-
-# Run E2E against testnet
-OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e \
-  OTEL_EXPORTER_OTLP_ENDPOINT=https://otlp-gateway-prod-ca-east-0.grafana.net/otlp \
-  OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
-  OTEL_EXPORTER_OTLP_HEADERS="Authorization=Basic <base64 of stackId:token>" \
-  deno run --allow-all main.ts
-
-# Verify traces arrived in Grafana Cloud Tempo
-TEMPO_URL=https://tempo-prod-13-prod-ca-east-0.grafana.net/tempo \
-  TEMPO_AUTH="Basic <base64 of tempoInstanceId:token>" \
-  deno run --allow-all verify-otel.ts
-```
-
-The verify script uses trace-by-ID lookups (deterministic) for all SDK and provider request-path checks, and a targeted TraceQL search for background service spans only.
 
 ## E2E in CI
 
