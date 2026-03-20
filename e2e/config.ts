@@ -51,7 +51,8 @@ export function loadConfig(): Config {
   const horizonUrl = rpcUrl.replace("/soroban/rpc", "");
   const friendbotUrl = Deno.env.get("FRIENDBOT_URL") ??
     "http://localhost:8000/friendbot";
-  const providerUrl = Deno.env.get("PROVIDER_URL") ??
+  const providerUrl = env["PROVIDER_URL"] ??
+    Deno.env.get("PROVIDER_URL") ??
     `http://localhost:${env["PORT"] ?? "3000"}`;
 
   const channelContractId = (env["CHANNEL_CONTRACT_ID"] ??
