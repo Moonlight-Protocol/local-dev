@@ -7,20 +7,21 @@ set -euo pipefail
 #
 # Usage: ./down.sh
 
-PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$HOME/repos/provider-platform}"
+BASE_DIR="${BASE_DIR:-$HOME/repos}"
+PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
-# Ports & names (must match up.sh)
-PROVIDER_PORT=3010
-PROVIDER_CONSOLE_PORT=3020
-COUNCIL_CONSOLE_PORT=3030
-NETWORK_DASHBOARD_PORT=3040
-PG_CONTAINER="provider-platform-db"
-ACCT_ADMIN="admin"
-ACCT_PROVIDER="provider"
-ACCT_TREASURY="treasury"
+# Ports & names — must match the values used in up.sh
+PROVIDER_PORT="${PROVIDER_PORT:-3010}"
+PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
+COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
+NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
+PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
+ACCT_ADMIN="${ACCT_ADMIN:-admin}"
+ACCT_PROVIDER="${ACCT_PROVIDER:-provider}"
+ACCT_TREASURY="${ACCT_TREASURY:-treasury}"
 
 # Colors
 GREEN='\033[0;32m'

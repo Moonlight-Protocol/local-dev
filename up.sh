@@ -18,20 +18,20 @@ COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
 NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$BASE_DIR/network-dashboard}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Ports (offset from local-dev defaults to prevent collisions)
-STELLAR_RPC_PORT=8000       # shared with local-dev
-JAEGER_OTLP_PORT=4318       # shared with local-dev
-PG_PORT=5442
-PROVIDER_PORT=3010
-PROVIDER_CONSOLE_PORT=3020
-COUNCIL_CONSOLE_PORT=3030
-NETWORK_DASHBOARD_PORT=3040
+# Ports — override via env to run multiple stacks in parallel
+STELLAR_RPC_PORT="${STELLAR_RPC_PORT:-8000}"       # shared
+JAEGER_OTLP_PORT="${JAEGER_OTLP_PORT:-4318}"       # shared
+PG_PORT="${PG_PORT:-5442}"
+PROVIDER_PORT="${PROVIDER_PORT:-3010}"
+PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
+COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
+NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 
-# Container / account names
-PG_CONTAINER="provider-platform-db"
-ACCT_ADMIN="admin"
-ACCT_PROVIDER="provider"
-ACCT_TREASURY="treasury"
+# Container / account names — override to avoid collisions
+PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
+ACCT_ADMIN="${ACCT_ADMIN:-admin}"
+ACCT_PROVIDER="${ACCT_PROVIDER:-provider}"
+ACCT_TREASURY="${ACCT_TREASURY:-treasury}"
 
 # Colors
 RED='\033[0;31m'
