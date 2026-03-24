@@ -15,11 +15,11 @@
 
 ## Branch Strategy
 
-Trunk-based development. PRs merge to the primary branch (`main` or `dev` depending on repo).
+Trunk-based development. PRs merge to the primary branch (`main` for all repos).
 
 | Branch | Purpose |
 |--------|---------|
-| `main` / `dev` | Primary branch. PRs merge here. Auto-tagging triggers on version bumps. |
+| `main` | Primary branch. PRs merge here. Auto-tagging triggers on version bumps. |
 | `feat/`, `fix/`, `chore/` | Feature branches. Named per convention, include ClickUp ID when applicable. |
 
 ## Versioning and Releases
@@ -109,9 +109,9 @@ Uses `E2E_TRIGGER_TOKEN` (PAT) with `persist-credentials: true` so the tag push 
 
 **Release pipeline:**
 
-**Step 1: Version bump merges to dev.** A PR bumps version in `deno.json`. Feature PRs without a version bump don't release.
+**Step 1: Version bump merges to main.** A PR bumps version in `deno.json`. Feature PRs without a version bump don't release.
 
-**Step 2: Auto-tag (`auto-tag.yml`).** Triggers on push to `dev` when `deno.json` changes. Same pattern as soroban-core — reads version, checks if tag exists, creates if not. Uses `E2E_TRIGGER_TOKEN` PAT.
+**Step 2: Auto-tag (`auto-tag.yml`).** Triggers on push to `main` when `deno.json` changes. Same pattern as soroban-core — reads version, checks if tag exists, creates if not. Uses `E2E_TRIGGER_TOKEN` PAT.
 
 **Step 3: Release (`release.yml`).** Triggers on tag push matching `v*`. It:
 1. Builds Docker image
@@ -252,7 +252,7 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 | soroban-core | `release.yml` | Tag push (`v*`) | Builds WASMs, publishes GitHub Release, dispatches E2E |
 | provider-platform | `auto-tag.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
 | provider-platform | `release.yml` | Tag push (`v*`) | Builds Docker image, pushes to GHCR, dispatches E2E, deploys to Fly.io |
-| provider-platform | `deploy-testnet.yml` | Push to `dev` | Auto-deploys to Fly.io (testnet) via blue/green |
+| provider-platform | `deploy-testnet.yml` | Push to `main` | Auto-deploys to Fly.io (testnet) via blue/green |
 | local-dev | `e2e.yml` | Repository dispatch from soroban-core or provider-platform | Runs Docker Compose E2E with resolved versions |
 | local-dev | `release-stellar-cli.yml` | Tag push (`stellar-cli-v*`) | Publishes stellar-cli Docker image to GHCR |
 | provider-console | `auto-version.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
