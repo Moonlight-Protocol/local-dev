@@ -110,6 +110,20 @@ else
   done
 fi
 
+# Wait for Friendbot (takes longer than RPC to initialize)
+info "Waiting for Friendbot to be ready..."
+for i in $(seq 1 30); do
+  fb_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" 2>/dev/null || echo "000")
+  if [ "$fb_code" = "200" ] || [ "$fb_code" = "400" ]; then
+    info "Friendbot is ready."
+    break
+  fi
+  if [ "$i" -eq 30 ]; then
+    error "Friendbot did not become ready after 30s."
+  fi
+  sleep 1
+done
+
 # ============================================================
 section "3/9  Accounts"
 # ============================================================
