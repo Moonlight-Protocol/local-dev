@@ -6,7 +6,7 @@ set -euo pipefail
 # with the primary local-dev instance. Reuses Stellar network & Jaeger.
 #
 # Ports: PostgreSQL 5442, Provider 3010, Console 3020
-# Shared: Stellar RPC 8000, Jaeger 4317/4318/16686
+# Shared: Stellar RPC 8000
 #
 # Usage: ./up.sh
 
@@ -15,6 +15,7 @@ SOROBAN_CORE_PATH="${SOROBAN_CORE_PATH:-$BASE_DIR/soroban-core}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$BASE_DIR/provider-console}"
 COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
+COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
 NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$BASE_DIR/network-dashboard}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -24,6 +25,7 @@ JAEGER_OTLP_PORT="${JAEGER_OTLP_PORT:-4318}"       # shared
 PG_PORT="${PG_PORT:-5442}"
 PROVIDER_PORT="${PROVIDER_PORT:-3010}"
 PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
+COUNCIL_PLATFORM_PORT="${COUNCIL_PLATFORM_PORT:-3015}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 
@@ -46,11 +48,17 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/9  Prerequisites"
+section "1/11  Prerequisites"
 # ============================================================
 
 command -v docker >/dev/null 2>&1 || error "Docker not found."
 info "Docker: $(docker --version)"
+
+# Detect Docker Desktop socket (macOS) — stellar CLI needs DOCKER_HOST
+if [ -z "${DOCKER_HOST:-}" ] && [ ! -S /var/run/docker.sock ] && [ -S "$HOME/.docker/run/docker.sock" ]; then
+  export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
+  info "Set DOCKER_HOST=$DOCKER_HOST (Docker Desktop)"
+fi
 
 if ! command -v cargo >/dev/null 2>&1; then
   info "Installing Rust..."
@@ -80,10 +88,39 @@ info "Deno: $($DENO_BIN --version | head -1)"
 [ -d "$PROVIDER_PLATFORM_PATH" ] || error "provider-platform not found at $PROVIDER_PLATFORM_PATH"
 [ -d "$PROVIDER_CONSOLE_PATH" ] || error "provider-console not found at $PROVIDER_CONSOLE_PATH"
 [ -d "$COUNCIL_CONSOLE_PATH" ] || error "council-console not found at $COUNCIL_CONSOLE_PATH"
+[ -d "$COUNCIL_PLATFORM_PATH" ] || error "council-platform not found at $COUNCIL_PLATFORM_PATH"
 [ -d "$NETWORK_DASHBOARD_PATH" ] || error "network-dashboard not found at $NETWORK_DASHBOARD_PATH"
 
 # ============================================================
-section "2/9  Stellar Network (shared)"
+section "2/11  Jaeger (ports 4317/4318/16686)"
+# ============================================================
+
+JAEGER_CONTAINER="${JAEGER_CONTAINER:-jaeger}"
+if docker ps --format '{{.Names}}' | grep -q "^${JAEGER_CONTAINER}$"; then
+  info "Jaeger already running."
+else
+  info "Starting Jaeger..."
+  docker rm -f "$JAEGER_CONTAINER" 2>/dev/null || true
+  docker run -d --name "$JAEGER_CONTAINER" \
+    -p 4317:4317 \
+    -p 4318:4318 \
+    -p 16686:16686 \
+    jaegertracing/all-in-one:latest >/dev/null
+  info "Waiting for Jaeger to be ready..."
+  for i in $(seq 1 30); do
+    if curl -sf "http://localhost:16686/api/services" >/dev/null 2>&1; then
+      info "Jaeger is ready."
+      break
+    fi
+    if [ "$i" -eq 30 ]; then
+      warn "Jaeger may not be ready yet."
+    fi
+    sleep 1
+  done
+fi
+
+# ============================================================
+section "3/11  Stellar Network"
 # ============================================================
 
 # Start the shared Stellar network if not already running
@@ -130,7 +167,7 @@ done
 sleep 2
 
 # ============================================================
-section "3/9  Accounts"
+section "4/11  Accounts"
 # ============================================================
 
 generate_or_reuse() {
@@ -163,6 +200,7 @@ generate_or_reuse "$ACCT_PROVIDER"
 generate_or_reuse "$ACCT_TREASURY"
 
 ADMIN_PK=$(stellar keys address "$ACCT_ADMIN")
+ADMIN_SK=$(stellar keys show "$ACCT_ADMIN")
 PROVIDER_PK=$(stellar keys address "$ACCT_PROVIDER")
 PROVIDER_SK=$(stellar keys show "$ACCT_PROVIDER")
 TREASURY_PK=$(stellar keys address "$ACCT_TREASURY")
@@ -173,7 +211,7 @@ info "Provider: $PROVIDER_PK"
 info "Treasury: $TREASURY_PK"
 
 # ============================================================
-section "4/9  Build & Deploy Contracts"
+section "5/11  Build & Deploy Contracts"
 # ============================================================
 
 cd "$SOROBAN_CORE_PATH"
@@ -228,7 +266,7 @@ stellar contract invoke \
 info "Provider registered."
 
 # ============================================================
-section "5/9  PostgreSQL (port $PG_PORT)"
+section "6/11  PostgreSQL (port $PG_PORT)"
 # ============================================================
 
 if docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -257,7 +295,7 @@ for i in $(seq 1 30); do
 done
 
 # ============================================================
-section "6/9  Provider Platform (port $PROVIDER_PORT)"
+section "7/11  Provider Platform (port $PROVIDER_PORT)"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
@@ -323,7 +361,69 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "7/9  Provider Console (port $PROVIDER_CONSOLE_PORT)"
+section "8/11  Council Platform (port $COUNCIL_PLATFORM_PORT)"
+# ============================================================
+
+cd "$COUNCIL_PLATFORM_PATH"
+
+# Create council_platform_db if it doesn't exist
+docker exec "$PG_CONTAINER" psql -U admin -d postgres -tc \
+  "SELECT 1 FROM pg_database WHERE datname = 'council_platform_db'" \
+  | grep -q 1 || \
+  docker exec "$PG_CONTAINER" psql -U admin -d postgres -c \
+  "CREATE DATABASE council_platform_db"
+
+cat > .env <<EOF
+# Generated by local-dev/up.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
+PORT=$COUNCIL_PLATFORM_PORT
+MODE=development
+LOG_LEVEL=TRACE
+SERVICE_DOMAIN=localhost
+
+DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/council_platform_db
+
+NETWORK=local
+STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
+NETWORK_FEE=1000000000
+CHANNEL_AUTH_ID=$AUTH_ID
+
+COUNCIL_SK=$ADMIN_SK
+OPEX_PUBLIC=$TREASURY_PK
+OPEX_SECRET=$TREASURY_SK
+
+SERVICE_AUTH_SECRET=local-dev-stable-auth-secret
+CHALLENGE_TTL=900
+SESSION_TTL=21600
+EOF
+
+info "Running council-platform migrations..."
+docker exec -i "$PG_CONTAINER" psql -U admin -d council_platform_db \
+  < "$COUNCIL_PLATFORM_PATH/src/persistence/drizzle/migration/0000_init.sql"
+
+info "Starting council-platform (background)..."
+COUNCIL_PLATFORM_LOG="$SCRIPT_DIR/council-platform.log"
+OTEL_DENO=true \
+OTEL_SERVICE_NAME=council-platform \
+OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:${JAEGER_OTLP_PORT}" \
+OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+nohup "$DENO_BIN" task serve > "$COUNCIL_PLATFORM_LOG" 2>&1 &
+COUNCIL_PLATFORM_PID=$!
+echo "$COUNCIL_PLATFORM_PID" > "$SCRIPT_DIR/.council-platform.pid"
+info "Council Platform running (PID $COUNCIL_PLATFORM_PID, log: $COUNCIL_PLATFORM_LOG)"
+
+for i in $(seq 1 15); do
+  if curl -sf "http://localhost:${COUNCIL_PLATFORM_PORT}/api/v1/health" >/dev/null 2>&1; then
+    info "Council Platform is ready on port $COUNCIL_PLATFORM_PORT."
+    break
+  fi
+  if [ "$i" -eq 15 ]; then
+    warn "Council Platform may not be ready yet. Check $COUNCIL_PLATFORM_LOG"
+  fi
+  sleep 1
+done
+
+# ============================================================
+section "9/11  Provider Console (port $PROVIDER_CONSOLE_PORT)"
 # ============================================================
 
 cd "$PROVIDER_CONSOLE_PATH"
@@ -360,7 +460,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "8/9  Council Console (port $COUNCIL_CONSOLE_PORT)"
+section "10/11  Council Console (port $COUNCIL_CONSOLE_PORT)"
 # ============================================================
 
 cd "$COUNCIL_CONSOLE_PATH"
@@ -373,6 +473,7 @@ window.__CONSOLE_CONFIG__ = {
   rpcUrl: "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc",
   horizonUrl: "http://localhost:${STELLAR_RPC_PORT}",
   friendbotUrl: "http://localhost:${STELLAR_RPC_PORT}/friendbot",
+  platformUrl: "http://localhost:${COUNCIL_PLATFORM_PORT}",
 };
 EOF
 
@@ -381,6 +482,7 @@ info "Building council-console..."
 
 info "Starting council-console (background)..."
 COUNCIL_CONSOLE_LOG="$SCRIPT_DIR/council-console.log"
+MODE=development \
 PORT=$COUNCIL_CONSOLE_PORT \
 nohup "$DENO_BIN" task serve > "$COUNCIL_CONSOLE_LOG" 2>&1 &
 COUNCIL_CONSOLE_PID=$!
@@ -399,7 +501,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "9/9  Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
+section "11/11  Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
 # ============================================================
 
 cd "$NETWORK_DASHBOARD_PATH"
@@ -464,12 +566,13 @@ echo "  Privacy Channel: $CHANNEL_ID"
 echo ""
 echo "Services:"
 echo "  Provider Platform:  http://localhost:$PROVIDER_PORT (PID $PROVIDER_PID)"
+echo "  Council Platform:   http://localhost:$COUNCIL_PLATFORM_PORT (PID $COUNCIL_PLATFORM_PID)"
 echo "  Provider Console:   http://localhost:$PROVIDER_CONSOLE_PORT (PID $PROVIDER_CONSOLE_PID)"
 echo "  Council Console:    http://localhost:$COUNCIL_CONSOLE_PORT (PID $COUNCIL_CONSOLE_PID)"
 echo "  Network Dashboard:  http://localhost:$NETWORK_DASHBOARD_PORT (PID $NETWORK_DASHBOARD_PID)"
 echo "  PostgreSQL:         localhost:$PG_PORT (container: $PG_CONTAINER)"
 echo "  Stellar RPC:        http://localhost:$STELLAR_RPC_PORT (shared)"
-echo "  Jaeger UI:          http://localhost:16686 (shared)"
+echo "  Jaeger UI:          http://localhost:16686"
 echo ""
 echo "To stop everything:"
 echo "  ./down.sh"
