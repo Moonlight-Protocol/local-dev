@@ -10,16 +10,22 @@
  *
  * Prerequisites:
  *   - E2E test completed with OTEL_DENO=true (writes e2e-trace-ids.json)
- *   - TEMPO_URL and TEMPO_AUTH env vars set (or defaults to Grafana Cloud)
+ *   - TEMPO_URL and TEMPO_AUTH env vars set
  *
  * Usage:
  *   deno run --allow-all verify-otel.ts
  */
 
-const TEMPO_URL = Deno.env.get("TEMPO_URL") ??
-  "https://tempo-prod-13-prod-ca-east-0.grafana.net/tempo";
-const TEMPO_AUTH = Deno.env.get("TEMPO_AUTH") ??
-  "Basic MTUxMzA1MTpnbGNfZXlKdklqb2lNVGN3TVRFeE5DSXNJbTRpT2lKd2NtOTJhV1JsY2kxMGNtRmpaWE10ZDNKcGRHVXRjSEp2ZG1sa1pYSXRkSEpoWTJWekxYZHlhWFJsSWl3aWF5STZJamM0TUc5YVNHNVNUak4wTmxJNU1HaHNTWFl4TlhjM1V5SXNJbTBpT25zaWNpSTZJbkJ5YjJRdFkyRXRaV0Z6ZEMwd0luMTk=";
+const TEMPO_URL = Deno.env.get("TEMPO_URL");
+if (!TEMPO_URL) {
+  console.error("❌ TEMPO_URL env var is required");
+  Deno.exit(1);
+}
+const TEMPO_AUTH = Deno.env.get("TEMPO_AUTH");
+if (!TEMPO_AUTH) {
+  console.error("❌ TEMPO_AUTH env var is required");
+  Deno.exit(1);
+}
 const TRACE_POLL_TIMEOUT_MS = Number(
   Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000",
 );
