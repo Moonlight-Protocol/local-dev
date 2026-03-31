@@ -91,7 +91,7 @@ services:
         deno install
         echo "Waiting for provider..."
         for i in $(seq 1 60); do
-          if deno eval "try { await fetch('$$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+          if curl -s --max-time 5 -o /dev/null "$$PROVIDER_URL" 2>/dev/null; then
             echo "Provider is ready."
             break
           fi
