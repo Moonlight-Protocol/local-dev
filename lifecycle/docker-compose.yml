@@ -91,11 +91,11 @@ services:
         deno install
         echo "Waiting for provider..."
         for i in $(seq 1 60); do
-          if deno eval "try { await fetch('$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+          if deno eval "try { await fetch('$$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
             echo "Provider is ready."
             break
           fi
-          if [ "$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
+          if [ "$$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
           sleep 2
         done
         deno run --allow-all ci-test.ts
