@@ -110,19 +110,24 @@ else
   done
 fi
 
-# Wait for Friendbot (takes longer than RPC to initialize)
-info "Waiting for Friendbot to be ready..."
-for i in $(seq 1 30); do
+# Wait for Friendbot (takes longer than RPC to initialize — cold boot can
+# take 90-120s as Stellar Core, Horizon, and Friendbot all start up inside
+# the quickstart container; Friendbot returns 502 until it is fully ready)
+info "Waiting for Friendbot to be ready (first boot is slow)..."
+for i in $(seq 1 180); do
   fb_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" 2>/dev/null || echo "000")
   if [ "$fb_code" = "200" ] || [ "$fb_code" = "400" ]; then
-    info "Friendbot is ready."
+    info "Friendbot is ready (after ${i}s)."
     break
   fi
-  if [ "$i" -eq 30 ]; then
-    error "Friendbot did not become ready after 30s."
+  if [ "$i" -eq 180 ]; then
+    error "Friendbot did not become ready after 180s."
   fi
   sleep 1
 done
+# Brief pause so Friendbot finishes processing the health-check transaction
+# before we hit it with account-funding requests
+sleep 2
 
 # ============================================================
 section "3/9  Accounts"
@@ -139,12 +144,18 @@ generate_or_reuse() {
   local addr
   addr=$(stellar keys address "$name")
   local http_code
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=$addr" 2>/dev/null || echo "000")
-  if [ "$http_code" = "200" ] || [ "$http_code" = "400" ]; then
-    info "Funded: $name"
-  else
-    error "Could not fund $name (HTTP $http_code)"
-  fi
+  for attempt in $(seq 1 10); do
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=$addr" 2>/dev/null || echo "000")
+    if [ "$http_code" = "200" ] || [ "$http_code" = "400" ]; then
+      info "Funded: $name"
+      return 0
+    fi
+    if [ "$attempt" -lt 10 ]; then
+      warn "Friendbot returned HTTP $http_code for $name, retrying ($attempt/10)..."
+      sleep 3
+    fi
+  done
+  error "Could not fund $name after 10 attempts (last HTTP $http_code)"
 }
 
 generate_or_reuse "$ACCT_ADMIN"
