@@ -1,0 +1,178 @@
+## Isolated local E2E test stack.
+##
+## Runs tests against local repo source code in full isolation (own Stellar,
+## PostgreSQL, and services). No host ports exposed — everything communicates
+## on the internal Docker network.
+##
+## Usage (via test.sh wrapper):
+##   ./test.sh e2e          # Payment flow
+##   ./test.sh governance   # UC2 governance
+##   ./test.sh uc2          # Manual UC2 user flow
+##   ./test.sh all          # All three in parallel
+##
+## Direct usage:
+##   TEST_SUITE=e2e docker compose -f docker-compose.test.yml -p my-test up \
+##     --abort-on-container-exit --exit-code-from test-runner
+
+services:
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --limits unlimited
+    healthcheck:
+      test: >
+        curl -sf http://localhost:8000/soroban/rpc -X POST
+        -H "Content-Type: application/json"
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+        | grep -q healthy
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: postgres
+    volumes:
+      - ./test/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  setup:
+    image: denoland/deno:latest
+    depends_on:
+      stellar:
+        condition: service_healthy
+    volumes:
+      - ./test:/app/test:ro
+      - ./lifecycle:/app/lifecycle:ro
+      - ${WASM_DIR:-../soroban-core/target/wasm32v1-none/release}:/wasms:ro
+      - shared-config:/config
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp test/setup.ts test/deno.json . && deno install && deno run --allow-all setup.ts
+    environment:
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      CONFIG_DIR: /config
+      WASM_DIR: /wasms
+      PROVIDER_INTERNAL_PORT: "3000"
+      COUNCIL_INTERNAL_PORT: "8080"
+
+  provider:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${PROVIDER_PLATFORM_PATH:-../provider-platform}:/app-src:ro
+      - shared-config:/config:ro
+      - ./test/provider-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "provider-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3000/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF\");
+          Deno.exit(r.status < 500 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  council:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${COUNCIL_PLATFORM_PATH:-../council-platform}:/app-src:ro
+      - shared-config:/config:ro
+      - ./test/council-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/council_platform_db
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "council-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:8080/api/v1/health\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  test-runner:
+    image: denoland/deno:latest
+    depends_on:
+      provider:
+        condition: service_healthy
+      council:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - shared-config:/config:ro
+      - ./e2e:/e2e-src:ro
+      - ./e2e/governance:/governance-src:ro
+      - ./manual-user-e2e:/uc2-src:ro
+      - ./test/test-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      PROVIDER_URL: http://provider:3000
+      PROVIDER_API: http://provider:3000/api/v1
+      COUNCIL_URL: http://council:8080
+      COUNCIL_API: http://council:8080/api/v1
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      JAEGER_QUERY_URL: http://jaeger:16686
+      TEST_SUITE: ${TEST_SUITE:-e2e}
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "moonlight-e2e"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+
+volumes:
+  shared-config:
