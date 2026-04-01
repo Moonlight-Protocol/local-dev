@@ -63,19 +63,29 @@ All configuration (`.env` files, `config.js` files) is generated automatically.
 ./down.sh
 ```
 
-### Run E2E tests
+### Run E2E tests (isolated)
+
+```bash
+./test.sh e2e           # Payment flow
+./test.sh governance    # UC2 governance flows
+./test.sh uc2           # Manual UC2 user flow
+./test.sh all           # All three in parallel
+```
+
+Each run spins up its own Stellar node, PostgreSQL, provider, and council in Docker — fully isolated, no shared state, no dependency on `up.sh`. Uses your current local repo source code (mounted read-only). Set `BASE_DIR` if your repos aren't in `~/repos/`.
+
+### Run E2E tests (against local stack)
+
+If you prefer to test against the `up.sh` stack:
 
 ```bash
 cd e2e && deno task e2e
 ```
 
-Runs the full E2E test (fund, auth, deposit, receive, send, withdraw) against the local stack. Traces are exported to Jaeger automatically.
+Traces are exported to Jaeger automatically:
 
 ```bash
-# Verify traces were captured
 deno task verify-otel
-
-# Open Jaeger UI to inspect traces
 open http://localhost:16686
 ```
 
