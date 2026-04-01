@@ -5,14 +5,16 @@ set -e
 cp -r /app-src/. /app/
 cd /app
 
-# Load config written by the setup container
-if [ -f /config/provider.env ]; then
-  set -a
-  . /config/provider.env
-  set +a
-fi
+# Remove host node_modules (may contain macOS-native binaries)
+rm -rf node_modules
 
-# DB URL comes from docker-compose environment (uses Docker service name)
+# Write .env so that @std/dotenv load() and drizzle-kit --env both find it.
+# Merge config from setup container + docker-compose DATABASE_URL.
+if [ -f /config/provider.env ]; then
+  cp /config/provider.env .env
+fi
+echo "DATABASE_URL=${DATABASE_URL}" >> .env
+
 deno install
 deno task db:migrate
 exec deno task serve
