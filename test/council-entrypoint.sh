@@ -1,18 +1,16 @@
 #!/bin/sh
 set -e
 
-# Copy source from read-only mount to writable working directory
-cp -r /app-src/. /app/
+# Copy source from read-only mount, excluding host artifacts
+cd /app-src && tar cf - --exclude node_modules --exclude .git --exclude target . | tar xf - -C /app
 cd /app
 
-# Load config written by the setup container
+# Write .env so that @std/dotenv load() and drizzle-kit --env both find it.
 if [ -f /config/council.env ]; then
-  set -a
-  . /config/council.env
-  set +a
+  cp /config/council.env .env
 fi
+echo "DATABASE_URL=${DATABASE_URL}" >> .env
 
-# DB URL comes from docker-compose environment (uses Docker service name)
 deno install
 deno task db:migrate
 exec deno task serve
