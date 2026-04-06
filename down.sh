@@ -2,8 +2,7 @@
 set -euo pipefail
 
 # Local Dev — Down
-# Stops all local-dev services and cleans up.
-# Does NOT touch Stellar (shared). Stops Jaeger, PostgreSQL, and all app services.
+# Stops all local-dev services and cleans up, including Stellar.
 #
 # Usage: ./down.sh
 
@@ -106,8 +105,19 @@ for f in \
   fi
 done
 
+# --- Stop Stellar ---
+for container in $(docker ps -a --format '{{.Names}}' | grep -iE 'stellar' || true); do
+  docker rm -f "$container" >/dev/null 2>&1
+  info "Stopped Stellar container ($container)"
+done
+
+# --- Tear down lifecycle Docker Compose if running ---
+if [ -f "$SCRIPT_DIR/lifecycle/docker-compose.yml" ]; then
+  docker compose -f "$SCRIPT_DIR/lifecycle/docker-compose.yml" down 2>/dev/null && info "Stopped lifecycle containers" || true
+fi
+
 # --- Clean up old pid files (backward compat) ---
 rm -f "$SCRIPT_DIR/.console.pid" "$SCRIPT_DIR/console.log" 2>/dev/null
 
 echo ""
-info "Down. local-dev services stopped (Stellar left running)."
+info "Down. All services stopped."

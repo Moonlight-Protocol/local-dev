@@ -2,3 +2,4 @@
 *.log
 e2e/.env
 node_modules/
+.traces/

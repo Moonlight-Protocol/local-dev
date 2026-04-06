@@ -280,16 +280,8 @@ DATABASE_URL=${databaseUrl}
 NETWORK=local
 STELLAR_RPC_URL=${rpcUrl}
 NETWORK_FEE=1000000000
-CHANNEL_CONTRACT_ID=${opts.channelContractId}
-CHANNEL_AUTH_ID=${opts.channelAuthId}
-CHANNEL_ASSET_CODE=XLM
-CHANNEL_ASSET_CONTRACT_ID=${opts.assetContractId}
 
-PROVIDER_SK=${opts.providerSecretKey}
-OPEX_PUBLIC=${opts.treasuryPublicKey}
-OPEX_SECRET=${opts.treasurySecretKey}
-
-SERVICE_AUTH_SECRET=
+SERVICE_AUTH_SECRET=lifecycle-test-auth-secret
 SERVICE_FEE=100
 CHALLENGE_TTL=900
 SESSION_TTL=21600
@@ -301,6 +293,11 @@ MEMPOOL_EXECUTOR_INTERVAL_MS=5000
 MEMPOOL_VERIFIER_INTERVAL_MS=10000
 MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 MEMPOOL_MAX_RETRY_ATTEMPTS=3
+
+# Legacy env vars — kept for e2e test config loading, not read by platform
+CHANNEL_CONTRACT_ID=${opts.channelContractId}
+CHANNEL_AUTH_ID=${opts.channelAuthId}
+PROVIDER_SK=${opts.providerSecretKey}
 `;
   await Deno.writeTextFile(envPath, content);
   return backupPath;

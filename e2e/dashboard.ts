@@ -131,7 +131,7 @@ export async function dashboardE2E({ config, providerSecretKey }: DashboardTestC
   // 5. Treasury
   await withE2ESpan("dashboard.treasury", async () => {
     console.log("  [dashboard] GET /dashboard/treasury...");
-    const res = await fetchDashboard(providerUrl, token, "/dashboard/treasury");
+    const res = await fetchDashboard(providerUrl, token, `/dashboard/treasury?ppPublicKey=${keypair.publicKey()}`);
     assertField(res, "data.address");
     assertField(res, "data.balances");
     console.log("  [dashboard] Treasury OK");

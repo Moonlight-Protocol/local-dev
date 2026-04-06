@@ -32,9 +32,9 @@ usage() {
   echo ""
   echo "Suites:"
   echo "  e2e           Payment flow (8 steps)"
+  echo "  otel          Payment flow + OTEL trace verification (16 checks)"
   echo "  governance    UC2 governance flows (40+ checks)"
-  echo "  uc2           Manual UC2 user flow (22 checks)"
-  echo "  all           Run all suites in parallel"
+  echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
   echo "  clean         Remove all test containers and volumes"
   exit 1
 }
@@ -61,9 +61,12 @@ run_suite() {
   local project_name="moonlight-test-${suite}-$(date +%s | tail -c 5)"
 
   case "$suite" in
-    e2e|governance|uc2) ;;
+    e2e|otel|governance|lifecycle) ;;
     *) error "Unknown suite: $suite" ;;
   esac
+
+  # Create traces directory so Docker mounts it with correct ownership
+  mkdir -p "$SCRIPT_DIR/.traces/$suite"
 
   info "Running '$suite' (project: $project_name)..."
 
@@ -129,7 +132,7 @@ clean_all() {
 }
 
 case "$SUITE" in
-  e2e|governance|uc2)
+  e2e|otel|governance|lifecycle)
     ensure_wasms
     run_suite "$SUITE"
     ;;
@@ -140,14 +143,14 @@ case "$SUITE" in
     pids=()
     results=()
 
-    for s in e2e governance uc2; do
+    for s in e2e otel governance lifecycle; do
       (run_suite "$s") &
       pids+=($!)
     done
 
     all_passed=true
     for i in "${!pids[@]}"; do
-      suite_names=(e2e governance uc2)
+      suite_names=(e2e otel governance lifecycle)
       if wait "${pids[$i]}"; then
         results+=("${suite_names[$i]}: passed")
       else

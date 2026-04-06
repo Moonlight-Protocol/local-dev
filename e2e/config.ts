@@ -27,22 +27,14 @@ function loadEnvFile(path: string): Record<string, string> {
       env[trimmed.slice(0, eqIdx)] = trimmed.slice(eqIdx + 1);
     }
   } catch {
-    // File not found — that's fine, we'll use env vars
+    // File not found
   }
   return env;
 }
 
 export function loadConfig(): Config {
-  // Priority: Docker contracts.env > local e2e/.env > provider-platform .env
-  const contractsEnv = loadEnvFile("/config/contracts.env");
-
-  const localEnv = loadEnvFile(new URL("./.env", import.meta.url).pathname);
-
-  const providerPlatformPath = Deno.env.get("PROVIDER_PLATFORM_PATH") ??
-    `${Deno.env.get("HOME")}/repos/provider-platform`;
-  const providerEnv = loadEnvFile(`${providerPlatformPath}/.env`);
-
-  const env = { ...providerEnv, ...localEnv, ...contractsEnv };
+  // Load from /config/contracts.env (Docker shared volume)
+  const env = loadEnvFile("/config/contracts.env");
 
   const networkPassphrase = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
     "Standalone Network ; February 2017";
@@ -51,20 +43,22 @@ export function loadConfig(): Config {
   const horizonUrl = rpcUrl.replace("/soroban/rpc", "");
   const friendbotUrl = Deno.env.get("FRIENDBOT_URL") ??
     "http://localhost:8000/friendbot";
-  const providerUrl = env["PROVIDER_URL"] ??
-    Deno.env.get("PROVIDER_URL") ??
-    `http://localhost:${env["PORT"] ?? "3000"}`;
+  const providerUrl = Deno.env.get("PROVIDER_URL") ??
+    env["PROVIDER_URL"] ?? "http://localhost:3000";
 
-  const channelContractId = (env["CHANNEL_CONTRACT_ID"] ??
-    Deno.env.get("CHANNEL_CONTRACT_ID")) as ContractId;
-  const channelAuthId = (env["CHANNEL_AUTH_ID"] ??
-    Deno.env.get("CHANNEL_AUTH_ID")) as ContractId;
-  const channelAssetContractId = (env["CHANNEL_ASSET_CONTRACT_ID"] ??
-    Deno.env.get("CHANNEL_ASSET_CONTRACT_ID")) as ContractId;
+  const channelContractId = (
+    Deno.env.get("E2E_CHANNEL_CONTRACT_ID") ?? env["E2E_CHANNEL_CONTRACT_ID"]
+  ) as ContractId;
+  const channelAuthId = (
+    Deno.env.get("E2E_CHANNEL_AUTH_ID") ?? env["E2E_CHANNEL_AUTH_ID"]
+  ) as ContractId;
+  const channelAssetContractId = (
+    Deno.env.get("E2E_CHANNEL_ASSET_CONTRACT_ID") ?? env["E2E_CHANNEL_ASSET_CONTRACT_ID"]
+  ) as ContractId;
 
   if (!channelContractId || !channelAuthId || !channelAssetContractId) {
     throw new Error(
-      "Missing contract IDs. Set env vars or provide .env files.",
+      "Missing contract IDs. Ensure /config/contracts.env exists (written by test setup).",
     );
   }
 
@@ -76,7 +70,8 @@ export function loadConfig(): Config {
     allowHttp: true,
   });
 
-  const providerSecretKey = env["PROVIDER_SK"] ?? Deno.env.get("PROVIDER_SK");
+  const providerSecretKey =
+    Deno.env.get("E2E_PROVIDER_SK") ?? env["E2E_PROVIDER_SK"];
 
   return {
     networkPassphrase,

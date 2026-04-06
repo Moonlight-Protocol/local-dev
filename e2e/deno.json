@@ -1,7 +1,6 @@
 {
   "nodeModulesDir": "auto",
   "tasks": {
-    "e2e": "OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4318 OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf deno run --allow-all main.ts",
     "verify-otel": "deno run --allow-all verify-otel.ts"
   },
   "imports": {

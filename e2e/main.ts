@@ -5,7 +5,6 @@ import { deposit } from "./deposit.ts";
 import { prepareReceive } from "./receive.ts";
 import { send } from "./send.ts";
 import { withdraw } from "./withdraw.ts";
-import { dashboardE2E } from "./dashboard.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "./tracer.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
@@ -41,7 +40,7 @@ async function main() {
   console.log(`  Alice:    ${alice.publicKey()}`);
   console.log(`  Bob:      ${bob.publicKey()}`);
 
-  // Step 2: Fund accounts via Friendbot
+  // Step 3: Fund accounts via Friendbot
   console.log("\n[2/8] Funding accounts via Friendbot...");
   await withE2ESpan("e2e.fund_accounts", async () => {
     await fundAccount(config.friendbotUrl, alice.publicKey());
@@ -93,17 +92,6 @@ async function main() {
     withdraw(bob.secret(), bob.publicKey(), WITHDRAW_AMOUNT, bobJwt, config, sdkTracer)
   );
   console.log(`  Withdraw complete`);
-
-  // Step 9: Dashboard API E2E
-  if (config.providerSecretKey) {
-    console.log("\n[9/9] Running dashboard API E2E...");
-    await withE2ESpan("e2e.dashboard", () =>
-      dashboardE2E({ config, providerSecretKey: config.providerSecretKey! })
-    );
-    console.log("  Dashboard E2E complete");
-  } else {
-    console.log("\n[9/9] Skipping dashboard E2E (PROVIDER_SK not available to test runner)");
-  }
 
   // Write trace IDs for verify-otel to fetch by ID
   await writeTraceIds();

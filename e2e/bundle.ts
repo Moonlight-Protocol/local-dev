@@ -17,7 +17,7 @@ export async function submitBundle(
           "Content-Type": "application/json",
           "Authorization": `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ operationsMLXDR }),
+        body: JSON.stringify({ operationsMLXDR, channelContractId: config.channelContractId }),
       });
 
       if (res.status === 429) {
