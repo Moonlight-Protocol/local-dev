@@ -75,15 +75,5 @@ jobs:
         env:
           STELLAR_CLI_IMAGE: ${{ env.REGISTRY }}/${{ env.ORG }}/stellar-cli:${{ inputs.stellar_cli_version }}
           PROVIDER_IMAGE: ${{ inputs.provider_image_override != '' && inputs.provider_image_override || format('{0}/{1}/provider-platform:{2}', env.REGISTRY, env.ORG, inputs.provider_version) }}
-        working-directory: e2e
-        run: |
-          docker compose up -d
-          EXIT_CODE=$(docker wait e2e-test-runner-1)
-          echo "--- setup logs ---"
-          docker compose logs setup
-          echo "--- provider logs ---"
-          docker compose logs provider
-          echo "--- test-runner logs ---"
-          docker compose logs test-runner
-          docker compose down
-          exit $EXIT_CODE
+          WASM_DIR: ${{ github.workspace }}/e2e/wasms
+        run: ./test.sh e2e
