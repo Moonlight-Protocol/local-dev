@@ -87,6 +87,42 @@ async function main() {
     providerSecretKey,
   };
 
+  // Step 3: Register PP on provider-platform (mimics UI "Create PP" flow)
+  console.log("\n[3/7] Registering PP on provider-platform");
+  const providerKeypair = Keypair.fromSecret(providerSecretKey);
+  {
+    const challengeRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/auth/challenge`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: providerKeypair.publicKey() }),
+    });
+    if (!challengeRes.ok) throw new Error(`Dashboard challenge failed: ${challengeRes.status}`);
+    const { data: { nonce } } = await challengeRes.json();
+
+    const nonceBytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
+    const sig = providerKeypair.sign(nonceBytes as unknown as Buffer);
+    const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
+
+    const verifyRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/auth/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nonce, signature, publicKey: providerKeypair.publicKey() }),
+    });
+    if (!verifyRes.ok) throw new Error(`Dashboard verify failed: ${verifyRes.status}`);
+    const { data: { token: dashboardJwt } } = await verifyRes.json();
+
+    const regRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/pp/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${dashboardJwt}` },
+      body: JSON.stringify({ secretKey: providerSecretKey, label: "Lifecycle PP" }),
+    });
+    if (!regRes.ok) {
+      const body = await regRes.json().catch(() => ({}));
+      throw new Error(`PP register failed: ${regRes.status} ${body.message || ""}`);
+    }
+    console.log(`  PP registered: ${providerKeypair.publicKey()}`);
+  }
+
   const alice = Keypair.random();
   const bob = Keypair.random();
   console.log(`  Alice: ${alice.publicKey()}`);

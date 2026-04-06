@@ -2,19 +2,20 @@
 set -euo pipefail
 
 # Local Dev — Down
-# Stops all local-dev services and cleans up.
-# Does NOT touch shared services (Stellar, Jaeger) or local-dev resources.
+# Stops all local-dev services and cleans up, including Stellar.
 #
 # Usage: ./down.sh
 
 BASE_DIR="${BASE_DIR:-$HOME/repos}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
+COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 # Ports & names — must match the values used in up.sh
 PROVIDER_PORT="${PROVIDER_PORT:-3010}"
+COUNCIL_PLATFORM_PORT="${COUNCIL_PLATFORM_PORT:-3015}"
 PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
@@ -61,6 +62,7 @@ stop_process() {
 
 # --- Stop all processes ---
 stop_process "provider-platform" "$SCRIPT_DIR/.provider.pid" "$PROVIDER_PORT"
+stop_process "council-platform" "$SCRIPT_DIR/.council-platform.pid" "$COUNCIL_PLATFORM_PORT"
 stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_CONSOLE_PORT"
 stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONSOLE_PORT"
 stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
@@ -69,6 +71,13 @@ stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_
 if docker ps -a --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
   docker rm -f "$PG_CONTAINER" >/dev/null 2>&1
   info "Stopped PostgreSQL ($PG_CONTAINER)"
+fi
+
+# --- Stop Jaeger container ---
+JAEGER_CONTAINER="${JAEGER_CONTAINER:-jaeger}"
+if docker ps -a --format '{{.Names}}' | grep -q "^${JAEGER_CONTAINER}$"; then
+  docker rm -f "$JAEGER_CONTAINER" >/dev/null 2>&1
+  info "Stopped Jaeger ($JAEGER_CONTAINER)"
 fi
 
 # --- Remove Stellar accounts ---
@@ -83,7 +92,9 @@ fi
 # --- Clean up generated files ---
 for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
+  "$COUNCIL_PLATFORM_PATH/.env" \
   "$SCRIPT_DIR/provider.log" \
+  "$SCRIPT_DIR/council-platform.log" \
   "$SCRIPT_DIR/provider-console.log" \
   "$SCRIPT_DIR/council-console.log" \
   "$SCRIPT_DIR/network-dashboard.log" \
@@ -94,8 +105,19 @@ for f in \
   fi
 done
 
+# --- Stop Stellar (only moonlight-managed containers) ---
+for container in $(docker ps -a --format '{{.Names}}' | grep -iE 'moonlight.*stellar|stellar.*moonlight' || true); do
+  docker rm -f "$container" >/dev/null 2>&1
+  info "Stopped Stellar container ($container)"
+done
+
+# --- Tear down lifecycle Docker Compose if running ---
+if [ -f "$SCRIPT_DIR/lifecycle/docker-compose.yml" ]; then
+  docker compose -f "$SCRIPT_DIR/lifecycle/docker-compose.yml" down 2>/dev/null && info "Stopped lifecycle containers" || true
+fi
+
 # --- Clean up old pid files (backward compat) ---
 rm -f "$SCRIPT_DIR/.console.pid" "$SCRIPT_DIR/console.log" 2>/dev/null
 
 echo ""
-info "Down. local-dev services stopped (shared Stellar & Jaeger left running)."
+info "Down. All services stopped."

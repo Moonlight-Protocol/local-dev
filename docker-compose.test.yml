@@ -47,6 +47,13 @@ services:
     image: jaegertracing/all-in-one:latest
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_KEY: /badger/keys
+      BADGER_DIRECTORY_VALUE: /badger/values
+    volumes:
+      # TEST_SUITE is validated against a fixed set in test.sh before reaching compose.
+      - ./.traces/${TEST_SUITE:-e2e}:/badger
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
       interval: 2s
@@ -77,6 +84,7 @@ services:
       WASM_DIR: /wasms
       PROVIDER_INTERNAL_PORT: "3000"
       COUNCIL_INTERNAL_PORT: "8080"
+      TEST_SUITE: ${TEST_SUITE:-e2e}
 
   provider:
     image: denoland/deno:2.7.9
@@ -155,7 +163,8 @@ services:
       - shared-config:/config:ro
       - ./e2e:/e2e-src:ro
       - ./e2e/governance:/governance-src:ro
-      - ./manual-user-e2e:/uc2-src:ro
+      - ./lifecycle:/lifecycle-src:ro
+      - ${WASM_DIR:-../soroban-core/target/wasm32v1-none/release}:/wasms:ro
       - ./test/test-entrypoint.sh:/entrypoint.sh:ro
     working_dir: /app
     entrypoint: ["sh", "/entrypoint.sh"]
@@ -168,6 +177,8 @@ services:
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
       FRIENDBOT_URL: http://stellar:8000/friendbot
       JAEGER_QUERY_URL: http://jaeger:16686
+      DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+      WASM_DIR: /wasms
       TEST_SUITE: ${TEST_SUITE:-e2e}
       OTEL_DENO: "true"
       OTEL_SERVICE_NAME: "moonlight-e2e"

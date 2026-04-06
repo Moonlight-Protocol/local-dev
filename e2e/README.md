@@ -87,9 +87,9 @@ WASM_DIR=/path/to/soroban-core/target/wasm32v1-none/release docker compose up
 4. **provider** reads `provider.env` at startup, runs migrations, starts serving
 5. **test-runner** reads `contracts.env` via env vars and runs the E2E test suite
 
-## Running locally (isolated)
+## Running locally
 
-The recommended way to run tests locally is via `test.sh` in the repo root, which spins up a fully isolated Docker stack (own Stellar, PostgreSQL, provider, council) using your current local source code:
+Run tests via `test.sh` in the repo root. Each run spins up a fully isolated Docker stack (own Stellar, PostgreSQL, provider, council) using your current local source code:
 
 ```bash
 # From local-dev/
@@ -100,17 +100,6 @@ The recommended way to run tests locally is via `test.sh` in the repo root, whic
 ```
 
 No `up.sh` needed. Each run is independent — parallel runs don't interfere with each other or with your dev stack.
-
-## Running locally (against up.sh stack)
-
-The test suite also runs directly with Deno against a local stack started by `up.sh`:
-
-```bash
-cd e2e
-deno task e2e
-```
-
-Config is loaded from env vars first, then `/config/contracts.env` (Docker), then `~/repos/provider-platform/.env` (local). Override the local path with `PROVIDER_PLATFORM_PATH`.
 
 ## Files
 

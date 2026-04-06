@@ -63,31 +63,16 @@ All configuration (`.env` files, `config.js` files) is generated automatically.
 ./down.sh
 ```
 
-### Run E2E tests (isolated)
+### Run E2E tests
 
 ```bash
-./test.sh e2e           # Payment flow
-./test.sh governance    # UC2 governance flows
-./test.sh uc2           # Manual UC2 user flow
-./test.sh all           # All three in parallel
+./test.sh e2e           # Payment flow (deposit, send, receive, withdraw)
+./test.sh otel          # Payment flow + OTEL trace verification
+./test.sh governance    # UC2 governance flows (approve, reject, multi-PP)
+./test.sh all           # All suites in parallel
 ```
 
 Each run spins up its own Stellar node, PostgreSQL, provider, and council in Docker — fully isolated, no shared state, no dependency on `up.sh`. Uses your current local repo source code (mounted read-only). Set `BASE_DIR` if your repos aren't in `~/repos/`.
-
-### Run E2E tests (against local stack)
-
-If you prefer to test against the `up.sh` stack:
-
-```bash
-cd e2e && deno task e2e
-```
-
-Traces are exported to Jaeger automatically:
-
-```bash
-deno task verify-otel
-open http://localhost:16686
-```
 
 ## E2E in CI
 
@@ -96,6 +81,52 @@ See [e2e/README.md](e2e/README.md) for the Docker compose setup that runs E2E te
 ```bash
 cd e2e && docker compose up --abort-on-container-exit
 ```
+
+## Debugging test failures with traces
+
+Every test suite exports OTEL traces to Jaeger, and Jaeger persists them to disk at `.traces/<suite>/`. After a test run (pass or fail), you can inspect the traces by starting a Jaeger instance against the persisted data:
+
+```bash
+# Start Jaeger in read-only mode against a suite's traces
+docker run --rm -d --name jaeger-inspect \
+  -e SPAN_STORAGE_TYPE=badger \
+  -e BADGER_EPHEMERAL=false \
+  -e BADGER_DIRECTORY_KEY=/badger/keys \
+  -e BADGER_DIRECTORY_VALUE=/badger/values \
+  -v "$(pwd)/.traces/lifecycle:/badger" \
+  -p 16687:16686 \
+  jaegertracing/all-in-one:latest
+
+# Open the UI
+open http://localhost:16687
+
+# When done
+docker rm -f jaeger-inspect
+```
+
+Replace `lifecycle` with any suite name (`e2e`, `otel`, `governance`).
+
+### What to look for
+
+| Symptom | Where to look |
+|---------|--------------|
+| Bundle FAILED | Service: `provider-platform`, Operation: `Executor.submitTransactionToNetwork` — check `submission_failed` event for `error.message` |
+| Auth fails | Service: `provider-platform`, Operation: `P_VerifyChallenge` — check signature verification events |
+| Event watcher not firing | Service: `provider-platform`, Operation: `EventWatcher.poll` — check for `poll_error` events |
+| Slow transactions | Service: `provider-platform`, compare `Executor.submitTransactionToNetwork` durations across bundles |
+| Missing distributed traces | Service: `moonlight-e2e` — check that SDK spans have provider-platform children (CHILD_OF references) |
+
+### Trace directory structure
+
+```
+.traces/
+├── e2e/           # Payment flow traces
+├── otel/          # Same as e2e (used for OTEL verification)
+├── governance/    # UC2 governance flow traces
+└── lifecycle/     # Full lifecycle traces (deploy → payment → remove)
+```
+
+Each directory contains Jaeger's badger storage (`keys/` and `values/`). Delete a directory to clear its traces. The `.traces/` directory is gitignored.
 
 ## Releases and Versioning
 
