@@ -58,15 +58,17 @@ ensure_wasms() {
 # Run a single test suite
 run_suite() {
   local suite=$1
-  local project_name="moonlight-test-${suite}-$(date +%s | tail -c 9)"
+  # Not local — must be visible to the EXIT trap after run_suite returns
+  project_name="moonlight-test-${suite}-$(date +%s | tail -c 9)"
 
   case "$suite" in
     e2e|otel|governance|lifecycle) ;;
     *) error "Unknown suite: $suite" ;;
   esac
 
-  # Create traces directory so Docker mounts it with correct ownership
+  # Create traces directory with open permissions so Jaeger (non-root) can write
   mkdir -p "$SCRIPT_DIR/.traces/$suite"
+  chmod 777 "$SCRIPT_DIR/.traces/$suite"
 
   info "Running '$suite' (project: $project_name)..."
 
