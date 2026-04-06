@@ -58,7 +58,7 @@ ensure_wasms() {
 # Run a single test suite
 run_suite() {
   local suite=$1
-  local project_name="moonlight-test-${suite}-$(date +%s | tail -c 5)"
+  local project_name="moonlight-test-${suite}-$(date +%s | tail -c 9)"
 
   case "$suite" in
     e2e|otel|governance|lifecycle) ;;
@@ -144,6 +144,8 @@ case "$SUITE" in
     results=()
 
     for s in e2e otel governance lifecycle; do
+      # Intentional: each subshell gets its own trap handler from run_suite,
+      # so cleanup runs independently per suite when it exits or is interrupted.
       (run_suite "$s") &
       pids+=($!)
     done

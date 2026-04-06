@@ -105,8 +105,8 @@ for f in \
   fi
 done
 
-# --- Stop Stellar ---
-for container in $(docker ps -a --format '{{.Names}}' | grep -iE 'stellar' || true); do
+# --- Stop Stellar (only moonlight-managed containers) ---
+for container in $(docker ps -a --format '{{.Names}}' | grep -iE 'moonlight.*stellar|stellar.*moonlight' || true); do
   docker rm -f "$container" >/dev/null 2>&1
   info "Stopped Stellar container ($container)"
 done

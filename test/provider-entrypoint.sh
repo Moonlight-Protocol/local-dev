@@ -10,6 +10,7 @@ cd /app
 if [ -f /config/provider.env ]; then
   cp /config/provider.env .env
 fi
+touch .env
 echo "DATABASE_URL=${DATABASE_URL}" >> .env
 
 deno install

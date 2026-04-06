@@ -40,7 +40,7 @@ async function main() {
   console.log(`  Alice:    ${alice.publicKey()}`);
   console.log(`  Bob:      ${bob.publicKey()}`);
 
-  // Step 3: Fund accounts via Friendbot
+  // Step 2: Fund accounts via Friendbot
   console.log("\n[2/8] Funding accounts via Friendbot...");
   await withE2ESpan("e2e.fund_accounts", async () => {
     await fundAccount(config.friendbotUrl, alice.publicKey());

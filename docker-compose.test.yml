@@ -52,6 +52,7 @@ services:
       BADGER_DIRECTORY_KEY: /badger/keys
       BADGER_DIRECTORY_VALUE: /badger/values
     volumes:
+      # TEST_SUITE is validated against a fixed set in test.sh before reaching compose.
       - ./.traces/${TEST_SUITE:-e2e}:/badger
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]

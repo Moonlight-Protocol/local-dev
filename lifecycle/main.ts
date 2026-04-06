@@ -126,11 +126,12 @@ async function main() {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ nonce: challengeRes.data.nonce, signature: sig, publicKey: provider.publicKey() }),
   })).json();
-  await fetch(`${PROVIDER_URL}/api/v1/dashboard/pp/register`, {
+  const registerRes = await (await fetch(`${PROVIDER_URL}/api/v1/dashboard/pp/register`, {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": `Bearer ${verifyRes.data.token}` },
     body: JSON.stringify({ secretKey: provider.secret(), derivationIndex: 0, label: "Lifecycle Provider" }),
-  });
+  })).json();
+  if (!registerRes.data?.publicKey) throw new Error(`PP register failed: ${JSON.stringify(registerRes)}`);
   console.log("  PP registered");
 
   // Seed council membership directly in DB

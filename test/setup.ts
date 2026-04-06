@@ -27,6 +27,7 @@ const PROVIDER_INTERNAL_PORT = Deno.env.get("PROVIDER_INTERNAL_PORT") ?? "3000";
 const COUNCIL_INTERNAL_PORT = Deno.env.get("COUNCIL_INTERNAL_PORT") ?? "8080";
 const TEST_SUITE = Deno.env.get("TEST_SUITE") ?? "e2e";
 
+// Must match the SERVICE_AUTH_SECRET in provider-platform's test config.
 const SERVICE_AUTH_SECRET = "test-auth-secret";
 
 async function fundAccount(publicKey: string): Promise<void> {
@@ -55,22 +56,6 @@ async function waitForFriendbot(): Promise<void> {
     await new Promise((r) => setTimeout(r, 1000));
   }
   throw new Error("Friendbot did not become ready after 180s");
-}
-
-async function waitForDb(): Promise<void> {
-  console.log("[setup] Waiting for PostgreSQL...");
-  const postgres = (await import("npm:postgres")).default;
-  for (let i = 0; i < 30; i++) {
-    try {
-      const sql = postgres("postgresql://admin:devpass@db:5432/provider_platform_db");
-      await sql`SELECT 1`;
-      await sql.end();
-      console.log("  PostgreSQL is ready.");
-      return;
-    } catch { /* not ready */ }
-    await new Promise((r) => setTimeout(r, 1000));
-  }
-  throw new Error("PostgreSQL did not become ready after 30s");
 }
 
 async function main() {
@@ -276,29 +261,30 @@ E2E_COUNCIL_URL=http://council:${COUNCIL_INTERNAL_PORT}
  * Replicated here so setup doesn't depend on the provider-platform source mount.
  */
 async function createEncryptor(secret: string): Promise<(plaintext: string) => Promise<string>> {
-  const keyMaterial = await crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    "PBKDF2",
-    false,
-    ["deriveKey"],
-  );
-  const key = await crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt: new TextEncoder().encode("moonlight-pp-sk"), iterations: 100000, hash: "SHA-256" },
-    keyMaterial,
-    { name: "AES-GCM", length: 256 },
-    false,
-    ["encrypt"],
-  );
-
   return async (plaintext: string): Promise<string> => {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const keyMaterial = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(secret),
+      "PBKDF2",
+      false,
+      ["deriveKey"],
+    );
+    const key = await crypto.subtle.deriveKey(
+      { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt"],
+    );
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encrypted = new Uint8Array(
       await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext)),
     );
-    const combined = new Uint8Array(iv.length + encrypted.length);
-    combined.set(iv);
-    combined.set(encrypted, iv.length);
+    const combined = new Uint8Array(salt.length + iv.length + encrypted.length);
+    combined.set(salt);
+    combined.set(iv, salt.length);
+    combined.set(encrypted, salt.length + iv.length);
     return btoa(String.fromCharCode(...combined));
   };
 }
