@@ -168,7 +168,7 @@ export async function startProvider(
     .pipeTo(new WritableStream({ write(chunk) { return logWriter.write(chunk); } }))
     .catch(() => {});
   child.stderr
-    .pipeTo(new WritableStream({ write() {} }))
+    .pipeTo(new WritableStream({ write(chunk) { return logWriter.write(chunk); } }))
     .catch(() => {});
 
   const providerUrl = `http://localhost:${PROVIDER_PORT}`;
@@ -293,6 +293,7 @@ MEMPOOL_EXECUTOR_INTERVAL_MS=5000
 MEMPOOL_VERIFIER_INTERVAL_MS=10000
 MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 MEMPOOL_MAX_RETRY_ATTEMPTS=3
+BUNDLE_MAX_OPERATIONS=20
 
 # Legacy env vars — kept for e2e test config loading, not read by platform
 CHANNEL_CONTRACT_ID=${opts.channelContractId}
