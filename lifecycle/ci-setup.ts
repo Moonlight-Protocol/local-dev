@@ -1,7 +1,16 @@
 /**
  * CI Setup phase — runs inside docker-compose.
- * Deploys contracts, registers provider, writes config for the provider
- * and test-runner containers via the shared /config volume.
+ *
+ * Deploys contracts and writes config for the provider, council, and
+ * test-runner containers via the shared /config volume.
+ *
+ * Wallets:
+ *   - admin: deploys contracts AND acts as council admin
+ *   - pp_operator: registers a PP via the dashboard API and joins the council
+ *
+ * NOTE: This setup does NOT call on-chain add_provider. The provider is
+ * added on-chain by the test runner (acting as the council admin) AFTER
+ * the PP submits a join request, mirroring the production flow.
  */
 import { Keypair } from "stellar-sdk";
 import { createServer } from "./soroban.ts";
@@ -11,7 +20,6 @@ import {
   getOrDeployNativeSac,
   uploadWasm,
 } from "./deploy.ts";
-import { addProvider } from "./admin.ts";
 import { extractEvents, verifyEvent } from "./events.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
@@ -54,16 +62,17 @@ async function main() {
 
   await waitForFriendbot();
 
+  // Two distinct identities, mirroring production:
+  //   admin       — council admin, also the on-chain contract deployer
+  //   ppOperator  — PP wallet that registers and joins councils via the dashboard
   const admin = Keypair.random();
-  const provider = Keypair.random();
-  const treasury = Keypair.random();
-  console.log(`  Admin:    ${admin.publicKey()}`);
-  console.log(`  Provider: ${provider.publicKey()}`);
-  console.log(`  Treasury: ${treasury.publicKey()}`);
+  const ppOperator = Keypair.random();
+  console.log(`  Admin:       ${admin.publicKey()}`);
+  console.log(`  PP Operator: ${ppOperator.publicKey()}`);
 
   console.log("[ci-setup] Funding accounts...");
   await fundAccount(admin.publicKey());
-  await fundAccount(treasury.publicKey());
+  await fundAccount(ppOperator.publicKey());
 
   // Step 1: Deploy Council (Channel Auth)
   console.log("[ci-setup] Deploying Channel Auth...");
@@ -93,16 +102,9 @@ async function main() {
     privacyChannelHash, channelAuthId, assetContractId,
   );
 
-  // Step 3: Register provider
-  console.log("[ci-setup] Registering provider...");
-  const addTx = await addProvider(
-    server, admin, NETWORK_PASSPHRASE, channelAuthId, provider.publicKey(),
-  );
-  const addEvents = extractEvents(addTx);
-  const addResult = verifyEvent(addEvents, "provider_added", true);
-  if (addResult.found) console.log("  ProviderAdded event verified");
-
-  // Write provider.env (read by provider-entrypoint.sh)
+  // Write provider.env (boot-only env vars for provider-platform).
+  // PPs and council memberships are created at runtime via the dashboard API,
+  // not seeded — lifecycle simulates the real user-driven flow.
   const providerEnv = `PORT=3000
 MODE=development
 LOG_LEVEL=TRACE
@@ -111,16 +113,8 @@ SERVICE_DOMAIN=localhost
 STELLAR_RPC_URL=${RPC_URL}
 NETWORK=local
 NETWORK_FEE=1000000000
-CHANNEL_CONTRACT_ID=${channelContractId}
-CHANNEL_AUTH_ID=${channelAuthId}
-CHANNEL_ASSET_CODE=XLM
-CHANNEL_ASSET_CONTRACT_ID=${assetContractId}
 
-PROVIDER_SK=${provider.secret()}
-OPEX_PUBLIC=${treasury.publicKey()}
-OPEX_SECRET=${treasury.secret()}
-
-SERVICE_AUTH_SECRET=
+SERVICE_AUTH_SECRET=lifecycle-test-secret
 SERVICE_FEE=100
 CHALLENGE_TTL=900
 SESSION_TTL=21600
@@ -135,14 +129,15 @@ MEMPOOL_MAX_RETRY_ATTEMPTS=3
 `;
   await Deno.writeTextFile(`${CONFIG_DIR}/provider.env`, providerEnv);
 
-  // Write contracts.env (read by test-runner)
+  // Write contracts.env (test fixture file consumed by ci-test.ts).
+  // Contains everything the test runner needs to act as both wallets.
   const contractsEnv = `CHANNEL_CONTRACT_ID=${channelContractId}
 CHANNEL_AUTH_ID=${channelAuthId}
 CHANNEL_ASSET_CONTRACT_ID=${assetContractId}
-PROVIDER_PK=${provider.publicKey()}
-PROVIDER_SK=${provider.secret()}
-TREASURY_PK=${treasury.publicKey()}
+ADMIN_PK=${admin.publicKey()}
 ADMIN_SK=${admin.secret()}
+PP_OPERATOR_PK=${ppOperator.publicKey()}
+PP_OPERATOR_SK=${ppOperator.secret()}
 `;
   await Deno.writeTextFile(`${CONFIG_DIR}/contracts.env`, contractsEnv);
 
