@@ -137,5 +137,26 @@ E2E_PROVIDER_SK=$PROVIDER_SK
 E2E_TREASURY_PK=$TREASURY_PK
 EOF
 
+# --- Write seed.json for provider DB seeding ---
+# The provider entrypoint will encrypt the SK and seed the database.
+cat > "$CONFIG_DIR/seed.json" <<EOF
+{
+  "provider": {
+    "id": "$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "00000000-0000-0000-0000-000000000001")",
+    "publicKey": "$PROVIDER_PK",
+    "secretKey": "$PROVIDER_SK",
+    "derivationIndex": 0,
+    "label": "E2E Provider"
+  },
+  "membership": {
+    "id": "$(cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "00000000-0000-0000-0000-000000000002")",
+    "channelAuthId": "$AUTH_ID",
+    "channelContractId": "$CHANNEL_ID",
+    "assetContractId": "$TOKEN_ID",
+    "ppPublicKey": "$PROVIDER_PK"
+  }
+}
+EOF
+
 info "Config written to $CONFIG_DIR/"
 info "Setup complete."
