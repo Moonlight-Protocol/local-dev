@@ -15,7 +15,8 @@
     "npm:@stellar/stellar-sdk@^14.6.1": "14.6.1",
     "npm:asn1js@3.0.5": "3.0.5",
     "npm:buffer@6.0.3": "6.0.3",
-    "npm:buffer@^6.0.3": "6.0.3"
+    "npm:buffer@^6.0.3": "6.0.3",
+    "npm:postgres@3.4.7": "3.4.7"
   },
   "jsr": {
     "@colibri/core@0.16.1": {
@@ -342,6 +343,9 @@
     "possible-typed-array-names@1.1.0": {
       "integrity": "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="
     },
+    "postgres@3.4.7": {
+      "integrity": "sha512-Jtc2612XINuBjIl/QTWsV5UvE8UHuNblcO3vVADSrKsrc6RqGX6lOW1cEo3CM2v0XG4Nat8nI+YM7/f26VxXLw=="
+    },
     "proxy-from-env@1.1.0": {
       "integrity": "sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg=="
     },
@@ -426,7 +430,9 @@
       "jsr:@colibri/core@~0.16.1",
       "jsr:@moonlight/moonlight-sdk@0.7",
       "npm:@opentelemetry/api@^1.9.0",
-      "npm:@stellar/stellar-sdk@14.2.0"
+      "npm:@stellar/stellar-sdk@14.2.0",
+      "npm:buffer@6.0.3",
+      "npm:postgres@3.4.7"
     ]
   }
 }
