@@ -211,9 +211,9 @@ const cr2 = await get(COUNCIL_API, `/council/provider-requests?councilId=${AUTH_
 const cr2entry = cr2.data.data?.find((r: any) => r.publicKey === pp2.publicKey());
 check("Council: shows REJECTED", cr2entry?.status, "REJECTED");
 
-// Membership-status should return 403 (rejected/not found — no pending request, not active provider)
+// Membership-status should return 404 (not found — council hides rejected status to prevent enumeration)
 const ms2 = await fetch(`${COUNCIL_API}/public/provider/membership-status?councilId=${AUTH_ID}&publicKey=${pp2.publicKey()}`);
-check("Membership-status: REJECTED (403)", ms2.status, 403);
+check("Membership-status: REJECTED (404)", ms2.status, 404);
 
 // Sync rejection to provider-platform (simulates UI polling)
 const sync2 = await post(PROVIDER_API, "/dashboard/council/membership", { ppPublicKey: pp2.publicKey() }, dashToken);
@@ -275,9 +275,9 @@ console.log("\n\x1b[34m=== Test 7: Membership-status endpoint ===\x1b[0m");
 const msBad = await fetch(`${COUNCIL_API}/public/provider/membership-status`);
 check("Missing params → 400", msBad.status, 400);
 
-// Unknown PP → 403
+// Unknown PP → 404
 const msUnknown = await fetch(`${COUNCIL_API}/public/provider/membership-status?councilId=${AUTH_ID}&publicKey=${Keypair.random().publicKey()}`);
-check("Unknown PP → 403", msUnknown.status, 403);
+check("Unknown PP → 404", msUnknown.status, 404);
 
 // --- Test 8: Multiple PPs join same council ---
 console.log("\n\x1b[34m=== Test 8: Multiple PPs join same council ===\x1b[0m");
