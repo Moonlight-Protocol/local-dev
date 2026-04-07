@@ -11,12 +11,20 @@ on:
         description: "provider-platform image tag (e.g. 0.2.0)"
         type: string
         default: "latest"
+      council_version:
+        description: "council-platform image tag (e.g. 0.3.0)"
+        type: string
+        default: "latest"
       contracts_artifact:
         description: "Name of a workflow artifact containing wasms (overrides release download)"
         type: string
         default: ""
       provider_image_override:
         description: "Full image ref override for provider-platform (e.g. ghcr.io/org/repo:sha-abc123)"
+        type: string
+        default: ""
+      council_image_override:
+        description: "Full image ref override for council-platform (e.g. ghcr.io/org/repo:sha-abc123)"
         type: string
         default: ""
     secrets:
@@ -70,6 +78,7 @@ jobs:
       - name: Run Lifecycle E2E
         env:
           PROVIDER_IMAGE: ${{ inputs.provider_image_override != '' && inputs.provider_image_override || format('{0}/{1}/provider-platform:{2}', env.REGISTRY, env.ORG, inputs.provider_version) }}
+          COUNCIL_IMAGE: ${{ inputs.council_image_override != '' && inputs.council_image_override || format('{0}/{1}/council-platform:{2}', env.REGISTRY, env.ORG, inputs.council_version) }}
         working-directory: lifecycle
         run: |
           set +e
@@ -81,12 +90,16 @@ jobs:
             docker compose logs setup
             echo "--- stellar logs ---"
             docker compose logs stellar
+            echo "--- council logs ---"
+            docker compose logs council
             docker compose down
             exit $UP_EXIT
           fi
           EXIT_CODE=$(docker wait lifecycle-test-runner-1)
           echo "--- setup logs ---"
           docker compose logs setup
+          echo "--- council logs ---"
+          docker compose logs council
           echo "--- provider logs ---"
           docker compose logs provider
           echo "--- test-runner logs ---"
