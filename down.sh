@@ -2,7 +2,14 @@
 set -euo pipefail
 
 # Local Dev — Down
-# Stops all local-dev services and cleans up, including Stellar.
+#
+# Tears down everything up.sh started: services, containers, generated env
+# files, log files, and the .local-dev-state file written by setup-c.sh /
+# setup-pp.sh.
+#
+# This is "nuclear cleanup" — when you re-run up.sh you get a clean slate
+# (fresh Stellar ledger, empty databases, no contracts, no PPs). Run setup-c
+# and setup-pp again to repopulate the application state.
 #
 # Usage: ./down.sh
 
@@ -20,9 +27,6 @@ PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
-ACCT_ADMIN="${ACCT_ADMIN:-admin}"
-ACCT_PROVIDER="${ACCT_PROVIDER:-provider}"
-ACCT_TREASURY="${ACCT_TREASURY:-treasury}"
 
 # Colors
 GREEN='\033[0;32m'
@@ -80,19 +84,14 @@ if docker ps -a --format '{{.Names}}' | grep -q "^${JAEGER_CONTAINER}$"; then
   info "Stopped Jaeger ($JAEGER_CONTAINER)"
 fi
 
-# --- Remove Stellar accounts ---
-if command -v stellar >/dev/null 2>&1; then
-  for name in "$ACCT_ADMIN" "$ACCT_PROVIDER" "$ACCT_TREASURY"; do
-    if stellar keys address "$name" >/dev/null 2>&1; then
-      stellar keys rm "$name" 2>/dev/null && info "Removed account: $name" || warn "Could not remove account: $name"
-    fi
-  done
-fi
-
 # --- Clean up generated files ---
+# Note: up.sh no longer creates Stellar keys (account creation moved to
+# setup-c.sh / setup-pp.sh, which use ephemeral keys per run — nothing to
+# remove from the stellar CLI keyring).
 for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
   "$COUNCIL_PLATFORM_PATH/.env" \
+  "$SCRIPT_DIR/.local-dev-state" \
   "$SCRIPT_DIR/provider.log" \
   "$SCRIPT_DIR/council-platform.log" \
   "$SCRIPT_DIR/provider-console.log" \

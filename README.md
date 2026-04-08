@@ -8,7 +8,7 @@ Run the full Moonlight stack locally: Stellar network, smart contracts, privacy 
 |------|---------|
 | Docker | [docker.com](https://docs.docker.com/get-docker/) |
 
-Rust/Cargo, Stellar CLI, and Deno are auto-installed by `up.sh` if missing.
+Stellar CLI and Deno are auto-installed by `up.sh` if missing.
 
 ## Repos
 
@@ -17,9 +17,9 @@ Clone all repos to `~/repos/`:
 ```
 ~/repos/
 ├── local-dev/              # This repo (setup scripts, E2E infrastructure)
-├── soroban-core/           # Smart contracts (channel-auth, privacy-channel)
 ├── provider-platform/      # Privacy provider server
 ├── provider-console/       # Provider dashboard
+├── council-platform/       # Council backend
 ├── council-console/        # Council dashboard
 └── network-dashboard/      # Network monitoring dashboard
 ```
@@ -33,35 +33,89 @@ BASE_DIR=~/projects ./up.sh
 You can also override individual repo paths:
 
 ```bash
-SOROBAN_CORE_PATH=~/other/soroban-core ./up.sh
+PROVIDER_PLATFORM_PATH=~/other/provider-platform ./up.sh
 ```
 
-## Local Dev
+## Infrastructure vs Application
 
-### Start everything
+`local-dev` cleanly separates **infrastructure** (long-lived services) from **application setup** (contracts, councils, PPs).
+
+| Layer | Script | Owns | When to run |
+|---|---|---|---|
+| Infra | `./up.sh` | Stellar quickstart, PostgreSQL, Jaeger, the platform services with infra-only env, the consoles | Once per session, or after `down.sh` |
+| App: Council | `./setup-c.sh` | Admin keypair, contract deploys (channel-auth, privacy-channel, XLM SAC), council registered via council-platform API | After `up.sh`, before any flow that needs a council |
+| App: Privacy Provider | `./setup-pp.sh` | PP keypair, registered in provider-platform, joined to the council via the production join flow, on-chain `add_provider` | After `setup-c.sh`, before any flow that needs a working PP |
+
+This split exists for three reasons:
+
+1. **Infra restarts shouldn't silently rebuild app state.** Before this split, every `down`/`up` cycle quietly redeployed contracts and re-funded accounts as a side effect. Now `up.sh` is idempotent infra and the app state is explicit.
+2. **The setup scripts exercise the production API surface.** `setup-c.sh` and `setup-pp.sh` make the same HTTP calls that council-console and provider-console make. If a platform release breaks the public surface, these scripts break too — that's the point. No DB seeding, no shortcuts.
+3. **Skipping app setup is supported.** You can run `up.sh` alone if you only want to develop console UI or hit infra directly without a populated stack.
+
+### Start the infra
 
 ```bash
 ./up.sh
 ```
 
-This runs through 9 stages:
-1. Checks prerequisites (Docker) — auto-installs Rust, Stellar CLI, Deno if missing
-2. Starts a local Stellar network if not already running
-3. Generates accounts (admin, provider, treasury) and funds them via Friendbot
-4. Builds and deploys contracts (SAC, channel-auth, privacy-channel)
-5. Starts PostgreSQL (Docker container on port 5442)
-6. Starts provider-platform (generates `.env`, runs migrations, port 3010)
-7. Builds and starts provider-console (port 3020)
-8. Builds and starts council-console (port 3030)
-9. Builds and starts network-dashboard (port 3040)
+This runs through 9 sections:
+1. Checks prerequisites (Docker, Stellar CLI, Deno) and auto-installs missing ones
+2. Starts Jaeger (OTLP on `:4318`, UI on `:16686`)
+3. Starts the Stellar quickstart container (`:8000`) and waits for Friendbot
+4. Starts PostgreSQL (`:5442`) and creates `provider_platform_db` + `council_platform_db`
+5. Generates provider-platform `.env` (infra-only — no contract IDs, no PP keys), runs migrations, starts the service on `:3010`
+6. Generates council-platform `.env` (infra-only — no `CHANNEL_AUTH_ID`, no `COUNCIL_SK`, no `OPEX_*`), runs migrations, starts the service on `:3015`
+7. Generates `provider-console/public/config.js` and serves it on `:3020`
+8. Generates `council-console/public/config.js` and serves it on `:3030`
+9. Generates `network-dashboard/public/config.js` and serves it on `:3040`
 
-All configuration (`.env` files, `config.js` files) is generated automatically.
+After `up.sh` finishes the platform services are healthy and reachable, but the protocol state is empty: no contracts deployed, no councils, no PPs. Run the setup scripts to populate it.
+
+### Set up a council
+
+```bash
+./setup-c.sh
+```
+
+Steps (all production-like — every API call is the one council-console makes):
+
+1. Generate ephemeral admin keypair, fund via Friendbot
+2. Deploy Channel Auth contract → councilId
+3. Deploy native XLM SAC (Stellar Asset Contract)
+4. Deploy Privacy Channel contract → channelContractId
+5. Admin authenticates to council-platform via SEP-43/53 challenge → JWT
+6. `PUT /council/metadata` to create the council
+7. `POST /council/channels` to add the XLM channel
+8. Write admin SK + contract IDs to `.local-dev-state` (gitignored) for `setup-pp.sh` and other followups to consume
+
+### Set up a Privacy Provider
+
+```bash
+./setup-pp.sh
+```
+
+Requires `setup-c.sh` to have run first. Steps (also production-like):
+
+1. Load admin SK + council ID from `.local-dev-state`
+2. Generate fresh PP operator keypair, fund via Friendbot
+3. PP operator authenticates to provider-platform dashboard → JWT
+4. `POST /dashboard/pp/register` to register the PP
+5. Sign a join envelope, `POST /dashboard/council/join` (provider-platform forwards to council-platform)
+6. Admin authenticates to council-platform → JWT
+7. List join requests, find ours, `POST /council/provider-requests/:id/approve`
+8. Admin calls `add_provider` on-chain against the channel-auth contract
+9. Poll provider-platform until the membership flips ACTIVE (event watcher sees `provider_added`)
+10. Append PP keys to `.local-dev-state`
+
+Each `setup-pp.sh` run registers a fresh PP. Re-running adds a second PP to the same council (multi-PP). To reset: `down.sh` → `up.sh` → `setup-c.sh` → `setup-pp.sh`.
 
 ### Stop everything
 
 ```bash
 ./down.sh
 ```
+
+Tears down all containers, kills all services, and removes generated files (`.env`, `*.log`, `.local-dev-state`). After this you're back to a clean machine. Re-running `up.sh` gives you a fresh Stellar ledger and empty databases — you'll need to re-run the setup scripts to repopulate the application state.
 
 ### Run E2E tests
 
