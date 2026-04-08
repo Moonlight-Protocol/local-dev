@@ -1,17 +1,34 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Local Dev — Up
-# Spins up a parallel local stack using different ports to avoid collisions
-# with the primary local-dev instance. Reuses Stellar network & Jaeger.
+# Local Dev — Up (infrastructure only)
 #
-# Ports: PostgreSQL 5442, Provider 3010, Console 3020
-# Shared: Stellar RPC 8000
+# Brings up all the LONG-LIVED INFRA needed by Moonlight: Stellar quickstart,
+# PostgreSQL, Jaeger, the platform services (provider, council), and the
+# frontend hosts (provider-console, council-console, network-dashboard). All
+# services start with infra-only configuration — no Stellar accounts, no
+# deployed contracts, no councils, no PPs.
 #
-# Usage: ./up.sh
+# After running this, the platform services are healthy and reachable but the
+# protocol state is empty. To populate it, run the app-setup scripts:
+#
+#   ./setup-c.sh    Deploy contracts + create a council (production-like API flow)
+#   ./setup-pp.sh   Register a Privacy Provider in that council (production-like flow)
+#
+# Both setup scripts are opt-in. If you only want to test something that
+# doesn't need a real council/PP (e.g. council-console UI development), run
+# `up.sh` alone and skip them.
+#
+# Why this split exists: account creation, contract deployment, and council/PP
+# registration are application-level concerns, not infrastructure. Mixing them
+# into up.sh meant every "infrastructure restart" silently rebuilt application
+# state, hid which env vars the platforms actually need, and made it impossible
+# to test the production setup flow because the local dev path skipped it.
+#
+# Usage:
+#   ./up.sh
 
 BASE_DIR="${BASE_DIR:-$HOME/repos}"
-SOROBAN_CORE_PATH="${SOROBAN_CORE_PATH:-$BASE_DIR/soroban-core}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$BASE_DIR/provider-console}"
 COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
@@ -29,11 +46,8 @@ COUNCIL_PLATFORM_PORT="${COUNCIL_PLATFORM_PORT:-3015}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 
-# Container / account names — override to avoid collisions
+# Container name — override to avoid collisions
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
-ACCT_ADMIN="${ACCT_ADMIN:-admin}"
-ACCT_PROVIDER="${ACCT_PROVIDER:-provider}"
-ACCT_TREASURY="${ACCT_TREASURY:-treasury}"
 
 # Colors
 RED='\033[0;31m'
@@ -48,7 +62,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/11  Prerequisites"
+section "1/9  Prerequisites"
 # ============================================================
 
 command -v docker >/dev/null 2>&1 || error "Docker not found."
@@ -59,14 +73,6 @@ if [ -z "${DOCKER_HOST:-}" ] && [ ! -S /var/run/docker.sock ] && [ -S "$HOME/.do
   export DOCKER_HOST="unix://$HOME/.docker/run/docker.sock"
   info "Set DOCKER_HOST=$DOCKER_HOST (Docker Desktop)"
 fi
-
-if ! command -v cargo >/dev/null 2>&1; then
-  info "Installing Rust..."
-  curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-  source "$HOME/.cargo/env"
-fi
-rustup target add wasm32v1-none 2>/dev/null || true
-info "Rust: $(rustc --version)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 if ! command -v stellar >/dev/null 2>&1; then
@@ -84,7 +90,6 @@ if ! command -v "$DENO_BIN" >/dev/null 2>&1; then
 fi
 info "Deno: $($DENO_BIN --version | head -1)"
 
-[ -d "$SOROBAN_CORE_PATH" ] || error "soroban-core not found at $SOROBAN_CORE_PATH"
 [ -d "$PROVIDER_PLATFORM_PATH" ] || error "provider-platform not found at $PROVIDER_PLATFORM_PATH"
 [ -d "$PROVIDER_CONSOLE_PATH" ] || error "provider-console not found at $PROVIDER_CONSOLE_PATH"
 [ -d "$COUNCIL_CONSOLE_PATH" ] || error "council-console not found at $COUNCIL_CONSOLE_PATH"
@@ -92,7 +97,7 @@ info "Deno: $($DENO_BIN --version | head -1)"
 [ -d "$NETWORK_DASHBOARD_PATH" ] || error "network-dashboard not found at $NETWORK_DASHBOARD_PATH"
 
 # ============================================================
-section "2/11  Jaeger (ports 4317/4318/16686)"
+section "2/9  Jaeger (ports 4317/4318/16686)"
 # ============================================================
 
 JAEGER_CONTAINER="${JAEGER_CONTAINER:-jaeger}"
@@ -120,7 +125,7 @@ else
 fi
 
 # ============================================================
-section "3/11  Stellar Network"
+section "3/9  Stellar Network"
 # ============================================================
 
 # Start the shared Stellar network if not already running
@@ -149,7 +154,8 @@ fi
 
 # Wait for Friendbot (takes longer than RPC to initialize — cold boot can
 # take 90-120s as Stellar Core, Horizon, and Friendbot all start up inside
-# the quickstart container; Friendbot returns 502 until it is fully ready)
+# the quickstart container; Friendbot returns 502 until it is fully ready).
+# setup-c.sh and setup-pp.sh both rely on Friendbot being responsive.
 info "Waiting for Friendbot to be ready (first boot is slow)..."
 for i in $(seq 1 180); do
   fb_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" 2>/dev/null || echo "000")
@@ -167,97 +173,7 @@ done
 sleep 2
 
 # ============================================================
-section "4/11  Accounts"
-# ============================================================
-
-generate_or_reuse() {
-  local name=$1
-  if stellar keys address "$name" >/dev/null 2>&1; then
-    warn "Account '$name' already exists, reusing."
-  else
-    stellar keys generate "$name" --network local
-    info "Created account: $name"
-  fi
-  local addr
-  addr=$(stellar keys address "$name")
-  local http_code
-  for attempt in $(seq 1 10); do
-    http_code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:${STELLAR_RPC_PORT}/friendbot?addr=$addr" 2>/dev/null || echo "000")
-    if [ "$http_code" = "200" ] || [ "$http_code" = "400" ]; then
-      info "Funded: $name"
-      return 0
-    fi
-    if [ "$attempt" -lt 10 ]; then
-      warn "Friendbot returned HTTP $http_code for $name, retrying ($attempt/10)..."
-      sleep 3
-    fi
-  done
-  error "Could not fund $name after 10 attempts (last HTTP $http_code)"
-}
-
-generate_or_reuse "$ACCT_ADMIN"
-generate_or_reuse "$ACCT_PROVIDER"
-generate_or_reuse "$ACCT_TREASURY"
-
-ADMIN_PK=$(stellar keys address "$ACCT_ADMIN")
-ADMIN_SK=$(stellar keys show "$ACCT_ADMIN")
-PROVIDER_PK=$(stellar keys address "$ACCT_PROVIDER")
-PROVIDER_SK=$(stellar keys show "$ACCT_PROVIDER")
-TREASURY_PK=$(stellar keys address "$ACCT_TREASURY")
-TREASURY_SK=$(stellar keys show "$ACCT_TREASURY")
-
-info "Admin:    $ADMIN_PK"
-info "Provider: $PROVIDER_PK"
-info "Treasury: $TREASURY_PK"
-
-# ============================================================
-section "5/11  Build & Deploy Contracts"
-# ============================================================
-
-cd "$SOROBAN_CORE_PATH"
-info "Building contracts..."
-stellar contract build
-
-WASM_DIR="target/wasm32v1-none/release"
-[ -f "$WASM_DIR/channel_auth_contract.wasm" ] || error "channel_auth_contract.wasm not found"
-[ -f "$WASM_DIR/privacy_channel.wasm" ] || error "privacy_channel.wasm not found"
-
-info "Deploying native XLM SAC (Stellar Asset Contract)..."
-if TOKEN_ID=$(stellar contract asset deploy \
-  --asset native \
-  --network local \
-  --source-account "$ACCT_ADMIN" 2>/dev/null); then
-  info "SAC deployed"
-else
-  # SAC may already be deployed (shared network) — fetch its ID
-  TOKEN_ID=$(stellar contract asset id --asset native --network local)
-  warn "SAC already deployed: $TOKEN_ID"
-fi
-info "XLM SAC:         $TOKEN_ID"
-
-info "Deploying channel-auth contract..."
-AUTH_ID=$(stellar contract deploy \
-  --wasm "$WASM_DIR/channel_auth_contract.wasm" \
-  --network local \
-  --source-account "$ACCT_ADMIN" \
-  -- \
-  --admin "$ADMIN_PK")
-info "Channel Auth:    $AUTH_ID"
-
-info "Deploying privacy-channel contract..."
-CHANNEL_ID=$(stellar contract deploy \
-  --wasm "$WASM_DIR/privacy_channel.wasm" \
-  --network local \
-  --source-account "$ACCT_ADMIN" \
-  -- \
-  --admin "$ADMIN_PK" \
-  --auth_contract "$AUTH_ID" \
-  --asset "$TOKEN_ID")
-info "Privacy Channel: $CHANNEL_ID"
-
-
-# ============================================================
-section "6/11  PostgreSQL (port $PG_PORT)"
+section "4/9  PostgreSQL (port $PG_PORT)"
 # ============================================================
 
 if docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -285,12 +201,22 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
+# Council platform uses a separate database in the same Postgres instance.
+docker exec "$PG_CONTAINER" psql -U admin -d postgres -tc \
+  "SELECT 1 FROM pg_database WHERE datname = 'council_platform_db'" \
+  | grep -q 1 || \
+  docker exec "$PG_CONTAINER" psql -U admin -d postgres -c \
+  "CREATE DATABASE council_platform_db" >/dev/null
+
 # ============================================================
-section "7/11  Provider Platform (port $PROVIDER_PORT)"
+section "5/9  Provider Platform (port $PROVIDER_PORT)"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
 
+# Infra-only env. No contract IDs, no PP keys, no council references.
+# Channel routing in the multi-PP architecture is DB-driven via
+# payment_providers + council_memberships, populated by setup-pp.sh.
 cat > .env <<EOF
 # Generated by local-dev/up.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
 PORT=$PROVIDER_PORT
@@ -305,12 +231,6 @@ STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
 NETWORK_FEE=1000000000
 
 SERVICE_AUTH_SECRET=local-dev-stable-auth-secret
-
-# Legacy env vars — kept for e2e test config loading, not read by platform
-CHANNEL_CONTRACT_ID=$CHANNEL_ID
-CHANNEL_AUTH_ID=$AUTH_ID
-PROVIDER_SK=$PROVIDER_SK
-SERVICE_FEE=100
 CHALLENGE_TTL=900
 SESSION_TTL=21600
 
@@ -321,7 +241,6 @@ MEMPOOL_EXECUTOR_INTERVAL_MS=5000
 MEMPOOL_VERIFIER_INTERVAL_MS=10000
 MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 MEMPOOL_MAX_RETRY_ATTEMPTS=3
-BUNDLE_MAX_OPERATIONS=20
 EOF
 
 info "Running migrations..."
@@ -339,7 +258,7 @@ echo "$PROVIDER_PID" > "$SCRIPT_DIR/.provider.pid"
 info "Provider running (PID $PROVIDER_PID, log: $PROVIDER_LOG)"
 
 for i in $(seq 1 15); do
-  if curl -sf "http://localhost:${PROVIDER_PORT}/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" >/dev/null 2>&1; then
+  if curl -sf "http://localhost:${PROVIDER_PORT}/api/v1/health" >/dev/null 2>&1; then
     info "Provider is ready on port $PROVIDER_PORT."
     break
   fi
@@ -350,18 +269,14 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "8/11  Council Platform (port $COUNCIL_PLATFORM_PORT)"
+section "6/9  Council Platform (port $COUNCIL_PLATFORM_PORT)"
 # ============================================================
 
 cd "$COUNCIL_PLATFORM_PATH"
 
-# Create council_platform_db if it doesn't exist
-docker exec "$PG_CONTAINER" psql -U admin -d postgres -tc \
-  "SELECT 1 FROM pg_database WHERE datname = 'council_platform_db'" \
-  | grep -q 1 || \
-  docker exec "$PG_CONTAINER" psql -U admin -d postgres -c \
-  "CREATE DATABASE council_platform_db"
-
+# Infra-only env. No CHANNEL_AUTH_ID, no COUNCIL_SK, no OPEX_*. With
+# multi-council, councils + their keys live in the council-platform DB,
+# created via the council-console UI or by setup-c.sh.
 cat > .env <<EOF
 # Generated by local-dev/up.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ)
 PORT=$COUNCIL_PLATFORM_PORT
@@ -374,11 +289,6 @@ DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/council_platform_db
 NETWORK=local
 STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
 NETWORK_FEE=1000000000
-CHANNEL_AUTH_ID=$AUTH_ID
-
-COUNCIL_SK=$ADMIN_SK
-OPEX_PUBLIC=$TREASURY_PK
-OPEX_SECRET=$TREASURY_SK
 
 SERVICE_AUTH_SECRET=local-dev-stable-auth-secret
 CHALLENGE_TTL=900
@@ -411,7 +321,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "9/11  Provider Console (port $PROVIDER_CONSOLE_PORT)"
+section "7/9  Provider Console (port $PROVIDER_CONSOLE_PORT)"
 # ============================================================
 
 cd "$PROVIDER_CONSOLE_PATH"
@@ -449,7 +359,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "10/11  Council Console (port $COUNCIL_CONSOLE_PORT)"
+section "8/9  Council Console (port $COUNCIL_CONSOLE_PORT)"
 # ============================================================
 
 cd "$COUNCIL_CONSOLE_PATH"
@@ -490,7 +400,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "11/11  Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
+section "9/9  Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
 # ============================================================
 
 cd "$NETWORK_DASHBOARD_PATH"
@@ -530,13 +440,8 @@ done
 # ============================================================
 echo ""
 echo "========================================"
-echo "  local-dev is ready!"
+echo "  local-dev infra is ready!"
 echo "========================================"
-echo ""
-echo "Contract IDs:"
-echo "  XLM SAC:         $TOKEN_ID"
-echo "  Channel Auth:    $AUTH_ID"
-echo "  Privacy Channel: $CHANNEL_ID"
 echo ""
 echo "Services:"
 echo "  Provider Platform:  http://localhost:$PROVIDER_PORT (PID $PROVIDER_PID)"
@@ -547,6 +452,10 @@ echo "  Network Dashboard:  http://localhost:$NETWORK_DASHBOARD_PORT (PID $NETWO
 echo "  PostgreSQL:         localhost:$PG_PORT (container: $PG_CONTAINER)"
 echo "  Stellar RPC:        http://localhost:$STELLAR_RPC_PORT (shared)"
 echo "  Jaeger UI:          http://localhost:16686"
+echo ""
+echo "Protocol state is empty. To populate:"
+echo "  ./setup-c.sh    Deploy contracts + create a council (production-like)"
+echo "  ./setup-pp.sh   Register a Privacy Provider in that council"
 echo ""
 echo "To stop everything:"
 echo "  ./down.sh"

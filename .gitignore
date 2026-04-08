@@ -3,3 +3,4 @@
 e2e/.env
 node_modules/
 .traces/
+.local-dev-state
