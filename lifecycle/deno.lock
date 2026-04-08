@@ -14,6 +14,7 @@
     "npm:@stellar/stellar-sdk@^14.2.0": "14.6.1",
     "npm:@stellar/stellar-sdk@^14.6.1": "14.6.1",
     "npm:asn1js@3.0.5": "3.0.5",
+    "npm:bip39@3.1.0": "3.1.0",
     "npm:buffer@6.0.3": "6.0.3",
     "npm:buffer@^6.0.3": "6.0.3",
     "npm:postgres@3.4.7": "3.4.7"
@@ -150,6 +151,12 @@
     },
     "bignumber.js@9.3.1": {
       "integrity": "sha512-Ko0uX15oIUS7wJ3Rb30Fs6SkVbLmPBAKdlm7q9+ak9bbIeFf0MwuBsQV6z7+X768/cHsfg+WlysDWJcmthjsjQ=="
+    },
+    "bip39@3.1.0": {
+      "integrity": "sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A==",
+      "dependencies": [
+        "@noble/hashes"
+      ]
     },
     "buffer@6.0.3": {
       "integrity": "sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==",
