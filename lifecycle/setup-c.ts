@@ -62,6 +62,40 @@ const CHANNEL_AUTH_WASM = Deno.env.get("CHANNEL_AUTH_WASM") ??
 const PRIVACY_CHANNEL_WASM = Deno.env.get("PRIVACY_CHANNEL_WASM") ??
   new URL("../e2e/wasms/privacy_channel.wasm", import.meta.url).pathname;
 
+// ─── DETERMINISTIC LOCAL-DEV IDENTITY ──────────────────────────────────
+//
+// Fixed admin secret + fixed contract salts → same admin G-address and
+// same channel-auth / privacy-channel contract IDs every run. This means
+// the wallet's seed file (channel contract ID) and any tooling that
+// references the council ID can be set ONCE and never change across
+// `down → up → setup-c` cycles.
+//
+// SAFETY: this secret is for local-dev against `Standalone Network ;
+// February 2017` ONLY. It is hard-coded in source so it must NEVER be
+// reused on testnet/mainnet. The Friendbot funding is gated to the local
+// network passphrase via FRIENDBOT_URL above.
+//
+// Override with env vars if you want to register a separate admin
+// (e.g. testing multi-council scenarios on the local stack).
+//
+// Admin G-address: GAEILCNSC4ZTA63RK3ACSADVSWC47NRG7KFVYHZ4HKS265YEZVEHWMHG
+const ADMIN_SECRET = Deno.env.get("ADMIN_SECRET") ??
+  "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74";
+// Salts are arbitrary 32-byte values. hexToFixedBuffer pads with leading
+// zeros so a 20-hex-char tail is fine. The tails spell "LOCAL_CAUT" and
+// "LOCAL_PCHC" — recognizable in logs/dumps and obviously dev-only.
+const CHANNEL_AUTH_SALT_HEX = Deno.env.get("CHANNEL_AUTH_SALT_HEX") ??
+  "4c4f43414c5f43415554"; // "LOCAL_CAUT"
+const PRIVACY_CHANNEL_SALT_HEX = Deno.env.get("PRIVACY_CHANNEL_SALT_HEX") ??
+  "4c4f43414c5f50434843"; // "LOCAL_PCHC"
+
+function hexToFixedBuffer(hex: string, length = 32): Buffer {
+  const bytes = Buffer.alloc(length);
+  const data = Buffer.from(hex, "hex");
+  data.copy(bytes, length - data.length);
+  return bytes;
+}
+
 async function fundAccount(publicKey: string): Promise<void> {
   // Friendbot returns 200 on first fund, 400 "already funded" on retry. Both fine.
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
@@ -142,10 +176,8 @@ async function main() {
   await warmupCouncil();
   console.log("  council-platform reachable");
 
-  // Ephemeral admin key. Each setup-c run creates a fresh council — there's no
-  // way to "reuse" a council across deployments because the contracts that
-  // identify it are themselves redeployed (Soroban quickstart is non-persistent).
-  const admin = Keypair.random();
+  // Deterministic admin keypair — same address every run. See header comment.
+  const admin = Keypair.fromSecret(ADMIN_SECRET);
   console.log(`\n  Admin: ${admin.publicKey()}`);
 
   console.log("\n[2/8] Funding admin via Friendbot");
@@ -156,8 +188,10 @@ async function main() {
   const server = createServer(RPC_URL, true);
   const channelAuthWasm = await Deno.readFile(CHANNEL_AUTH_WASM);
   const channelAuthHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, channelAuthWasm);
+  // Fixed salt → deterministic contract ID across runs.
+  const channelAuthSalt = hexToFixedBuffer(CHANNEL_AUTH_SALT_HEX);
   const { contractId: channelAuthId, txResponse: authDeployTx } =
-    await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash);
+    await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash, channelAuthSalt);
   if (verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found) {
     console.log("  contract_initialized event verified");
   }
@@ -170,6 +204,8 @@ async function main() {
   console.log("\n[5/8] Deploy Privacy Channel contract");
   const privacyChannelWasm = await Deno.readFile(PRIVACY_CHANNEL_WASM);
   const privacyChannelHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, privacyChannelWasm);
+  // Fixed salt → deterministic contract ID across runs.
+  const privacyChannelSalt = hexToFixedBuffer(PRIVACY_CHANNEL_SALT_HEX);
   const channelContractId = await deployPrivacyChannel(
     server,
     admin,
@@ -177,6 +213,7 @@ async function main() {
     privacyChannelHash,
     channelAuthId,
     assetContractId,
+    privacyChannelSalt,
   );
   console.log(`  Privacy Channel: ${channelContractId}`);
 

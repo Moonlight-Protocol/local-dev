@@ -104,11 +104,35 @@ for f in \
   fi
 done
 
-# --- Stop Stellar (only moonlight-managed containers) ---
-for container in $(docker ps -a --format '{{.Names}}' | grep -iE 'moonlight.*stellar|stellar.*moonlight' || true); do
-  docker rm -f "$container" >/dev/null 2>&1
-  info "Stopped Stellar container ($container)"
+# --- Wipe Deno KV stores ---
+# Both platforms persist event-watcher cursors and other state in
+# ./.data/memory-kvdb.db relative to their working directory. This file
+# survives docker/postgres teardown and would otherwise carry stale ledger
+# cursors into the next up cycle (event watcher tries to poll a ledger
+# that no longer exists on the freshly-launched Stellar quickstart).
+for d in \
+  "$PROVIDER_PLATFORM_PATH/.data" \
+  "$COUNCIL_PLATFORM_PATH/.data" \
+; do
+  if [ -d "$d" ]; then
+    rm -rf "$d"
+    info "Removed $d"
+  fi
 done
+
+# --- Stop the Stellar quickstart container started by `stellar container start local`.
+# This is the same container up.sh launches via the Stellar CLI. Without this
+# step, `down → up` reuses the same ledger state — which masks bugs in
+# scripts that assume a fresh ledger and breaks deterministic deploys
+# (the contracts setup-c.sh deploys at fixed addresses already exist).
+if command -v stellar >/dev/null 2>&1; then
+  stellar container stop local >/dev/null 2>&1 && info "Stopped Stellar container (stellar-local)" || true
+fi
+# Belt-and-braces: also force-remove anything that matches the
+# stellar-local container name in case the CLI subcommand failed.
+if docker ps -a --format '{{.Names}}' | grep -q "^stellar-local$"; then
+  docker rm -f stellar-local >/dev/null 2>&1 && info "Force-removed stellar-local container" || true
+fi
 
 # --- Tear down lifecycle Docker Compose if running ---
 if [ -f "$SCRIPT_DIR/lifecycle/docker-compose.yml" ]; then

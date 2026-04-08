@@ -59,6 +59,19 @@ const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("../.local-dev-state", import.meta.url).pathname;
 const PP_LABEL = Deno.env.get("PP_LABEL") ?? "Local PP";
 
+// ─── DETERMINISTIC LOCAL-DEV PP IDENTITY ───────────────────────────────
+//
+// Same fixed-secret approach as setup-c.ts. Re-running setup-pp against
+// a fresh `up.sh` ledger registers the SAME PP G-address — so any client
+// that has the PP's pubkey baked in (the wallet's seed file, manual test
+// configs, etc.) keeps working without updates.
+//
+// SAFETY: local-dev only. See setup-c.ts for the same warning.
+//
+// PP G-address: GBW7TE4PGNEKFAH7DRZBA3CDQIFLNT22ZQO2G5DJSNRGKCS5PYKTIMWV
+const PP_SECRET = Deno.env.get("PP_SECRET") ??
+  "SDRTOKYHEEVBDTC3QPFKKGS5EGTFSXM4B6HTGO2JLY6ZRH4XHICZQTLI";
+
 interface State {
   ADMIN_SK: string;
   ADMIN_PK: string;
@@ -223,10 +236,10 @@ async function main() {
   await warmupService("provider-platform", PROVIDER_URL);
   console.log("  provider-platform reachable");
 
-  // Fresh PP operator key. In production this would be a wallet the PP operator
-  // controls; here we generate it ephemerally and save the secret to the state
-  // file at the end so the wallet/test can use it as the PP signing key.
-  const ppOperator = Keypair.random();
+  // Deterministic PP operator key. Same address every run, so anything that
+  // has the PP pubkey baked in (wallet seed, manual configs) keeps working
+  // across `down`/`up` cycles. See PP_SECRET comment at the top of the file.
+  const ppOperator = Keypair.fromSecret(PP_SECRET);
   console.log(`\n  PP Operator: ${ppOperator.publicKey()}`);
 
   console.log("\n[3/10] Funding PP operator via Friendbot");
