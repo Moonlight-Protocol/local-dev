@@ -34,16 +34,23 @@ export async function uploadWasm(
 /**
  * Deploy the Channel Auth contract with constructor(admin).
  * Returns both the contract ID and the full tx response (for event extraction).
+ *
+ * Soroban contract addresses are derived from
+ * Hash(network_id || "ContractInstance" || deployer || salt). Pass an explicit
+ * `salt` to get a deterministic contract address (useful for local-dev where
+ * we want repeatable IDs across `down`/`up` cycles). Defaults to a fresh
+ * random salt for production-like (testnet) deploys.
  */
 export async function deployChannelAuth(
   server: rpc.Server,
   admin: Keypair,
   networkPassphrase: string,
   wasmHash: Buffer,
+  salt?: Buffer,
 ): Promise<{ contractId: string; txResponse: rpc.Api.GetSuccessfulTransactionResponse }> {
   console.log("  Deploying Channel Auth contract...");
 
-  const salt = Buffer.from(crypto.getRandomValues(new Uint8Array(32)));
+  salt ??= Buffer.from(crypto.getRandomValues(new Uint8Array(32)));
   const adminAddress = new Address(admin.publicKey());
 
   const op = Operation.createCustomContract({
@@ -61,6 +68,9 @@ export async function deployChannelAuth(
 
 /**
  * Deploy the Privacy Channel contract with constructor(admin, auth_contract, asset).
+ *
+ * As with `deployChannelAuth`, pass an explicit `salt` for a deterministic
+ * contract address. Defaults to a fresh random salt.
  */
 export async function deployPrivacyChannel(
   server: rpc.Server,
@@ -69,10 +79,11 @@ export async function deployPrivacyChannel(
   wasmHash: Buffer,
   channelAuthId: string,
   assetContractId: string,
+  salt?: Buffer,
 ): Promise<string> {
   console.log("  Deploying Privacy Channel contract...");
 
-  const salt = Buffer.from(crypto.getRandomValues(new Uint8Array(32)));
+  salt ??= Buffer.from(crypto.getRandomValues(new Uint8Array(32)));
   const adminAddress = new Address(admin.publicKey());
   const authAddress = new Address(channelAuthId);
   const assetAddress = new Address(assetContractId);
