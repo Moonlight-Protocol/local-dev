@@ -35,6 +35,7 @@ usage() {
   echo "  otel          Payment flow + OTEL trace verification (16 checks)"
   echo "  governance    UC2 governance flows (40+ checks)"
   echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
+  echo "  pos           POS payment flow + OTEL trace verification"
   echo "  clean         Remove all test containers and volumes"
   exit 1
 }
@@ -62,7 +63,7 @@ run_suite() {
   project_name="moonlight-test-${suite}-$(date +%s | tail -c 9)"
 
   case "$suite" in
-    e2e|otel|governance|lifecycle) ;;
+    e2e|otel|governance|lifecycle|pos) ;;
     *) error "Unknown suite: $suite" ;;
   esac
 
@@ -134,7 +135,7 @@ clean_all() {
 }
 
 case "$SUITE" in
-  e2e|otel|governance|lifecycle)
+  e2e|otel|governance|lifecycle|pos)
     ensure_wasms
     run_suite "$SUITE"
     ;;

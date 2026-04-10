@@ -86,9 +86,33 @@ case "$SUITE" in
     exec deno run --allow-all verify-otel.ts
     ;;
 
+  pos)
+    cp /pos-src/*.ts /pos-src/deno.json . && cp /pos-src/deno.lock . 2>/dev/null || true
+    # Copy e2e helpers (deposit, send, receive, bundle, account, config) for reuse
+    mkdir -p e2e && cp /e2e-src/*.ts /e2e-src/deno.json e2e/ 2>/dev/null || true
+    deno install
+    echo "Waiting for provider, council, and pay-platform..."
+    for i in $(seq 1 60); do
+      provider_ok=false council_ok=false pay_ok=false
+      PROBE_URL="$PROVIDER_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && provider_ok=true
+      PROBE_URL="$COUNCIL_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && council_ok=true
+      PROBE_URL="$PAY_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && pay_ok=true
+      if [ "$provider_ok" = true ] && [ "$council_ok" = true ] && [ "$pay_ok" = true ]; then
+        echo "All services are ready."
+        break
+      fi
+      if [ "$i" -eq 60 ]; then echo "Services not ready after 120s"; exit 1; fi
+      sleep 2
+    done
+    echo "Running POS payment flow..."
+    deno run --allow-all main.ts
+    echo "Verifying OTEL traces..."
+    exec deno run --allow-all verify-otel.ts
+    ;;
+
   *)
     echo "Unknown test suite: $SUITE"
-    echo "Usage: TEST_SUITE=e2e|governance|otel"
+    echo "Usage: TEST_SUITE=e2e|governance|otel|pos"
     exit 1
     ;;
 esac

@@ -150,6 +150,48 @@ services:
       retries: 30
       start_period: 10s
 
+  pay:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${PAY_PLATFORM_PATH:-../pay-platform}:/app-src:ro
+      - shared-config:/config:ro
+      - ./test/pay-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/pay_platform_db
+      PORT: "3025"
+      MODE: development
+      SERVICE_DOMAIN: pay
+      SERVICE_AUTH_SECRET: test-auth-secret
+      CHALLENGE_TTL: "300000"
+      SESSION_TTL: "86400000"
+      # Known admin wallet for the POS test — the test authenticates as
+      # this keypair to seed council/PP config via the admin endpoints.
+      # Secret: SAKAWUZTXAQTKDYIMWEUGXDIPVVS3CIYEHH5UWFV6NFC7YDMX2G7OWOU
+      ADMIN_WALLETS: "GB577NO7D3YMZKHFQQ7OEOXXL33BRV3YRJPP3MI7UT5ZF2XNOSEQX7FN"
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "pay-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3025/api/v1/health\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
   test-runner:
     image: denoland/deno:latest
     depends_on:
@@ -157,12 +199,15 @@ services:
         condition: service_healthy
       council:
         condition: service_healthy
+      pay:
+        condition: service_healthy
       jaeger:
         condition: service_healthy
     volumes:
       - shared-config:/config:ro
       - ./e2e:/e2e-src:ro
       - ./e2e/governance:/governance-src:ro
+      - ./e2e/pos:/pos-src:ro
       - ./lifecycle:/lifecycle-src:ro
       - ${WASM_DIR:-../soroban-core/target/wasm32v1-none/release}:/wasms:ro
       - ./test/test-entrypoint.sh:/entrypoint.sh:ro
@@ -173,6 +218,8 @@ services:
       PROVIDER_API: http://provider:3000/api/v1
       COUNCIL_URL: http://council:8080
       COUNCIL_API: http://council:8080/api/v1
+      PAY_URL: http://pay:3025
+      PAY_API: http://pay:3025/api/v1
       STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
       FRIENDBOT_URL: http://stellar:8000/friendbot
