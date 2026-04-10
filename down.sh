@@ -24,6 +24,7 @@ export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 PROVIDER_PORT="${PROVIDER_PORT:-3010}"
 COUNCIL_PLATFORM_PORT="${COUNCIL_PLATFORM_PORT:-3015}"
 PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
+PAY_PLATFORM_PORT="${PAY_PLATFORM_PORT:-3025}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
@@ -67,6 +68,7 @@ stop_process() {
 # --- Stop all processes ---
 stop_process "provider-platform" "$SCRIPT_DIR/.provider.pid" "$PROVIDER_PORT"
 stop_process "council-platform" "$SCRIPT_DIR/.council-platform.pid" "$COUNCIL_PLATFORM_PORT"
+stop_process "pay-platform" "$SCRIPT_DIR/.pay-platform.pid" "$PAY_PLATFORM_PORT"
 stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_CONSOLE_PORT"
 stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONSOLE_PORT"
 stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
@@ -88,12 +90,15 @@ fi
 # Note: up.sh no longer creates Stellar keys (account creation moved to
 # setup-c.sh / setup-pp.sh, which use ephemeral keys per run — nothing to
 # remove from the stellar CLI keyring).
+PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-$BASE_DIR/pay-platform}"
 for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
   "$COUNCIL_PLATFORM_PATH/.env" \
+  "$PAY_PLATFORM_PATH/.env" \
   "$SCRIPT_DIR/.local-dev-state" \
   "$SCRIPT_DIR/provider.log" \
   "$SCRIPT_DIR/council-platform.log" \
+  "$SCRIPT_DIR/pay-platform.log" \
   "$SCRIPT_DIR/provider-console.log" \
   "$SCRIPT_DIR/council-console.log" \
   "$SCRIPT_DIR/network-dashboard.log" \
