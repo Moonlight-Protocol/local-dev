@@ -49,6 +49,8 @@ import { deposit } from "../e2e/deposit.ts";
 import { prepareReceive } from "../e2e/receive.ts";
 import { send } from "../e2e/send.ts";
 import { withdraw } from "../e2e/withdraw.ts";
+import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
+import { verifyOtelTraces } from "../lib/verify-otel.ts";
 
 // ─── Testnet endpoints ────────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
@@ -398,19 +400,49 @@ async function main() {
   await fundAccount(bob.publicKey());
   console.log("  Users funded");
 
-  const aliceJwt = await authenticate(alice, e2eConfig);
+  const aliceJwt = await withE2ESpan("e2e.authenticate_alice", () =>
+    authenticate(alice, e2eConfig));
   console.log("  Alice authenticated");
-  await deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, e2eConfig);
+
+  await withE2ESpan("e2e.deposit", () =>
+    deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, e2eConfig, sdkTracer));
   console.log(`  Deposit ${DEPOSIT_AMOUNT} XLM complete`);
 
-  const bobJwt = await authenticate(bob, e2eConfig);
+  const bobJwt = await withE2ESpan("e2e.authenticate_bob", () =>
+    authenticate(bob, e2eConfig));
   console.log("  Bob authenticated");
-  const receiverOps = await prepareReceive(bob.secret(), SEND_AMOUNT, e2eConfig);
-  await send(alice.secret(), receiverOps, SEND_AMOUNT, aliceJwt, e2eConfig);
+
+  const receiverOps = await withE2ESpan("e2e.prepare_receive", () =>
+    prepareReceive(bob.secret(), SEND_AMOUNT, e2eConfig, sdkTracer));
+
+  await withE2ESpan("e2e.send", () =>
+    send(alice.secret(), receiverOps, SEND_AMOUNT, aliceJwt, e2eConfig, sdkTracer));
   console.log(`  Send ${SEND_AMOUNT} XLM complete`);
 
-  await withdraw(bob.secret(), bob.publicKey(), WITHDRAW_AMOUNT, bobJwt, e2eConfig);
+  await withE2ESpan("e2e.withdraw", () =>
+    withdraw(bob.secret(), bob.publicKey(), WITHDRAW_AMOUNT, bobJwt, e2eConfig, sdkTracer));
   console.log(`  Withdraw ${WITHDRAW_AMOUNT} XLM complete`);
+
+  await writeTraceIds();
+
+  // ── Step 13 (optional): OTEL trace verification ───────────────────
+  const tempoUrl = Deno.env.get("TEMPO_URL");
+  const tempoAuth = Deno.env.get("TEMPO_AUTH");
+  if (tempoUrl && tempoAuth) {
+    console.log("\n[13/13] OTEL trace verification");
+    const traceIdsPath = new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
+    const result = await verifyOtelTraces({
+      tempoUrl,
+      tempoAuth,
+      traceIdsPath,
+      pollTimeoutMs: Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000"),
+    });
+    if (result.failed > 0) {
+      throw new Error(`OTEL verification failed: ${result.failed} checks failed`);
+    }
+  } else {
+    console.log("\n  (OTEL verification skipped — set TEMPO_URL and TEMPO_AUTH to enable)");
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Testnet Lifecycle Verification PASSED in ${elapsed}s ===\n`);

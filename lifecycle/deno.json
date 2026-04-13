@@ -2,7 +2,8 @@
   "nodeModulesDir": "auto",
   "tasks": {
     "lifecycle": "deno run --allow-all main.ts",
-    "lifecycle:testnet": "NETWORK=testnet deno run --allow-all main.ts"
+    "lifecycle:testnet": "NETWORK=testnet deno run --allow-all main.ts",
+    "testnet-verify": "OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf deno run --allow-all testnet-verify.ts"
   },
   "imports": {
     "@colibri/core": "jsr:@colibri/core@^0.16.1",
