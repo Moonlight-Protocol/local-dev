@@ -38,12 +38,13 @@ if [ ! -f "$KEYS_FILE" ]; then
 fi
 PAY_ADMIN_PK=$(grep "^PAY_ADMIN_PK=" "$KEYS_FILE" | cut -d= -f2)
 PAY_ADMIN_SK=$(grep "^PAY_ADMIN_SK=" "$KEYS_FILE" | cut -d= -f2)
+PAY_SERVICE_PK=$(grep "^PAY_SERVICE_PK=" "$KEYS_FILE" | cut -d= -f2)
 if [ -z "$PAY_ADMIN_PK" ] || [ -z "$PAY_ADMIN_SK" ]; then
   echo "ERROR: PAY_ADMIN_PK or PAY_ADMIN_SK missing from $KEYS_FILE" >&2
   exit 1
 fi
 
-export PAY_ADMIN_PK PAY_ADMIN_SK
+export PAY_ADMIN_PK PAY_ADMIN_SK PAY_SERVICE_PK
 
 cd "$SCRIPT_DIR"
 exec "$DENO_BIN" run --allow-all setup-pay.ts "$@"

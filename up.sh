@@ -349,8 +349,10 @@ cd "$PAY_PLATFORM_PATH"
 # If setup-keys.sh hasn't run yet, ADMIN_WALLETS is empty and the /admin
 # endpoints return 403 until it's configured.
 PAY_ADMIN_PK=""
+PAY_SERVICE_SK=""
 if [ -f "$SCRIPT_DIR/.local-dev-keys" ]; then
   PAY_ADMIN_PK=$(grep "^PAY_ADMIN_PK=" "$SCRIPT_DIR/.local-dev-keys" | cut -d= -f2)
+  PAY_SERVICE_SK=$(grep "^PAY_SERVICE_SK=" "$SCRIPT_DIR/.local-dev-keys" | cut -d= -f2)
 fi
 
 cat > .env <<EOF
@@ -367,6 +369,7 @@ CHALLENGE_TTL=900
 SESSION_TTL=21600
 
 ADMIN_WALLETS=$PAY_ADMIN_PK
+PAY_SERVICE_SK=$PAY_SERVICE_SK
 EOF
 
 info "Running pay-platform migrations..."

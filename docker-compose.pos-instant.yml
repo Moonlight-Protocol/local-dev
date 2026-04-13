@@ -161,6 +161,7 @@ services:
       CHALLENGE_TTL: "300000"
       SESSION_TTL: "86400000"
       ADMIN_WALLETS: "GB577NO7D3YMZKHFQQ7OEOXXL33BRV3YRJPP3MI7UT5ZF2XNOSEQX7FN"
+      PAY_SERVICE_SK: "SDYYLPL7KNGYUHD35BYZ3LLJR7G2BA4UIFUH2SMRNEIICHY5VQXWUJDW"
       OTEL_DENO: "true"
       OTEL_SERVICE_NAME: "pay-platform"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
@@ -191,6 +192,7 @@ services:
       - shared-config:/config:ro
       - ./e2e:/e2e-src:ro
       - ./e2e/pos-instant:/pos-src:ro
+      - ${MOONLIGHT_PAY_PATH:-../moonlight-pay}/src/lib:/moonlight-pay-lib:ro
     working_dir: /app
     entrypoint:
       - sh
@@ -198,6 +200,7 @@ services:
       - |
         cp /pos-src/*.ts /pos-src/deno.json . && cp /pos-src/deno.lock . 2>/dev/null || true
         mkdir -p e2e && cp /e2e-src/*.ts /e2e-src/deno.json e2e/ 2>/dev/null || true
+        mkdir -p moonlight-pay-lib && cp /moonlight-pay-lib/*.ts moonlight-pay-lib/
         deno install
         echo "Waiting for provider, council, and pay-platform..."
         for i in $$(seq 1 60); do
@@ -230,6 +233,7 @@ services:
       DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
       WASM_DIR: /wasms
       OTEL_DENO: "true"
+      PAY_SERVICE_SK: "SDYYLPL7KNGYUHD35BYZ3LLJR7G2BA4UIFUH2SMRNEIICHY5VQXWUJDW"
       OTEL_SERVICE_NAME: "moonlight-e2e"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
       OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
