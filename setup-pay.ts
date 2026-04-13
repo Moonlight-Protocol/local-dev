@@ -161,7 +161,7 @@ async function main() {
   const jwt = await walletAuth(payAdmin);
   console.log("  JWT acquired");
 
-  console.log("\n[5/6] Create council via POST /admin/councils");
+  console.log("\n[5/8] Create council via POST /admin/councils");
   const councilRes = await fetch(`${PAY_API}/admin/councils`, {
     method: "POST",
     headers: {
@@ -171,10 +171,15 @@ async function main() {
     body: JSON.stringify({
       name: "Local Council",
       channelAuthId: state.COUNCIL_ID,
-      privacyChannelId: state.CHANNEL_ID,
-      assetId: state.ASSET_ID,
       networkPassphrase: state.NETWORK_PASSPHRASE,
-      jurisdictionCodes: "US,GB,DE",
+      channels: [
+        {
+          assetCode: "XLM",
+          assetContractId: state.ASSET_ID,
+          privacyChannelId: state.CHANNEL_ID,
+        },
+      ],
+      jurisdictions: ["US", "UY", "BR", "AR", "FR"],
       active: true,
     }),
   });
@@ -186,7 +191,7 @@ async function main() {
   const { data: council } = await councilRes.json();
   console.log(`  Council created: ${council.id}`);
 
-  console.log("\n[6/6] Create PP via POST /admin/councils/:id/pps");
+  console.log("\n[6/8] Create PP via POST /admin/councils/:id/pps");
   const ppRes = await fetch(`${PAY_API}/admin/councils/${council.id}/pps`, {
     method: "POST",
     headers: {
@@ -208,6 +213,27 @@ async function main() {
   const { data: pp } = await ppRes.json();
   console.log(`  PP created: ${pp.id}`);
 
+  // Fund the PAY_SERVICE keypair so it can authenticate with provider-platform
+  const payServicePk = Deno.env.get("PAY_SERVICE_PK");
+  if (payServicePk) {
+    console.log("\n[7/8] Fund PAY_SERVICE via Friendbot");
+    await fundAccount(payServicePk);
+    console.log(`  PAY_SERVICE funded: ${payServicePk}`);
+  } else {
+    console.log("\n[7/8] PAY_SERVICE_PK not set — skipping fund");
+  }
+
+  console.log("\n[8/8] Verify council config");
+  const verifyRes = await fetch(`${PAY_API}/admin/councils/${council.id}`, {
+    headers: { "Authorization": `Bearer ${jwt}` },
+  });
+  if (verifyRes.ok) {
+    const { data: full } = await verifyRes.json();
+    console.log(`  Channels: ${full.channels?.length ?? 0}`);
+    console.log(`  Jurisdictions: ${full.jurisdictions?.join(", ") ?? "none"}`);
+    console.log(`  PPs: ${full.pps?.length ?? 0}`);
+  }
+
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Pay Platform setup complete in ${elapsed}s ===\n`);
   console.log(`  Council DB ID:  ${council.id}`);
@@ -215,6 +241,9 @@ async function main() {
   console.log(`  PP DB ID:       ${pp.id}`);
   console.log(`  PP public key:  ${state.PP_PK}`);
   console.log(`  Provider URL:   ${state.PROVIDER_URL}`);
+  if (payServicePk) {
+    console.log(`  Service key:    ${payServicePk}`);
+  }
   console.log("");
   console.log("Pay-platform now has the council + PP routing config needed");
   console.log("for the POS instant payment flow.");
