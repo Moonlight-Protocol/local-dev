@@ -33,7 +33,7 @@
  *   ./setup-pp.sh
  *
  * Usage (direct):
- *   deno run --allow-all lifecycle/setup-pp.ts
+ *   deno run --allow-all setup-pp.ts
  *
  * Env overrides:
  *   STELLAR_RPC_URL          default http://localhost:8000/soroban/rpc
@@ -41,14 +41,14 @@
  *   STELLAR_NETWORK_PASSPHRASE default "Standalone Network ; February 2017"
  *   COUNCIL_URL              default (loaded from state file)
  *   PROVIDER_URL             default http://localhost:3010
- *   STATE_FILE               default ../.local-dev-state
+ *   STATE_FILE               default ./.local-dev-state
  *   PP_LABEL                 default "Local PP"
  */
-import { Keypair } from "stellar-sdk";
+import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
-import { createServer } from "./soroban.ts";
-import { addProvider } from "./admin.ts";
-import { extractEvents, verifyEvent } from "./events.ts";
+import { createServer } from "./lib/soroban.ts";
+import { addProvider } from "./lib/admin.ts";
+import { extractEvents, verifyEvent } from "./lib/events.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "http://localhost:8000/soroban/rpc";
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
@@ -56,7 +56,7 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
   "Standalone Network ; February 2017";
 const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "http://localhost:3010";
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
-  new URL("../.local-dev-state", import.meta.url).pathname;
+  new URL("./.local-dev-state", import.meta.url).pathname;
 const PP_LABEL = Deno.env.get("PP_LABEL") ?? "Local PP";
 
 // ─── DETERMINISTIC LOCAL-DEV PP IDENTITY ───────────────────────────────

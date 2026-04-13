@@ -93,10 +93,13 @@ Run tests via `test.sh` in the repo root. Each run spins up a fully isolated Doc
 
 ```bash
 # From local-dev/
-./test.sh e2e           # Payment flow
-./test.sh governance    # UC2 governance flows
-./test.sh uc2           # Manual UC2 user flow
-./test.sh all           # All three in parallel
+./test.sh e2e                  # Payment flow
+./test.sh otel                 # Payment flow + OTEL trace verification
+./test.sh governance           # UC2 governance flows
+./test.sh lifecycle            # Full lifecycle (deploy → payment → remove)
+./test.sh pos-instant          # UC4 POS crypto instant payment
+./test.sh pos-self-custodial   # UC4 POS self-custodial payment
+./test.sh all                  # All suites in parallel
 ```
 
 No `up.sh` needed. Each run is independent — parallel runs don't interfere with each other or with your dev stack.

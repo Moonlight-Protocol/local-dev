@@ -26,28 +26,28 @@
  *   ./setup-c.sh
  *
  * Usage (direct):
- *   deno run --allow-all lifecycle/setup-c.ts
+ *   deno run --allow-all setup-c.ts
  *
  * Env overrides:
  *   STELLAR_RPC_URL          default http://localhost:8000/soroban/rpc
  *   FRIENDBOT_URL            default http://localhost:8000/friendbot
  *   STELLAR_NETWORK_PASSPHRASE default "Standalone Network ; February 2017"
  *   COUNCIL_URL              default http://localhost:3015
- *   STATE_FILE               default ../.local-dev-state
+ *   STATE_FILE               default ./.local-dev-state
  *   COUNCIL_NAME             default "Local Council"
- *   CHANNEL_AUTH_WASM        default ../e2e/wasms/channel_auth_contract.wasm
- *   PRIVACY_CHANNEL_WASM     default ../e2e/wasms/privacy_channel.wasm
+ *   CHANNEL_AUTH_WASM        default ./e2e/wasms/channel_auth_contract.wasm
+ *   PRIVACY_CHANNEL_WASM     default ./e2e/wasms/privacy_channel.wasm
  */
-import { Keypair } from "stellar-sdk";
+import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
-import { createServer } from "./soroban.ts";
+import { createServer } from "./lib/soroban.ts";
 import {
   deployChannelAuth,
   deployPrivacyChannel,
   getOrDeployNativeSac,
   uploadWasm,
-} from "./deploy.ts";
-import { extractEvents, verifyEvent } from "./events.ts";
+} from "./lib/deploy.ts";
+import { extractEvents, verifyEvent } from "./lib/events.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "http://localhost:8000/soroban/rpc";
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
@@ -55,12 +55,12 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
   "Standalone Network ; February 2017";
 const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015";
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
-  new URL("../.local-dev-state", import.meta.url).pathname;
+  new URL("./.local-dev-state", import.meta.url).pathname;
 const COUNCIL_NAME = Deno.env.get("COUNCIL_NAME") ?? "Local Council";
 const CHANNEL_AUTH_WASM = Deno.env.get("CHANNEL_AUTH_WASM") ??
-  new URL("../e2e/wasms/channel_auth_contract.wasm", import.meta.url).pathname;
+  new URL("./e2e/wasms/channel_auth_contract.wasm", import.meta.url).pathname;
 const PRIVACY_CHANNEL_WASM = Deno.env.get("PRIVACY_CHANNEL_WASM") ??
-  new URL("../e2e/wasms/privacy_channel.wasm", import.meta.url).pathname;
+  new URL("./e2e/wasms/privacy_channel.wasm", import.meta.url).pathname;
 
 // ─── DETERMINISTIC LOCAL-DEV IDENTITY ──────────────────────────────────
 //

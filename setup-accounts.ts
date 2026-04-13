@@ -10,7 +10,7 @@
  *
  * Usage as a CLI:
  *   ./setup-accounts.sh GABC... GDEF... GHIJ...
- *   deno run --allow-all lifecycle/setup-accounts.ts GABC... GDEF...
+ *   deno run --allow-all setup-accounts.ts GABC... GDEF...
  *
  * Usage as a module:
  *   import { fundAccounts } from "./setup-accounts.ts";
@@ -19,7 +19,7 @@
  * Env overrides:
  *   FRIENDBOT_URL    default http://localhost:8000/friendbot
  */
-import { StrKey } from "stellar-sdk";
+import { StrKey } from "npm:@stellar/stellar-sdk@14.2.0";
 
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
 

@@ -16,7 +16,6 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
-COMPOSE_FILE="$SCRIPT_DIR/docker-compose.test.yml"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -35,6 +34,8 @@ usage() {
   echo "  otel          Payment flow + OTEL trace verification (16 checks)"
   echo "  governance    UC2 governance flows (40+ checks)"
   echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
+  echo "  pos-instant   POS crypto instant payment (temp P256 hop)"
+  echo "  pos-self-custodial  POS self-custodial payment (password-derived keys)"
   echo "  clean         Remove all test containers and volumes"
   exit 1
 }
@@ -61,12 +62,14 @@ run_suite() {
   # Not local — must be visible to the EXIT trap after run_suite returns
   project_name="moonlight-test-${suite}-$(date +%s | tail -c 9)"
 
-  case "$suite" in
-    e2e|otel|governance|lifecycle) ;;
-    *) error "Unknown suite: $suite" ;;
-  esac
+  local compose_file="$SCRIPT_DIR/docker-compose.${suite}.yml"
+  if [ ! -f "$compose_file" ]; then
+    error "No compose file for suite '$suite' at $compose_file"
+  fi
 
-  # Create traces directory with open permissions so Jaeger (non-root) can write
+  # Wipe and recreate traces directory so Badger never sees a stale lock
+  # from a previous (possibly crashed) run. Data is ephemeral per-run.
+  rm -rf "$SCRIPT_DIR/.traces/$suite"
   mkdir -p "$SCRIPT_DIR/.traces/$suite"
   chmod 777 "$SCRIPT_DIR/.traces/$suite"
 
@@ -75,21 +78,19 @@ run_suite() {
   # Cleanup on exit or interrupt
   cleanup() {
     info "Cleaning up $project_name..."
-    docker compose -f "$COMPOSE_FILE" -p "$project_name" down -v --remove-orphans 2>/dev/null || true
+    docker compose -f "$compose_file" -p "$project_name" down -v --remove-orphans 2>/dev/null || true
   }
   trap cleanup EXIT INT TERM
 
-  # Start in detached mode (--abort-on-container-exit can't be used with
-  # one-shot setup containers — it aborts before the test runner starts)
-  TEST_SUITE="$suite" \
   WASM_DIR="${WASM_DIR}" \
   PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-${BASE_DIR}/provider-platform}" \
   COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-${BASE_DIR}/council-platform}" \
-  docker compose -f "$COMPOSE_FILE" -p "$project_name" up -d
+  PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-${BASE_DIR}/pay-platform}" \
+  docker compose -f "$compose_file" -p "$project_name" up -d
 
   # Stream test-runner logs and wait for it to finish
   info "Waiting for test-runner to complete..."
-  docker compose -f "$COMPOSE_FILE" -p "$project_name" logs -f test-runner 2>&1 &
+  docker compose -f "$compose_file" -p "$project_name" logs -f test-runner 2>&1 &
   local logs_pid=$!
 
   # Wait for the test-runner container to exit
@@ -134,7 +135,7 @@ clean_all() {
 }
 
 case "$SUITE" in
-  e2e|otel|governance|lifecycle)
+  e2e|otel|governance|lifecycle|pos-instant|pos-self-custodial)
     ensure_wasms
     run_suite "$SUITE"
     ;;
@@ -145,7 +146,7 @@ case "$SUITE" in
     pids=()
     results=()
 
-    for s in e2e otel governance lifecycle; do
+    for s in e2e otel governance lifecycle pos-instant pos-self-custodial; do
       # Intentional: each subshell gets its own trap handler from run_suite,
       # so cleanup runs independently per suite when it exits or is interrupted.
       (run_suite "$s") &
@@ -154,7 +155,7 @@ case "$SUITE" in
 
     all_passed=true
     for i in "${!pids[@]}"; do
-      suite_names=(e2e otel governance lifecycle)
+      suite_names=(e2e otel governance lifecycle pos-instant pos-self-custodial)
       if wait "${pids[$i]}"; then
         results+=("${suite_names[$i]}: passed")
       else

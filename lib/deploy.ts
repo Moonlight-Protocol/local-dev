@@ -7,7 +7,7 @@ import {
   rpc,
   StrKey,
   xdr,
-} from "stellar-sdk";
+} from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
 import { submitTx } from "./soroban.ts";
 

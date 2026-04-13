@@ -1,4 +1,4 @@
-import { rpc, scValToNative, xdr } from "stellar-sdk";
+import { rpc, scValToNative, xdr } from "npm:@stellar/stellar-sdk@14.2.0";
 
 export interface ContractEvent {
   type: string;

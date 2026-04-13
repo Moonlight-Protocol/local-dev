@@ -35,15 +35,15 @@ import { Buffer } from "node:buffer";
 import { NetworkConfig, type ContractId } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
 import type { Config } from "../e2e/config.ts";
-import { createServer } from "./soroban.ts";
+import { createServer } from "../lib/soroban.ts";
 import {
   deployChannelAuth,
   deployPrivacyChannel,
   getOrDeployNativeSac,
   uploadWasm,
-} from "./deploy.ts";
-import { addProvider } from "./admin.ts";
-import { extractEvents, verifyEvent } from "./events.ts";
+} from "../lib/deploy.ts";
+import { addProvider } from "../lib/admin.ts";
+import { extractEvents, verifyEvent } from "../lib/events.ts";
 import { authenticate } from "../e2e/auth.ts";
 import { deposit } from "../e2e/deposit.ts";
 import { prepareReceive } from "../e2e/receive.ts";

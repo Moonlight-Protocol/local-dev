@@ -26,6 +26,7 @@ COUNCIL_PLATFORM_PORT="${COUNCIL_PLATFORM_PORT:-3015}"
 PROVIDER_CONSOLE_PORT="${PROVIDER_CONSOLE_PORT:-3020}"
 PAY_PLATFORM_PORT="${PAY_PLATFORM_PORT:-3025}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
+MOONLIGHT_PAY_PORT="${MOONLIGHT_PAY_PORT:-3050}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
 
@@ -71,6 +72,7 @@ stop_process "council-platform" "$SCRIPT_DIR/.council-platform.pid" "$COUNCIL_PL
 stop_process "pay-platform" "$SCRIPT_DIR/.pay-platform.pid" "$PAY_PLATFORM_PORT"
 stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_CONSOLE_PORT"
 stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONSOLE_PORT"
+stop_process "moonlight-pay" "$SCRIPT_DIR/.moonlight-pay.pid" "$MOONLIGHT_PAY_PORT"
 stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
 
 # --- Stop PostgreSQL container ---
@@ -101,6 +103,7 @@ for f in \
   "$SCRIPT_DIR/pay-platform.log" \
   "$SCRIPT_DIR/provider-console.log" \
   "$SCRIPT_DIR/council-console.log" \
+  "$SCRIPT_DIR/moonlight-pay.log" \
   "$SCRIPT_DIR/network-dashboard.log" \
 ; do
   if [ -f "$f" ]; then

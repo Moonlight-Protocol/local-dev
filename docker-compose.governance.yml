@@ -1,18 +1,5 @@
-## Isolated local E2E test stack.
-##
-## Runs tests against local repo source code in full isolation (own Stellar,
-## PostgreSQL, and services). No host ports exposed — everything communicates
-## on the internal Docker network.
-##
-## Usage (via test.sh wrapper):
-##   ./test.sh e2e          # Payment flow
-##   ./test.sh governance   # UC2 governance
-##   ./test.sh uc2          # Manual UC2 user flow
-##   ./test.sh all          # All three in parallel
-##
-## Direct usage:
-##   TEST_SUITE=e2e docker compose -f docker-compose.test.yml -p my-test up \
-##     --abort-on-container-exit --exit-code-from test-runner
+## Governance (UC2) test.
+## Deploys contracts (no provider registration), tests approve/reject flows.
 
 services:
   stellar:
@@ -52,8 +39,7 @@ services:
       BADGER_DIRECTORY_KEY: /badger/keys
       BADGER_DIRECTORY_VALUE: /badger/values
     volumes:
-      # TEST_SUITE is validated against a fixed set in test.sh before reaching compose.
-      - ./.traces/${TEST_SUITE:-e2e}:/badger
+      - ./.traces/governance:/badger
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
       interval: 2s
@@ -67,7 +53,7 @@ services:
         condition: service_healthy
     volumes:
       - ./test:/app/test:ro
-      - ./lifecycle:/app/lifecycle:ro
+      - ./lib:/app/lib:ro
       - ${WASM_DIR:-../soroban-core/target/wasm32v1-none/release}:/wasms:ro
       - shared-config:/config
     working_dir: /app
@@ -75,7 +61,7 @@ services:
       - sh
       - -c
       - |
-        cp test/setup.ts test/deno.json . && deno install && deno run --allow-all setup.ts
+        cp test/setup-governance.ts setup.ts && deno run --allow-all setup.ts
     environment:
       STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
@@ -84,7 +70,6 @@ services:
       WASM_DIR: /wasms
       PROVIDER_INTERNAL_PORT: "3000"
       COUNCIL_INTERNAL_PORT: "8080"
-      TEST_SUITE: ${TEST_SUITE:-e2e}
 
   provider:
     image: denoland/deno:2.7.9
@@ -161,13 +146,28 @@ services:
         condition: service_healthy
     volumes:
       - shared-config:/config:ro
-      - ./e2e:/e2e-src:ro
       - ./e2e/governance:/governance-src:ro
-      - ./lifecycle:/lifecycle-src:ro
-      - ${WASM_DIR:-../soroban-core/target/wasm32v1-none/release}:/wasms:ro
-      - ./test/test-entrypoint.sh:/entrypoint.sh:ro
     working_dir: /app
-    entrypoint: ["sh", "/entrypoint.sh"]
+    entrypoint:
+      - sh
+      - -c
+      - |
+        if [ -f /config/contracts.env ]; then set -a; . /config/contracts.env; set +a; fi
+        cp /governance-src/*.ts /governance-src/deno.json . && cp /governance-src/deno.lock . 2>/dev/null || true
+        deno install
+        echo "Waiting for provider and council..."
+        for i in $$(seq 1 60); do
+          provider_ok=false council_ok=false
+          PROBE_URL="$$PROVIDER_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && provider_ok=true
+          PROBE_URL="$$COUNCIL_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && council_ok=true
+          if [ "$$provider_ok" = true ] && [ "$$council_ok" = true ]; then
+            echo "Provider and Council are ready."
+            break
+          fi
+          if [ "$$i" -eq 60 ]; then echo "Services not ready after 120s"; exit 1; fi
+          sleep 2
+        done
+        exec deno run --allow-all uc2-approve-reject.ts
     environment:
       PROVIDER_URL: http://provider:3000
       PROVIDER_API: http://provider:3000/api/v1
@@ -179,7 +179,6 @@ services:
       JAEGER_QUERY_URL: http://jaeger:16686
       DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
       WASM_DIR: /wasms
-      TEST_SUITE: ${TEST_SUITE:-e2e}
       OTEL_DENO: "true"
       OTEL_SERVICE_NAME: "moonlight-e2e"
       OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"

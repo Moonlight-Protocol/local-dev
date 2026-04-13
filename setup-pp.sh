@@ -38,5 +38,5 @@ command -v "$DENO_BIN" >/dev/null 2>&1 || {
   exit 1
 }
 
-cd "$SCRIPT_DIR/lifecycle"
+cd "$SCRIPT_DIR"
 exec "$DENO_BIN" run --allow-all setup-pp.ts "$@"

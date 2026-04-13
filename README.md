@@ -120,13 +120,18 @@ Tears down all containers, kills all services, and removes generated files (`.en
 ### Run E2E tests
 
 ```bash
-./test.sh e2e           # Payment flow (deposit, send, receive, withdraw)
-./test.sh otel          # Payment flow + OTEL trace verification
-./test.sh governance    # UC2 governance flows (approve, reject, multi-PP)
-./test.sh all           # All suites in parallel
+./test.sh e2e                  # Payment flow (deposit, send, receive, withdraw)
+./test.sh otel                 # Payment flow + OTEL trace verification
+./test.sh governance           # UC2 governance flows (approve, reject, multi-PP)
+./test.sh lifecycle            # Full lifecycle (deploy → payment → remove)
+./test.sh pos-instant          # UC4 POS crypto instant payment (temp P256 hop)
+./test.sh pos-self-custodial   # UC4 POS self-custodial payment (password-derived keys)
+./test.sh all                  # All suites in parallel
 ```
 
-Each run spins up its own Stellar node, PostgreSQL, provider, and council in Docker — fully isolated, no shared state, no dependency on `up.sh`. Uses your current local repo source code (mounted read-only). Set `BASE_DIR` if your repos aren't in `~/repos/`.
+Each run spins up its own Stellar node, PostgreSQL, provider, council, and (for POS suites) pay-platform in Docker — fully isolated, no shared state, no dependency on `up.sh`. Uses your current local repo source code (mounted read-only). Set `BASE_DIR` if your repos aren't in `~/repos/`.
+
+Each suite has its own Docker Compose file (`docker-compose.<suite>.yml`), its own setup script, and its own test runner. No conditional branching — every suite is fully explicit about what it needs.
 
 ## E2E in CI
 
@@ -174,10 +179,12 @@ Replace `lifecycle` with any suite name (`e2e`, `otel`, `governance`).
 
 ```
 .traces/
-├── e2e/           # Payment flow traces
-├── otel/          # Same as e2e (used for OTEL verification)
-├── governance/    # UC2 governance flow traces
-└── lifecycle/     # Full lifecycle traces (deploy → payment → remove)
+├── e2e/                  # Payment flow traces
+├── otel/                 # Same as e2e (used for OTEL verification)
+├── governance/           # UC2 governance flow traces
+├── lifecycle/            # Full lifecycle traces (deploy → payment → remove)
+├── pos-instant/          # POS crypto instant payment traces
+└── pos-self-custodial/   # POS self-custodial payment traces
 ```
 
 Each directory contains Jaeger's badger storage (`keys/` and `values/`). Delete a directory to clear its traces. The `.traces/` directory is gitignored.

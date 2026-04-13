@@ -1,0 +1,69 @@
+/**
+ * Lifecycle test setup — writes minimal platform config only.
+ *
+ * The lifecycle test handles ALL deployment and seeding itself. Setup
+ * only writes the bare .env files so provider and council can start.
+ */
+const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
+const CONFIG_DIR = Deno.env.get("CONFIG_DIR") ?? "/config";
+const PROVIDER_INTERNAL_PORT = Deno.env.get("PROVIDER_INTERNAL_PORT") ?? "3000";
+const COUNCIL_INTERNAL_PORT = Deno.env.get("COUNCIL_INTERNAL_PORT") ?? "8080";
+const SERVICE_AUTH_SECRET = "test-auth-secret";
+
+async function main() {
+  console.log("[setup-lifecycle] Writing minimal config...");
+
+  const providerEnv = `PORT=${PROVIDER_INTERNAL_PORT}
+MODE=development
+LOG_LEVEL=TRACE
+SERVICE_DOMAIN=localhost
+
+STELLAR_RPC_URL=${RPC_URL}
+NETWORK=local
+NETWORK_FEE=1000000000
+
+SERVICE_AUTH_SECRET=${SERVICE_AUTH_SECRET}
+SERVICE_FEE=100
+CHALLENGE_TTL=900
+SESSION_TTL=21600
+
+MEMPOOL_SLOT_CAPACITY=100
+MEMPOOL_EXPENSIVE_OP_WEIGHT=10
+MEMPOOL_CHEAP_OP_WEIGHT=1
+MEMPOOL_EXECUTOR_INTERVAL_MS=5000
+MEMPOOL_VERIFIER_INTERVAL_MS=10000
+MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
+MEMPOOL_MAX_RETRY_ATTEMPTS=3
+BUNDLE_MAX_OPERATIONS=20
+
+EVENT_WATCHER_INTERVAL_MS=5000
+`;
+  await Deno.writeTextFile(`${CONFIG_DIR}/provider.env`, providerEnv);
+
+  const councilEnv = `PORT=${COUNCIL_INTERNAL_PORT}
+MODE=development
+LOG_LEVEL=TRACE
+SERVICE_DOMAIN=localhost
+
+STELLAR_RPC_URL=${RPC_URL}
+NETWORK=local
+NETWORK_FEE=1000000000
+CHANNEL_AUTH_ID=CCSRQA6OD5OX2VSEIKRZY5R75TLO55QB4RUUZISZYKWCDBC4BXC6XY37
+COUNCIL_SK=SCTQUHSGRWMHZZ7XNTQZJZYZTHLBJFUQVRHYVH4N7GJPVXZQ4OMI5IEQ
+OPEX_PUBLIC=GCCMSSJP2GIK4WEQIG3KW253PVRKNPJPHOJVU2IDSCUIP5IRIGTBBWKG
+OPEX_SECRET=SCTQUHSGRWMHZZ7XNTQZJZYZTHLBJFUQVRHYVH4N7GJPVXZQ4OMI5IEQ
+
+SERVICE_AUTH_SECRET=${SERVICE_AUTH_SECRET}
+CHALLENGE_TTL=900
+SESSION_TTL=21600
+`;
+  await Deno.writeTextFile(`${CONFIG_DIR}/council.env`, councilEnv);
+
+  console.log(`[setup-lifecycle] Config written to ${CONFIG_DIR}/`);
+  console.log("[setup-lifecycle] Done.");
+}
+
+main().catch((err) => {
+  console.error("[setup-lifecycle] FAILED:", err);
+  Deno.exit(1);
+});

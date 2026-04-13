@@ -1,4 +1,4 @@
-import { Address, Contract, Keypair, rpc } from "stellar-sdk";
+import { Address, Contract, Keypair, rpc } from "npm:@stellar/stellar-sdk@14.2.0";
 import { submitTx } from "./soroban.ts";
 
 /**
