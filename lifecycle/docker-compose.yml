@@ -47,6 +47,7 @@ services:
     volumes:
       - ${WASM_DIR:-../e2e}/wasms:/wasms:ro
       - .:/lifecycle-src:ro
+      - ../lib:/lib-src:ro
       - ../e2e:/e2e-src:ro
       - shared-config:/config
     working_dir: /app
@@ -59,10 +60,12 @@ services:
       - sh
       - -c
       - |
-        cp /lifecycle-src/*.ts /lifecycle-src/deno.json . && cp /lifecycle-src/deno.lock . 2>/dev/null || true
-        mkdir -p ../e2e && cp /e2e-src/*.ts /e2e-src/deno.json ../e2e/ && cp /e2e-src/deno.lock ../e2e/ 2>/dev/null || true
-        deno install
-        deno run --allow-all ci-setup.ts
+        mkdir -p lifecycle lib e2e
+        cp /lifecycle-src/*.ts lifecycle/ && cp /lifecycle-src/deno.json lifecycle/ && cp /lifecycle-src/deno.lock lifecycle/ 2>/dev/null || true
+        cp /lib-src/*.ts lib/
+        cp /e2e-src/*.ts e2e/ && cp /e2e-src/deno.json e2e/ && cp /e2e-src/deno.lock e2e/ 2>/dev/null || true
+        cd lifecycle && deno install && cd ..
+        deno run --allow-all lifecycle/ci-setup.ts
 
   council:
     image: ${COUNCIL_IMAGE:-council-platform:local}
@@ -116,6 +119,7 @@ services:
     volumes:
       - shared-config:/config:ro
       - .:/lifecycle-src:ro
+      - ../lib:/lib-src:ro
       - ../e2e:/e2e-src:ro
     working_dir: /app
     environment:
@@ -129,9 +133,11 @@ services:
       - sh
       - -c
       - |
-        cp /lifecycle-src/*.ts /lifecycle-src/deno.json . && cp /lifecycle-src/deno.lock . 2>/dev/null || true
-        mkdir -p ../e2e && cp /e2e-src/*.ts /e2e-src/deno.json ../e2e/ && cp /e2e-src/deno.lock ../e2e/ 2>/dev/null || true
-        deno install
+        mkdir -p lifecycle lib e2e
+        cp /lifecycle-src/*.ts lifecycle/ && cp /lifecycle-src/deno.json lifecycle/ && cp /lifecycle-src/deno.lock lifecycle/ 2>/dev/null || true
+        cp /lib-src/*.ts lib/
+        cp /e2e-src/*.ts e2e/ && cp /e2e-src/deno.json e2e/ && cp /e2e-src/deno.lock e2e/ 2>/dev/null || true
+        cd lifecycle && deno install && cd ..
         echo "Waiting for provider..."
         for i in $(seq 1 60); do
           if deno eval "try { await fetch('$$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
@@ -141,7 +147,7 @@ services:
           if [ "$$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
           sleep 2
         done
-        deno run --allow-all ci-test.ts
+        deno run --allow-all lifecycle/ci-test.ts
 
 volumes:
   shared-config:

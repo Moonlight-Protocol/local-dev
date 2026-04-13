@@ -13,14 +13,14 @@
  * the PP submits a join request, mirroring the production flow.
  */
 import { Keypair } from "stellar-sdk";
-import { createServer } from "./soroban.ts";
+import { createServer } from "../lib/soroban.ts";
 import {
   deployChannelAuth,
   deployPrivacyChannel,
   getOrDeployNativeSac,
   uploadWasm,
-} from "./deploy.ts";
-import { extractEvents, verifyEvent } from "./events.ts";
+} from "../lib/deploy.ts";
+import { extractEvents, verifyEvent } from "../lib/events.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL")!;

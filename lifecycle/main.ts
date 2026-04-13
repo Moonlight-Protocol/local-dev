@@ -1,24 +1,23 @@
 import { Keypair } from "stellar-sdk";
 import { NetworkConfig, type ContractId } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
-import { createServer } from "./soroban.ts";
+import { createServer } from "../lib/soroban.ts";
 import {
   deployChannelAuth,
   deployPrivacyChannel,
   getOrDeployNativeSac,
   uploadWasm,
-} from "./deploy.ts";
-import { addProvider, removeProvider } from "./admin.ts";
-import { extractEvents, verifyEvent } from "./events.ts";
+} from "../lib/deploy.ts";
+import { addProvider, removeProvider } from "../lib/admin.ts";
+import { extractEvents, verifyEvent } from "../lib/events.ts";
 
-// E2E payment modules — copied to ./e2e/ by the test entrypoint
-import { authenticate } from "./e2e/auth.ts";
-import { deposit } from "./e2e/deposit.ts";
-import { prepareReceive } from "./e2e/receive.ts";
-import { send } from "./e2e/send.ts";
-import { withdraw } from "./e2e/withdraw.ts";
+import { authenticate } from "../e2e/auth.ts";
+import { deposit } from "../e2e/deposit.ts";
+import { prepareReceive } from "../e2e/receive.ts";
+import { send } from "../e2e/send.ts";
+import { withdraw } from "../e2e/withdraw.ts";
 
-import type { Config } from "./e2e/config.ts";
+import type { Config } from "../e2e/config.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
 const SEND_AMOUNT = 5; // XLM
