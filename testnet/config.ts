@@ -23,7 +23,7 @@ export function loadConfig(): Config {
   const friendbotUrl = Deno.env.get("FRIENDBOT_URL") ??
     "https://friendbot.stellar.org";
   const providerUrl = Deno.env.get("PROVIDER_URL") ??
-    "https://moonlight-beta-privacy-provider-a.fly.dev";
+    "https://provider-api-testnet.moonlightprotocol.io";
 
   const channelContractId = (Deno.env.get("CHANNEL_CONTRACT_ID") ??
     "CDMZSHMT2AIL2UG7XBOHZKXM6FY3MUP75HAXUUSAHLGRQ2VWPGYKPM5T") as ContractId;

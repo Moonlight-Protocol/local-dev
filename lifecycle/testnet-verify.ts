@@ -26,8 +26,8 @@
  *   deno run --allow-all lifecycle/testnet-verify.ts
  *
  * Env overrides (defaults are the public testnet endpoints):
- *   COUNCIL_URL    council-platform URL (default: https://moonlight-beta-council-platform.fly.dev)
- *   PROVIDER_URL   provider-platform URL (default: https://moonlight-beta-privacy-provider-a.fly.dev)
+ *   COUNCIL_URL    council-platform URL (default: https://council-api-testnet.moonlightprotocol.io)
+ *   PROVIDER_URL   provider-platform URL (default: https://provider-api-testnet.moonlightprotocol.io)
  *   CHANNEL_AUTH_WASM, PRIVACY_CHANNEL_WASM  paths to contract WASMs
  */
 import { Keypair } from "stellar-sdk";
@@ -57,8 +57,8 @@ const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stel
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "https://friendbot.stellar.org";
 const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
   "Test SDF Network ; September 2015";
-const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "https://moonlight-beta-council-platform.fly.dev";
-const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "https://moonlight-beta-privacy-provider-a.fly.dev";
+const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "https://council-api-testnet.moonlightprotocol.io";
+const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "https://provider-api-testnet.moonlightprotocol.io";
 
 const CHANNEL_AUTH_WASM = Deno.env.get("CHANNEL_AUTH_WASM") ??
   new URL("../e2e/wasms/channel_auth_contract.wasm", import.meta.url).pathname;
