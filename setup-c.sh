@@ -32,5 +32,15 @@ command -v "$DENO_BIN" >/dev/null 2>&1 || {
   exit 1
 }
 
-cd "$SCRIPT_DIR/lifecycle"
+# If setup-keys.sh has been run, use the DEPLOYER keypair for contract deployment.
+# Falls back to the hardcoded default in setup-c.ts if .local-dev-keys is missing.
+KEYS_FILE="$SCRIPT_DIR/.local-dev-keys"
+if [ -f "$KEYS_FILE" ]; then
+  DEPLOYER_SK=$(grep "^DEPLOYER_SK=" "$KEYS_FILE" | cut -d= -f2)
+  if [ -n "$DEPLOYER_SK" ]; then
+    export ADMIN_SECRET="$DEPLOYER_SK"
+  fi
+fi
+
+cd "$SCRIPT_DIR"
 exec "$DENO_BIN" run --allow-all setup-c.ts "$@"

@@ -15,22 +15,22 @@
  *   ./setup-accounts-extension.sh
  *
  * Usage (direct):
- *   deno run --allow-all lifecycle/setup-accounts-extension.ts
+ *   deno run --allow-all setup-accounts-extension.ts
  *
  * Env overrides:
  *   FRIENDBOT_URL                 default http://localhost:8000/friendbot
- *   WALLET_SEED_DIR               default ../../browser-wallet
+ *   WALLET_SEED_DIR               default ../browser-wallet
  *   SEED_FILES                    comma-separated, default ".env.seed.user1,.env.seed.user2"
  *   DERIVATION_INDEX              default 0
  */
-import { Keypair } from "stellar-sdk";
+import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
 import { mnemonicToSeed } from "npm:bip39@3.1.0";
 import { fundAccounts, formatResults } from "./setup-accounts.ts";
 
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
 const WALLET_SEED_DIR = Deno.env.get("WALLET_SEED_DIR") ??
-  new URL("../../browser-wallet", import.meta.url).pathname;
+  new URL("../browser-wallet", import.meta.url).pathname;
 const SEED_FILES = (Deno.env.get("SEED_FILES") ?? ".env.seed.user1,.env.seed.user2")
   .split(",")
   .map((s) => s.trim())
