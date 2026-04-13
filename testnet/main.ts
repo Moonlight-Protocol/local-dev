@@ -37,8 +37,8 @@ import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "https://friendbot.stellar.org";
 const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
-const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "https://moonlight-beta-council-platform.fly.dev";
-const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "https://moonlight-beta-privacy-provider-a.fly.dev";
+const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "https://council-api-testnet.moonlightprotocol.io";
+const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "https://provider-api-testnet.moonlightprotocol.io";
 
 const CHANNEL_AUTH_WASM = Deno.env.get("CHANNEL_AUTH_WASM") ??
   new URL("../e2e/wasms/channel_auth_contract.wasm", import.meta.url).pathname;

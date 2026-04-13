@@ -176,7 +176,7 @@ Uses `AUTO_VERSION_TOKEN` (PAT) with `persist-credentials: true` so the tag push
 
 **Hosting**: Static files served directly from Tigris (S3-compatible object storage on Fly.io). No server required.
 - **Bucket**: `provider-console`
-- **URL**: `https://provider-console.fly.storage.tigris.dev/index.html`
+- **URL**: `https://provider-testnet.moonlightprotocol.io` (Tigris bucket: `provider-console`)
 - **Secrets**: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`, `API_BASE_URL`, `POSTHOG_PROJECT_TOKEN`
 
 **Tests**: `test.yml` runs `deno task test` on every PR to main. Tests must pass before merge.
@@ -194,8 +194,8 @@ Same pattern as provider-console.
 **Step 3: Deploy (`deploy.yml`).** Triggers on tag push matching `v*`. Same build + Tigris upload pattern.
 
 **Hosting**: Static files on Tigris.
-- **Bucket**: `council-console`
-- **URL**: `https://council-console.fly.storage.tigris.dev/index.html`
+- **Bucket**: `moonlight-council-console`
+- **URL**: `https://council-testnet.moonlightprotocol.io` (Tigris bucket: `moonlight-council-console`)
 - **Secrets**: `TIGRIS_ACCESS_KEY_ID`, `TIGRIS_SECRET_ACCESS_KEY`, `POSTHOG_PROJECT_TOKEN`, `GRAFANA_OTLP_ENDPOINT`, `GRAFANA_OTLP_AUTH`
 
 **Tests**: `ci.yml` runs tests on every PR to main.
