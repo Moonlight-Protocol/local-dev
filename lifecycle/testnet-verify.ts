@@ -430,6 +430,8 @@ async function main() {
   const tempoAuth = Deno.env.get("TEMPO_AUTH");
   if (tempoUrl && tempoAuth) {
     console.log("\n[13/13] OTEL trace verification");
+    console.log("  Waiting 60s for trace ingestion...");
+    await new Promise((r) => setTimeout(r, 60_000));
     const traceIdsPath = new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
     const result = await verifyOtelTraces({
       tempoUrl,
