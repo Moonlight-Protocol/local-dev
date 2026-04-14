@@ -315,7 +315,18 @@ export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<Verify
   const providerTraceIds = new Set(providerSpans.map((s) => s.traceId));
   const sdkTraceIds = new Set(sdkSpans.map((s) => s.traceId));
   const sharedTraceIds = [...sdkTraceIds].filter((id) => providerTraceIds.has(id));
-  assertMin("Shared trace IDs", sharedTraceIds.length, 5);
+  const providerOnlyTraceIds = [...providerTraceIds].filter((id) => !sdkTraceIds.has(id));
+  assertMin("Shared trace IDs (SDK ↔ Provider)", sharedTraceIds.length, 1);
+
+  // Every provider span triggered by the E2E should share a trace ID with the SDK.
+  // Provider-only trace IDs indicate broken context propagation.
+  if (providerOnlyTraceIds.length === 0) {
+    console.log(`  ✅ All provider traces linked to SDK (0 orphaned trace IDs)`);
+    passed++;
+  } else {
+    console.log(`  ❌ ${providerOnlyTraceIds.length} provider trace ID(s) not linked to SDK`);
+    failed++;
+  }
 
   const sdkSpanIds = new Set(sdkSpans.map((s) => s.spanId));
   const providerWithSdkParent = providerSpans.filter((s) => sdkSpanIds.has(s.parentSpanId));
