@@ -21,6 +21,7 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
     environment: "test",
     stellarNetwork: "standalone",
     payPlatformUrl: PAY_URL,
+    rpcUrl: Deno.env.get("STELLAR_RPC_URL") ?? "http://stellar:8000/soroban/rpc",
   },
 };
 
