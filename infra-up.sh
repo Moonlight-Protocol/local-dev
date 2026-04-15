@@ -370,6 +370,7 @@ SESSION_TTL=21600
 
 ADMIN_WALLETS=$PAY_ADMIN_PK
 PAY_SERVICE_SK=$PAY_SERVICE_SK
+STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
 EOF
 
 info "Running pay-platform migrations..."
@@ -488,6 +489,8 @@ window.__PAY_CONFIG__ = {
   environment: "development",
   stellarNetwork: "standalone",
   payPlatformUrl: "http://localhost:${PAY_PLATFORM_PORT}",
+  rpcUrl: "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc",
+  allowlist: ["*"],
 };
 EOF
 

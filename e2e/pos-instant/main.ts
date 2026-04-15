@@ -21,6 +21,7 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
     environment: "test",
     stellarNetwork: "standalone",
     payPlatformUrl: PAY_URL,
+    rpcUrl: Deno.env.get("STELLAR_RPC_URL") ?? "http://stellar:8000/soroban/rpc",
   },
 };
 
@@ -102,7 +103,20 @@ const utxoRes = await payApi(PAY_API, "/utxo/receive", {
 if (utxoRes.status !== 201 && utxoRes.status !== 200) {
   throw new Error(`Store UTXOs failed: ${utxoRes.status} ${await utxoRes.text()}`);
 }
-console.log(`  Merchant + ${utxoPayloads.length} UTXOs created (${elapsed()})`);
+// Register OpEx account for the merchant (instant flow requires this)
+const opexKeypair = Keypair.random();
+await fundAccount(FRIENDBOT_URL, opexKeypair.publicKey());
+const opexRes = await payApi(PAY_API, "/account/opex", {
+  method: "POST",
+  headers: { Authorization: `Bearer ${merchantJwt}` },
+  body: JSON.stringify({
+    secretKey: opexKeypair.secret(),
+    publicKey: opexKeypair.publicKey(),
+    feePct: 1,
+  }),
+});
+if (!opexRes.ok) throw new Error(`OpEx registration failed: ${opexRes.status} ${await opexRes.text()}`);
+console.log(`  Merchant + ${utxoPayloads.length} UTXOs + OpEx created (${elapsed()})`);
 
 // [3] Seed council + PP
 console.log("\n[3/5] Seeding council and PP config...");
@@ -153,10 +167,12 @@ const balanceRes = await payApi(PAY_API, "/transactions/balance", {
 if (!balanceRes.ok) throw new Error(`Balance check failed: ${balanceRes.status}`);
 const { data: balance } = await balanceRes.json();
 console.log(`  Merchant balance: ${balance.balanceXlm} XLM`);
-if (BigInt(balance.balanceStroops) >= PAYMENT_STROOPS) {
+// With 1% fee, merchant receives 99% of the payment
+const expectedMin = PAYMENT_STROOPS * 99n / 100n;
+if (BigInt(balance.balanceStroops) >= expectedMin) {
   console.log("  ✅ Merchant received funds");
 } else {
-  throw new Error(`Expected balance >= ${PAYMENT_STROOPS}, got ${balance.balanceStroops}`);
+  throw new Error(`Expected balance >= ${expectedMin}, got ${balance.balanceStroops}`);
 }
 
 console.log(`\n✅ POS instant payment test passed in ${elapsed()}`);
