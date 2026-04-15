@@ -10,6 +10,8 @@ export interface VerifyOtelConfig {
   tempoAuth: string;
   traceIdsPath: string;
   pollTimeoutMs?: number;
+  providerServiceName: string;
+  sdkServiceName: string;
 }
 
 export interface VerifyOtelResult {
@@ -58,8 +60,8 @@ interface NormalizedSpan {
   hasEvents: boolean;
 }
 
-const SDK_SERVICE = "moonlight-e2e";
-const PROVIDER_SERVICE = "provider-platform";
+// Service names are passed via config — no defaults, to prevent silent mismatches
+// between testnet (provider-platform) and mainnet (provider-platform-mainnet).
 
 function getServiceName(rs: ResourceSpan): string {
   const attr = rs.resource.attributes.find((a) => a.key === "service.name");
@@ -161,7 +163,9 @@ async function searchTraceCount(
  * Throws on connectivity failure.
  */
 export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<VerifyOtelResult> {
-  const { tempoUrl, tempoAuth, traceIdsPath, pollTimeoutMs = 30000 } = config;
+  const { tempoUrl, tempoAuth, traceIdsPath, pollTimeoutMs = 30000, providerServiceName, sdkServiceName } = config;
+  const PROVIDER_SERVICE = providerServiceName;
+  const SDK_SERVICE = sdkServiceName;
 
   console.log("\n[OTEL] Verifying OpenTelemetry traces in Grafana Cloud Tempo\n");
 
