@@ -428,7 +428,9 @@ async function main() {
   // ── Step 13 (optional): OTEL trace verification ───────────────────
   const tempoUrl = Deno.env.get("TEMPO_URL");
   const tempoAuth = Deno.env.get("TEMPO_AUTH");
-  if (tempoUrl && tempoAuth) {
+  const providerServiceName = Deno.env.get("PROVIDER_SERVICE_NAME");
+  const sdkServiceName = Deno.env.get("SDK_SERVICE_NAME");
+  if (tempoUrl && tempoAuth && providerServiceName && sdkServiceName) {
     console.log("\n[13/13] OTEL trace verification");
     console.log("  Waiting 60s for trace ingestion...");
     await new Promise((r) => setTimeout(r, 60_000));
@@ -438,12 +440,14 @@ async function main() {
       tempoAuth,
       traceIdsPath,
       pollTimeoutMs: Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000"),
+      providerServiceName,
+      sdkServiceName,
     });
     if (result.failed > 0) {
       throw new Error(`OTEL verification failed: ${result.failed} checks failed`);
     }
   } else {
-    console.log("\n  (OTEL verification skipped — set TEMPO_URL and TEMPO_AUTH to enable)");
+    console.log("\n  (OTEL verification skipped — set TEMPO_URL, TEMPO_AUTH, PROVIDER_SERVICE_NAME, and SDK_SERVICE_NAME to enable)");
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

@@ -24,6 +24,16 @@ if (!TEMPO_AUTH) {
   console.error("❌ TEMPO_AUTH env var is required");
   Deno.exit(1);
 }
+const PROVIDER_SERVICE_NAME = Deno.env.get("PROVIDER_SERVICE_NAME");
+if (!PROVIDER_SERVICE_NAME) {
+  console.error("❌ PROVIDER_SERVICE_NAME env var is required");
+  Deno.exit(1);
+}
+const SDK_SERVICE_NAME = Deno.env.get("SDK_SERVICE_NAME");
+if (!SDK_SERVICE_NAME) {
+  console.error("❌ SDK_SERVICE_NAME env var is required");
+  Deno.exit(1);
+}
 
 const TRACE_IDS_PATH = (() => {
   const localPath = new URL("./e2e-trace-ids.json", import.meta.url).pathname;
@@ -40,6 +50,8 @@ const result = await verifyOtelTraces({
   tempoAuth: TEMPO_AUTH,
   traceIdsPath: TRACE_IDS_PATH,
   pollTimeoutMs: Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000"),
+  providerServiceName: PROVIDER_SERVICE_NAME,
+  sdkServiceName: SDK_SERVICE_NAME,
 });
 
 if (result.failed > 0) {
