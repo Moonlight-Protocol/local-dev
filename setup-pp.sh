@@ -38,5 +38,14 @@ command -v "$DENO_BIN" >/dev/null 2>&1 || {
   exit 1
 }
 
+# Use the PP keypair from setup-keys.sh.
+KEYS_FILE="$SCRIPT_DIR/.local-dev-keys"
+if [ -f "$KEYS_FILE" ]; then
+  PP_SK=$(grep "^PP_SK=" "$KEYS_FILE" | cut -d= -f2)
+  if [ -n "$PP_SK" ]; then
+    export PP_SECRET="$PP_SK"
+  fi
+fi
+
 cd "$SCRIPT_DIR"
 exec "$DENO_BIN" run --allow-all setup-pp.ts "$@"
