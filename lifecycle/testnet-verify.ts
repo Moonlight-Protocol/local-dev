@@ -35,6 +35,7 @@ import { Buffer } from "node:buffer";
 import { NetworkConfig, type ContractId } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
 import type { Config } from "../e2e/config.ts";
+import { masterSeedFromSecret, deriveKeypair, ROLES } from "../lib/master-seed.ts";
 import { createServer } from "../lib/soroban.ts";
 import {
   deployChannelAuth,
@@ -183,8 +184,18 @@ async function main() {
   await warmupService("provider-platform", PROVIDER_URL);
 
   // Generate two distinct identities
-  const admin = Keypair.random();
-  const ppOperator = Keypair.random();
+  const masterSecret = Deno.env.get("MASTER_SECRET");
+  let admin: Keypair, ppOperator: Keypair;
+  if (masterSecret) {
+    const seed = await masterSeedFromSecret(masterSecret);
+    admin = await deriveKeypair(seed, ROLES.ADMIN, 0);
+    ppOperator = await deriveKeypair(seed, ROLES.PP, 0);
+    console.log("  Keys: derived from MASTER_SECRET");
+  } else {
+    admin = Keypair.random();
+    ppOperator = Keypair.random();
+    console.log("  Keys: random (set MASTER_SECRET for deterministic)");
+  }
   console.log(`\n  Admin:       ${admin.publicKey()}`);
   console.log(`  PP Operator: ${ppOperator.publicKey()}`);
 
@@ -391,8 +402,15 @@ async function main() {
     providerSecretKey: ppKeypair.secret(),
   };
 
-  const alice = Keypair.random();
-  const bob = Keypair.random();
+  let alice: Keypair, bob: Keypair;
+  if (masterSecret) {
+    const seed = await masterSeedFromSecret(masterSecret);
+    alice = await deriveKeypair(seed, ROLES.ALICE, 0);
+    bob = await deriveKeypair(seed, ROLES.BOB, 0);
+  } else {
+    alice = Keypair.random();
+    bob = Keypair.random();
+  }
   console.log(`  Alice: ${alice.publicKey()}`);
   console.log(`  Bob:   ${bob.publicKey()}`);
 
