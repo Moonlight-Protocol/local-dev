@@ -409,6 +409,7 @@ window.__CONSOLE_CONFIG__ = {
   apiBaseUrl: "http://localhost:${PROVIDER_PORT}/api/v1",
   stellarNetwork: "standalone",
   environment: "development",
+  allowlist: ["*"],
 };
 EOF
 
@@ -450,6 +451,7 @@ window.__CONSOLE_CONFIG__ = {
   horizonUrl: "http://localhost:${STELLAR_RPC_PORT}",
   friendbotUrl: "http://localhost:${STELLAR_RPC_PORT}/friendbot",
   platformUrl: "http://localhost:${COUNCIL_PLATFORM_PORT}",
+  allowlist: ["*"],
 };
 EOF
 
