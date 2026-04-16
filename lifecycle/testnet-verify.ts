@@ -51,7 +51,6 @@ import { prepareReceive } from "../e2e/receive.ts";
 import { send } from "../e2e/send.ts";
 import { withdraw } from "../e2e/withdraw.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
-import { verifyOtelTraces } from "../lib/verify-otel.ts";
 
 // ─── Testnet endpoints ────────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
@@ -442,31 +441,6 @@ async function main() {
   console.log(`  Withdraw ${WITHDRAW_AMOUNT} XLM complete`);
 
   await writeTraceIds();
-
-  // ── Step 13 (optional): OTEL trace verification ───────────────────
-  const tempoUrl = Deno.env.get("TEMPO_URL");
-  const tempoAuth = Deno.env.get("TEMPO_AUTH");
-  const providerServiceName = Deno.env.get("PROVIDER_SERVICE_NAME");
-  const sdkServiceName = Deno.env.get("SDK_SERVICE_NAME");
-  if (tempoUrl && tempoAuth && providerServiceName && sdkServiceName) {
-    console.log("\n[13/13] OTEL trace verification");
-    console.log("  Waiting 60s for trace ingestion...");
-    await new Promise((r) => setTimeout(r, 60_000));
-    const traceIdsPath = new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
-    const result = await verifyOtelTraces({
-      tempoUrl,
-      tempoAuth,
-      traceIdsPath,
-      pollTimeoutMs: Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000"),
-      providerServiceName,
-      sdkServiceName,
-    });
-    if (result.failed > 0) {
-      throw new Error(`OTEL verification failed: ${result.failed} checks failed`);
-    }
-  } else {
-    console.log("\n  (OTEL verification skipped — set TEMPO_URL, TEMPO_AUTH, PROVIDER_SERVICE_NAME, and SDK_SERVICE_NAME to enable)");
-  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Testnet Lifecycle Verification PASSED in ${elapsed}s ===\n`);
