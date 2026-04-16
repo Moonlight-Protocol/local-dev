@@ -6,13 +6,13 @@ Scripts to verify that the deployed Moonlight testnet infrastructure works end-t
 
 - Deno installed
 - Contract WASMs available at `../e2e/wasms/` (build with `stellar contract build` in soroban-core, or copy from a release)
-- For OTEL verification: `TEMPO_URL` and `TEMPO_AUTH` env vars set (Grafana Cloud credentials)
+- For OTEL verification: `TEMPO_URL`, `TEMPO_AUTH`, `PROVIDER_SERVICE_NAME`, `SDK_SERVICE_NAME` env vars set
 
 ## Test Suites
 
 ### 1. Payment Flow (`testnet/main.ts`)
 
-Quick end-to-end payment test. Deploys contracts, registers a PP, then runs deposit → send → withdraw.
+Quick end-to-end payment test. Deploys contracts, registers a PP, then runs deposit → send → withdraw. Exports OTEL traces.
 
 ```bash
 cd testnet && deno task e2e
@@ -20,41 +20,31 @@ cd testnet && deno task e2e
 
 **What it tests:** Contract deployment, council + PP registration through both platforms, bundle submission and execution (deposit, send, withdraw). Fails early if platform registration is broken — isolates bugs to the bundle/execution pipeline.
 
-**Default endpoints:** `provider-api-testnet.moonlightprotocol.io`, `council-api-testnet.moonlightprotocol.io`
+### 2. OTEL Verification — Payment (`testnet/verify-otel.ts`)
 
-### 2. OTEL Trace Verification (`testnet/verify-otel.ts`)
-
-Verifies that the E2E test produced traces in Grafana Tempo. Run after the payment flow test.
+Verifies that suite 1 produced traces in Grafana Tempo. Run after suite 1 with a 60s wait for trace ingestion.
 
 ```bash
-TEMPO_URL=https://aha.grafana.net TEMPO_AUTH="Basic ..." deno run --allow-all testnet/verify-otel.ts
+sleep 60 && deno run --allow-all testnet/verify-otel.ts
 ```
 
-**Prerequisite:** Payment flow test must have completed with `OTEL_DENO=true` (the `deno task e2e` command sets this automatically). The test writes trace IDs to `e2e-trace-ids.json`.
+### 3. Lifecycle Flow (`lifecycle/testnet-verify.ts`)
 
-### 3. Full Lifecycle Verification (`lifecycle/testnet-verify.ts`)
-
-Comprehensive lifecycle test. Same as the payment flow but with the full UC2 governance flow — admin creates council, adds channel, PP operator registers and submits a join request, admin approves, on-chain `add_provider`, event watcher activates membership, then deposit → send → withdraw.
+Comprehensive lifecycle test. Full UC2 governance flow — admin creates council, adds channel, PP operator registers and submits a join request, admin approves, on-chain `add_provider`, event watcher activates membership, then deposit → send → withdraw. Exports OTEL traces.
 
 ```bash
-deno run --allow-all lifecycle/testnet-verify.ts
+cd .. && deno run --allow-all lifecycle/testnet-verify.ts
 ```
 
-**What it tests:** Everything in the payment flow plus the complete PP-joins-council governance flow with both council-platform and provider-platform cooperating. This is the closest to a real user flow.
+**What it tests:** Everything in the payment flow plus the complete PP-joins-council governance flow with both council-platform and provider-platform cooperating.
 
-**OTEL:** If `TEMPO_URL` and `TEMPO_AUTH` are set, also verifies traces in Grafana Tempo after the flow completes. If not set, OTEL verification is skipped (the flow itself still runs).
+### 4. OTEL Verification — Lifecycle (`lifecycle/verify-otel.ts`)
 
-### 4. Full Lifecycle + OTEL (`lifecycle/testnet-verify.ts` with Tempo credentials)
-
-Same as #3 but with OTEL trace verification enabled.
+Verifies that suite 3 produced traces in Grafana Tempo. Run after suite 3 with a 60s wait for trace ingestion.
 
 ```bash
-TEMPO_URL=https://aha.grafana.net \
-TEMPO_AUTH="Basic ..." \
-deno run --allow-all lifecycle/testnet-verify.ts
+sleep 60 && deno run --allow-all lifecycle/verify-otel.ts
 ```
-
-**What it adds over #3:** After the lifecycle flow completes, queries Grafana Tempo to verify that traces from the test run were ingested and contain the expected spans.
 
 ## Environment Variables
 
@@ -62,29 +52,33 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 
 | Variable | Default | Used by |
 |---|---|---|
-| `STELLAR_RPC_URL` | `https://soroban-testnet.stellar.org` | All |
-| `FRIENDBOT_URL` | `https://friendbot.stellar.org` | All |
-| `COUNCIL_URL` | `https://council-api-testnet.moonlightprotocol.io` | All |
-| `PROVIDER_URL` | `https://provider-api-testnet.moonlightprotocol.io` | All |
-| `CHANNEL_AUTH_WASM` | `../e2e/wasms/channel_auth_contract.wasm` | Payment flow, Lifecycle |
-| `PRIVACY_CHANNEL_WASM` | `../e2e/wasms/privacy_channel.wasm` | Payment flow, Lifecycle |
-| `TEMPO_URL` | (none) | OTEL verification |
-| `TEMPO_AUTH` | (none) | OTEL verification |
+| `STELLAR_RPC_URL` | `https://soroban-testnet.stellar.org` | Suites 1, 3 |
+| `FRIENDBOT_URL` | `https://friendbot.stellar.org` | Suites 1, 3 |
+| `COUNCIL_URL` | `https://council-api-testnet.moonlightprotocol.io` | Suites 1, 3 |
+| `PROVIDER_URL` | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3 |
+| `CHANNEL_AUTH_WASM` | `../e2e/wasms/channel_auth_contract.wasm` | Suites 1, 3 |
+| `PRIVACY_CHANNEL_WASM` | `../e2e/wasms/privacy_channel.wasm` | Suites 1, 3 |
+| `MASTER_SECRET` | (none — random keys) | Suites 1, 3 |
+| `TEMPO_URL` | (none) | Suites 2, 4 |
+| `TEMPO_AUTH` | (none) | Suites 2, 4 |
+| `PROVIDER_SERVICE_NAME` | (none) | Suites 2, 4 |
+| `SDK_SERVICE_NAME` | (none) | Suites 2, 4 |
+| `TRACE_POLL_TIMEOUT_MS` | `30000` | Suites 2, 4 |
 
 ## Run Order
 
-For a complete testnet verification:
-
 ```bash
-# 1. Payment flow (fast, ~3 min)
+# Suite 1: Payment flow (~5 min)
 cd testnet && deno task e2e
 
-# 2. OTEL trace check (requires Grafana credentials)
-TEMPO_URL=... TEMPO_AUTH=... deno run --allow-all verify-otel.ts
-cd ..
+# Suite 2: OTEL verification for suite 1 (wait 60s for ingestion)
+sleep 60 && deno run --allow-all verify-otel.ts
 
-# 3. Full lifecycle (comprehensive, ~3.5 min)
-TEMPO_URL=... TEMPO_AUTH=... deno run --allow-all lifecycle/testnet-verify.ts
+# Suite 3: Lifecycle flow (~5 min)
+cd .. && deno run --allow-all lifecycle/testnet-verify.ts
+
+# Suite 4: OTEL verification for suite 3 (wait 60s for ingestion)
+sleep 60 && deno run --allow-all lifecycle/verify-otel.ts
 ```
 
-Suites 1 and 3 can run independently — they each deploy fresh contracts.
+Flow scripts (1, 3) export traces and write trace IDs. Verify scripts (2, 4) read those trace IDs and check Tempo. Suites 1 and 3 can run independently — they each deploy fresh contracts.
