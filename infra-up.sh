@@ -493,6 +493,7 @@ window.__PAY_CONFIG__ = {
   payPlatformUrl: "http://localhost:${PAY_PLATFORM_PORT}",
   rpcUrl: "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc",
   allowlist: ["*"],
+  adminWallets: ["*"],
 };
 EOF
 
