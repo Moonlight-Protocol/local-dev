@@ -13,10 +13,10 @@ set -euo pipefail
 #
 # Usage: ./down.sh
 
-BASE_DIR="${BASE_DIR:-$HOME/repos}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
