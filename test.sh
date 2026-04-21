@@ -85,6 +85,7 @@ run_suite() {
   PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-${BASE_DIR}/provider-platform}" \
   COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-${BASE_DIR}/council-platform}" \
   PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-${BASE_DIR}/pay-platform}" \
+  MOONLIGHT_PAY_PATH="${MOONLIGHT_PAY_PATH:-${BASE_DIR}/moonlight-pay}" \
   docker compose -f "$compose_file" -p "$project_name" up -d
 
   # Stream test-runner logs and wait for it to finish
