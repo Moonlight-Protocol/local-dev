@@ -2,8 +2,9 @@
  * Shared test utilities for POS e2e tests.
  *
  * Provides:
+ *   - deriveTestKeys: derive all identity keys from a single master seed
+ *   - walletAuth: generic wallet challenge-response auth for any platform
  *   - createTestSigner: mock Signer that replaces Freighter with a raw Keypair
- *   - createTestSignMessage: mock signMessage for self-custodial password signing
  *   - payApi: HTTP helper for pay-platform API calls
  *   - getPayJwt: authenticate with pay-platform and return JWT
  *   - fundAccount: fund a Stellar account via Friendbot
@@ -11,6 +12,43 @@
  */
 import { Keypair, authorizeEntry } from "stellar-sdk";
 import { Buffer } from "node:buffer";
+import {
+  masterSeedFromSecret,
+  deriveKeypair,
+  ROLES,
+  LOCAL_DEV_MASTER_SECRET,
+} from "../lib/master-seed.ts";
+
+// ─── Master seed key derivation ───────────────────────────────
+
+export interface TestKeys {
+  admin: Keypair;
+  pp: Keypair;
+  payAdmin: Keypair;
+  payService: Keypair;
+  merchant: Keypair;
+  customer: Keypair;
+}
+
+/**
+ * Derive all identity keys from a single master seed.
+ * One secret → all roles, no copy-paste errors.
+ */
+export async function deriveTestKeys(
+  masterSecret?: string,
+): Promise<TestKeys> {
+  const seed = await masterSeedFromSecret(
+    masterSecret ?? LOCAL_DEV_MASTER_SECRET,
+  );
+  return {
+    admin: await deriveKeypair(seed, ROLES.ADMIN, 0),
+    pp: await deriveKeypair(seed, ROLES.PP, 0),
+    payAdmin: await deriveKeypair(seed, ROLES.PAY_ADMIN, 0),
+    payService: await deriveKeypair(seed, ROLES.PAY_SERVICE, 0),
+    merchant: await deriveKeypair(seed, ROLES.ALICE, 0),
+    customer: await deriveKeypair(seed, ROLES.BOB, 0),
+  };
+}
 
 // ─── Pay-platform API helpers ──────────────────────────────────
 
@@ -118,18 +156,6 @@ export function createTestSigner(
   };
 }
 
-/**
- * Mock signMessage — signs the message bytes with the raw keypair.
- * Replaces Freighter's SEP-43 signMessage in tests.
- */
-export function createTestSignMessage(keypair: Keypair) {
-  return async (message: string): Promise<string> => {
-    const msgBytes = new TextEncoder().encode(message);
-    const sig = keypair.sign(Buffer.from(msgBytes));
-    return Buffer.from(sig).toString("base64");
-  };
-}
-
 // ─── P256 key generation (for merchant UTXOs) ──────────────────
 
 function buildPkcs8P256(rawPrivateKey: Uint8Array): ArrayBuffer {
@@ -188,11 +214,57 @@ export async function generateP256PublicKey(): Promise<Uint8Array> {
   return publicKey;
 }
 
+// ─── Generic wallet challenge-response auth ───────────────────
+
+/**
+ * Wallet challenge-response auth for any platform.
+ * authPath is relative to apiBaseUrl, e.g. "/admin/auth" or "/auth".
+ */
+export async function walletAuth(
+  apiBaseUrl: string,
+  authPath: string,
+  publicKey: string,
+  secretKey: string,
+): Promise<string> {
+  const kp = Keypair.fromSecret(secretKey);
+  const chRes = await fetch(`${apiBaseUrl}${authPath}/challenge`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicKey }),
+  });
+  if (!chRes.ok) {
+    throw new Error(
+      `Auth challenge failed (${apiBaseUrl}${authPath}): ${chRes.status} ${await chRes.text()}`,
+    );
+  }
+  const { data: { nonce } } = await chRes.json();
+  const sig = Buffer.from(kp.sign(Buffer.from(nonce, "base64"))).toString(
+    "base64",
+  );
+  const vfRes = await fetch(`${apiBaseUrl}${authPath}/verify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ publicKey, nonce, signature: sig }),
+  });
+  if (!vfRes.ok) {
+    throw new Error(
+      `Auth verify failed (${apiBaseUrl}${authPath}): ${vfRes.status} ${await vfRes.text()}`,
+    );
+  }
+  const { data: { token } } = await vfRes.json();
+  return token;
+}
+
 // ─── Contract config loader ────────────────────────────────────
 
 export function loadContractsEnv(
   path = "/config/contracts.env",
-): { channelAuthId: string; privacyChannelId: string; assetId: string } {
+): {
+  channelAuthId: string;
+  privacyChannelId: string;
+  assetId: string;
+  councilUrl: string;
+} {
   const env: Record<string, string> = {};
   try {
     for (
@@ -210,5 +282,6 @@ export function loadContractsEnv(
     channelAuthId: env["E2E_CHANNEL_AUTH_ID"],
     privacyChannelId: env["E2E_CHANNEL_CONTRACT_ID"],
     assetId: env["E2E_CHANNEL_ASSET_CONTRACT_ID"],
+    councilUrl: env["E2E_COUNCIL_URL"],
   };
 }
