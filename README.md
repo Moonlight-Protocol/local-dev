@@ -161,7 +161,6 @@ Tears down all containers, kills all services, and removes generated files (`.en
 ./test.sh governance           # UC2 governance flows (approve, reject, multi-PP)
 ./test.sh lifecycle            # Full lifecycle (deploy → payment → remove)
 ./test.sh pos-instant          # UC4 POS crypto instant payment (temp P256 hop)
-./test.sh pos-self-custodial   # UC4 POS self-custodial payment (password-derived keys)
 ./test.sh all                  # All suites in parallel
 ```
 
@@ -221,8 +220,7 @@ Replace `lifecycle` with any suite name (`e2e`, `otel`, `governance`).
 ├── otel/                 # Same as e2e (used for OTEL verification)
 ├── governance/           # UC2 governance flow traces
 ├── lifecycle/            # Full lifecycle traces (deploy → payment → remove)
-├── pos-instant/          # POS crypto instant payment traces
-└── pos-self-custodial/   # POS self-custodial payment traces
+└── pos-instant/          # POS crypto instant payment traces
 ```
 
 Each directory contains Jaeger's badger storage (`keys/` and `values/`). Delete a directory to clear its traces. The `.traces/` directory is gitignored.

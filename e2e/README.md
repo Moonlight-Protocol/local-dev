@@ -98,7 +98,6 @@ Run tests via `test.sh` in the repo root. Each run spins up a fully isolated Doc
 ./test.sh governance           # UC2 governance flows
 ./test.sh lifecycle            # Full lifecycle (deploy → payment → remove)
 ./test.sh pos-instant          # UC4 POS crypto instant payment
-./test.sh pos-self-custodial   # UC4 POS self-custodial payment
 ./test.sh all                  # All suites in parallel
 ```
 
