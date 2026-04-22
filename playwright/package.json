@@ -1,0 +1,17 @@
+{
+  "name": "moonlight-playwright-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "test": "npx playwright test --project=chromium",
+    "test:headed": "npx playwright test --project=chromium --headed",
+    "test:debug": "npx playwright test --project=chromium --debug",
+    "install:browsers": "npx playwright install chromium"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@stellar/stellar-sdk": "^15.0.1",
+    "@types/node": "^25.6.0",
+    "typescript": "^5.7.0"
+  }
+}
