@@ -447,6 +447,23 @@ test.describe("Full UC Flow", () => {
     await expect(
       adminPage.locator("#council-list [data-id]").first(),
     ).toBeVisible({ timeout: 15_000 });
+
+    // Navigate into the council detail view to add a privacy provider
+    await adminPage.locator("#council-list [data-id]").first().click();
+    await adminPage.waitForSelector("#add-pp-btn", { timeout: 10_000 });
+
+    // Add a privacy provider so instant payments can route
+    await adminPage.click("#add-pp-btn");
+    await adminPage.waitForSelector("#pp-name", { timeout: 5_000 });
+    await adminPage.fill("#pp-name", PROVIDER_NAME);
+    await adminPage.fill("#pp-url", urls.providerApi);
+    await adminPage.fill("#pp-pk", profiles.provider.publicKey);
+    await adminPage.click("#pp-save");
+
+    // Verify PP appears in the list
+    await expect(
+      adminPage.locator("#pp-list .stat-card").first(),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
   // ── Step 9: Merchant signs in to moonlight-pay ────────────────────
