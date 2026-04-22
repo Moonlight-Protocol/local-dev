@@ -14,6 +14,13 @@ import {
 } from "./lib/deploy.ts";
 import { addProvider } from "./lib/admin.ts";
 import { extractEvents, verifyEvent } from "./lib/events.ts";
+// Resolved relative to /app/ at runtime (setup-e2e.ts is copied to /app/setup.ts)
+import {
+  masterSeedFromSecret,
+  deriveKeypair,
+  ROLES,
+  LOCAL_DEV_MASTER_SECRET,
+} from "./lib/master-seed.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL")!;
@@ -81,9 +88,10 @@ async function main() {
   const server = createServer(RPC_URL);
   await waitForFriendbot();
 
-  const admin = Keypair.random();
-  const provider = Keypair.random();
-  const treasury = Keypair.random();
+  const seed = await masterSeedFromSecret(LOCAL_DEV_MASTER_SECRET);
+  const admin = await deriveKeypair(seed, ROLES.ADMIN, 0);
+  const provider = await deriveKeypair(seed, ROLES.PP, 0);
+  const treasury = await deriveKeypair(seed, ROLES.OPEX, 0);
   console.log(`  Admin:    ${admin.publicKey()}`);
   console.log(`  Provider: ${provider.publicKey()}`);
   console.log(`  Treasury: ${treasury.publicKey()}`);

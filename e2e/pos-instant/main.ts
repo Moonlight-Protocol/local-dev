@@ -29,20 +29,18 @@ import { executeInstantPayment } from "./moonlight-pay-lib/instant-payment.ts";
 import { __resetConfigForTests } from "./moonlight-pay-lib/config.ts";
 import {
   createTestSigner,
+  deriveTestKeys,
   fundAccount,
   generateP256PublicKey,
   getPayJwt,
   loadContractsEnv,
   payApi,
+  walletAuth,
 } from "./e2e/pos-helpers.ts";
 
 __resetConfigForTests();
 
-const ADMIN_PK = "GB577NO7D3YMZKHFQQ7OEOXXL33BRV3YRJPP3MI7UT5ZF2XNOSEQX7FN";
-const ADMIN_SK = "SAKAWUZTXAQTKDYIMWEUGXDIPVVS3CIYEHH5UWFV6NFC7YDMX2G7OWOU";
-const PAY_SERVICE_SK = Deno.env.get("PAY_SERVICE_SK") ??
-  "SCTQUHSGRWMHZZ7XNTQZJZYZTHLBJFUQVRHYVH4N7GJPVXZQ4OMI5IEQ";
-const PAY_SERVICE_PK = Keypair.fromSecret(PAY_SERVICE_SK).publicKey();
+const keys = await deriveTestKeys();
 
 const PAYMENT_XLM = 5;
 const PAYMENT_STROOPS = BigInt(PAYMENT_XLM) * 10_000_000n;
@@ -54,21 +52,32 @@ const elapsed = () => `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
 
 console.log("\n=== POS Instant Payment E2E Test ===\n");
 
-const { channelAuthId, privacyChannelId, assetId } = loadContractsEnv();
+const { channelAuthId, privacyChannelId, assetId, councilUrl } = loadContractsEnv();
+const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? councilUrl;
+const COUNCIL_API = Deno.env.get("COUNCIL_API") ?? `${COUNCIL_URL}/api/v1`;
 console.log(`  Channel Auth:    ${channelAuthId}`);
 console.log(`  Privacy Channel: ${privacyChannelId}`);
 console.log(`  Asset:           ${assetId}`);
+console.log(`  Council:         ${COUNCIL_URL}`);
 
-// [1] Create + fund accounts
-console.log("\n[1/5] Creating merchant and customer accounts...");
-const merchant = Keypair.random();
-const customer = Keypair.random();
-console.log(`  Merchant: ${merchant.publicKey()}`);
-console.log(`  Customer: ${customer.publicKey()}`);
-await fundAccount(FRIENDBOT_URL, merchant.publicKey());
-await fundAccount(FRIENDBOT_URL, customer.publicKey());
-await fundAccount(FRIENDBOT_URL, ADMIN_PK);
-await fundAccount(FRIENDBOT_URL, PAY_SERVICE_PK);
+// [1] Fund derived accounts
+console.log("\n[1/5] Funding accounts...");
+const merchant = keys.merchant;
+const customer = keys.customer;
+console.log(`  Admin:       ${keys.admin.publicKey()}`);
+console.log(`  Pay Admin:   ${keys.payAdmin.publicKey()}`);
+console.log(`  Pay Service: ${keys.payService.publicKey()}`);
+console.log(`  PP:          ${keys.pp.publicKey()}`);
+console.log(`  Merchant:    ${merchant.publicKey()}`);
+console.log(`  Customer:    ${customer.publicKey()}`);
+await Promise.all([
+  fundAccount(FRIENDBOT_URL, keys.admin.publicKey()),
+  fundAccount(FRIENDBOT_URL, keys.payAdmin.publicKey()),
+  fundAccount(FRIENDBOT_URL, keys.payService.publicKey()),
+  fundAccount(FRIENDBOT_URL, keys.pp.publicKey()),
+  fundAccount(FRIENDBOT_URL, merchant.publicKey()),
+  fundAccount(FRIENDBOT_URL, customer.publicKey()),
+]);
 console.log(`  Funded (${elapsed()})`);
 
 // [2] Create merchant on pay-platform + store UTXOs
@@ -118,15 +127,67 @@ const opexRes = await payApi(PAY_API, "/account/opex", {
 if (!opexRes.ok) throw new Error(`OpEx registration failed: ${opexRes.status} ${await opexRes.text()}`);
 console.log(`  Merchant + ${utxoPayloads.length} UTXOs + OpEx created (${elapsed()})`);
 
-// [3] Seed council + PP
-console.log("\n[3/5] Seeding council and PP config...");
-const adminJwt = await getPayJwt(PAY_API, ADMIN_PK, ADMIN_SK);
+// [3] Seed council via council-platform + pay-platform (production-like flow)
+console.log("\n[3/5] Seeding council config...");
+
+// 3a. Admin authenticates to council-platform
+const councilAdminJwt = await walletAuth(
+  COUNCIL_API, "/admin/auth",
+  keys.admin.publicKey(), keys.admin.secret(),
+);
+
+// 3b. Create council metadata on council-platform
+const metaRes = await fetch(`${COUNCIL_API}/council/metadata`, {
+  method: "PUT",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
+  body: JSON.stringify({ councilId: channelAuthId, name: "Test Council" }),
+});
+if (!metaRes.ok) throw new Error(`Council metadata failed: ${metaRes.status} ${await metaRes.text()}`);
+
+// 3c. Add jurisdictions + channel
+for (const code of ["US", "GB", "DE"]) {
+  await fetch(`${COUNCIL_API}/council/jurisdictions?councilId=${channelAuthId}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
+    body: JSON.stringify({ countryCode: code, label: code }),
+  });
+}
+await fetch(`${COUNCIL_API}/council/channels?councilId=${channelAuthId}`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
+  body: JSON.stringify({ channelContractId: privacyChannelId, assetCode: "XLM" }),
+});
+
+// 3d. PP submits join request with callbackEndpoint (council stores service_url)
+const joinRes = await fetch(`${COUNCIL_API}/public/provider/join-request`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    publicKey: keys.pp.publicKey(),
+    councilId: channelAuthId,
+    label: "Test PP",
+    callbackEndpoint: PROVIDER_URL,
+  }),
+});
+if (!joinRes.ok) throw new Error(`Join request failed: ${joinRes.status} ${await joinRes.text()}`);
+const { data: joinData } = await joinRes.json();
+
+// 3e. Admin approves → council-platform creates provider record with service_url
+const approveRes = await fetch(`${COUNCIL_API}/council/provider-requests/${joinData.id}/approve`, {
+  method: "POST",
+  headers: { Authorization: `Bearer ${councilAdminJwt}` },
+});
+if (!approveRes.ok) throw new Error(`Approve failed: ${approveRes.status} ${await approveRes.text()}`);
+
+// 3f. Create council on pay-platform (councilUrl tells it where to fetch PP data)
+const payAdminJwt = await getPayJwt(PAY_API, keys.payAdmin.publicKey(), keys.payAdmin.secret());
 const councilRes = await payApi(PAY_API, "/admin/councils", {
   method: "POST",
-  headers: { Authorization: `Bearer ${adminJwt}` },
+  headers: { Authorization: `Bearer ${payAdminJwt}` },
   body: JSON.stringify({
     name: "Test Council",
     channelAuthId,
+    councilUrl: COUNCIL_URL,
     networkPassphrase: NETWORK_PASSPHRASE,
     channels: [{ assetCode: "XLM", assetContractId: assetId, privacyChannelId }],
     jurisdictions: ["US", "GB", "DE"],
@@ -134,15 +195,7 @@ const councilRes = await payApi(PAY_API, "/admin/councils", {
   }),
 });
 if (!councilRes.ok) throw new Error(`Council failed: ${councilRes.status} ${await councilRes.text()}`);
-const { data: council } = await councilRes.json();
-
-const ppRes = await payApi(PAY_API, `/admin/councils/${council.id}/pps`, {
-  method: "POST",
-  headers: { Authorization: `Bearer ${adminJwt}` },
-  body: JSON.stringify({ name: "Test PP", url: PROVIDER_URL, publicKey: "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF", active: true }),
-});
-if (!ppRes.ok) throw new Error(`PP failed: ${ppRes.status} ${await ppRes.text()}`);
-console.log(`  Council + PP seeded (${elapsed()})`);
+console.log(`  Council seeded (${elapsed()})`);
 
 // [4] Execute instant payment via the actual moonlight-pay function
 console.log("\n[4/5] Executing instant payment...");

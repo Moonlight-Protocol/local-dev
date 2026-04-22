@@ -1,18 +1,21 @@
 /**
  * Local Dev — Pay Platform Setup
  *
- * Seeds pay-platform with council + PP routing configuration via the admin API.
+ * Seeds pay-platform with council configuration via the admin API.
  * This runs AFTER setup-c.sh and setup-pp.sh — it reads their outputs from
  * .local-dev-state and combines them with the PAY_ADMIN identity from
  * .local-dev-keys.
  *
  * Steps:
  *   1. Load PAY_ADMIN keypair from env (passed by setup-pay.sh wrapper)
- *   2. Load council/channel/asset IDs + PP info from .local-dev-state
+ *   2. Load council/channel/asset IDs from .local-dev-state
  *   3. Fund PAY_ADMIN via Friendbot (needed for wallet auth challenge)
  *   4. PAY_ADMIN authenticates to pay-platform → JWT
- *   5. Create council record via POST /admin/councils
- *   6. Create PP record via POST /admin/councils/:id/pps
+ *   5. Create council record via POST /admin/councils (includes councilUrl)
+ *
+ * PP data is fetched live from council-platform at bundle time, not stored
+ * locally. The councilUrl stored with the council record tells pay-platform
+ * where to query.
  *
  * Why production-like: the admin API endpoints exercised here are the same
  * ones an admin console would call. If pay-platform's admin surface breaks,
@@ -51,6 +54,7 @@ interface State {
   CHANNEL_ID: string;
   ASSET_ID: string;
   NETWORK_PASSPHRASE: string;
+  COUNCIL_URL: string;
   PP_PK: string;
   PROVIDER_URL: string;
 }
@@ -72,7 +76,7 @@ async function loadState(): Promise<State> {
     if (eqIdx === -1) continue;
     env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
   }
-  const required = ["COUNCIL_ID", "CHANNEL_ID", "ASSET_ID", "NETWORK_PASSPHRASE", "PP_PK", "PROVIDER_URL"];
+  const required = ["COUNCIL_ID", "CHANNEL_ID", "ASSET_ID", "NETWORK_PASSPHRASE", "COUNCIL_URL", "PP_PK", "PROVIDER_URL"];
   for (const key of required) {
     if (!env[key]) {
       throw new Error(`State file missing ${key}. Run setup-c.sh and setup-pp.sh first.`);
@@ -141,6 +145,7 @@ async function main() {
   console.log("[1/6] Load state from setup-c + setup-pp");
   const state = await loadState();
   console.log(`  Council ID:       ${state.COUNCIL_ID}`);
+  console.log(`  Council URL:      ${state.COUNCIL_URL}`);
   console.log(`  Privacy Channel:  ${state.CHANNEL_ID}`);
   console.log(`  XLM SAC:          ${state.ASSET_ID}`);
   console.log(`  PP public key:    ${state.PP_PK}`);
@@ -161,7 +166,7 @@ async function main() {
   const jwt = await walletAuth(payAdmin);
   console.log("  JWT acquired");
 
-  console.log("\n[5/8] Create council via POST /admin/councils");
+  console.log("\n[5/6] Create council via POST /admin/councils");
   const councilRes = await fetch(`${PAY_API}/admin/councils`, {
     method: "POST",
     headers: {
@@ -171,6 +176,7 @@ async function main() {
     body: JSON.stringify({
       name: "Local Council",
       channelAuthId: state.COUNCIL_ID,
+      councilUrl: state.COUNCIL_URL,
       networkPassphrase: state.NETWORK_PASSPHRASE,
       channels: [
         {
@@ -191,62 +197,29 @@ async function main() {
   const { data: council } = await councilRes.json();
   console.log(`  Council created: ${council.id}`);
 
-  console.log("\n[6/8] Create PP via POST /admin/councils/:id/pps");
-  const ppRes = await fetch(`${PAY_API}/admin/councils/${council.id}/pps`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({
-      name: "Local PP",
-      url: state.PROVIDER_URL,
-      publicKey: state.PP_PK,
-      active: true,
-    }),
-  });
-  if (!ppRes.ok) {
-    throw new Error(
-      `Create PP failed: ${ppRes.status} ${await ppRes.text()}`,
-    );
-  }
-  const { data: pp } = await ppRes.json();
-  console.log(`  PP created: ${pp.id}`);
-
   // Fund the PAY_SERVICE keypair so it can authenticate with provider-platform
   const payServicePk = Deno.env.get("PAY_SERVICE_PK");
   if (payServicePk) {
-    console.log("\n[7/8] Fund PAY_SERVICE via Friendbot");
+    console.log("\n[6/6] Fund PAY_SERVICE via Friendbot");
     await fundAccount(payServicePk);
     console.log(`  PAY_SERVICE funded: ${payServicePk}`);
   } else {
-    console.log("\n[7/8] PAY_SERVICE_PK not set — skipping fund");
-  }
-
-  console.log("\n[8/8] Verify council config");
-  const verifyRes = await fetch(`${PAY_API}/admin/councils/${council.id}`, {
-    headers: { "Authorization": `Bearer ${jwt}` },
-  });
-  if (verifyRes.ok) {
-    const { data: full } = await verifyRes.json();
-    console.log(`  Channels: ${full.channels?.length ?? 0}`);
-    console.log(`  Jurisdictions: ${full.jurisdictions?.join(", ") ?? "none"}`);
-    console.log(`  PPs: ${full.pps?.length ?? 0}`);
+    console.log("\n[6/6] PAY_SERVICE_PK not set — skipping fund");
   }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Pay Platform setup complete in ${elapsed}s ===\n`);
   console.log(`  Council DB ID:  ${council.id}`);
   console.log(`  Council Auth:   ${state.COUNCIL_ID}`);
-  console.log(`  PP DB ID:       ${pp.id}`);
-  console.log(`  PP public key:  ${state.PP_PK}`);
-  console.log(`  Provider URL:   ${state.PROVIDER_URL}`);
+  console.log(`  Council URL:    ${state.COUNCIL_URL}`);
+  console.log(`  PP public key:  ${state.PP_PK} (from council-platform)`);
+  console.log(`  Provider URL:   ${state.PROVIDER_URL} (from council-platform)`);
   if (payServicePk) {
     console.log(`  Service key:    ${payServicePk}`);
   }
   console.log("");
-  console.log("Pay-platform now has the council + PP routing config needed");
-  console.log("for the POS instant payment flow.");
+  console.log("Pay-platform now has the council config. PP data is fetched");
+  console.log("live from council-platform at bundle time.");
   console.log("");
 }
 

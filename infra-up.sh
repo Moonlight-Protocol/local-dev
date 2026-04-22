@@ -28,7 +28,8 @@ set -euo pipefail
 # Usage:
 #   ./up.sh
 
-BASE_DIR="${BASE_DIR:-$HOME/repos}"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$BASE_DIR/provider-console}"
 COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
@@ -36,7 +37,6 @@ COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
 PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-$BASE_DIR/pay-platform}"
 MOONLIGHT_PAY_PATH="${MOONLIGHT_PAY_PATH:-$BASE_DIR/moonlight-pay}"
 NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$BASE_DIR/network-dashboard}"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # Ports — override via env to run multiple stacks in parallel
 STELLAR_RPC_PORT="${STELLAR_RPC_PORT:-8000}"       # shared
@@ -253,6 +253,7 @@ MEMPOOL_EXECUTOR_INTERVAL_MS=5000
 MEMPOOL_VERIFIER_INTERVAL_MS=10000
 MEMPOOL_TTL_CHECK_INTERVAL_MS=60000
 MEMPOOL_MAX_RETRY_ATTEMPTS=3
+BUNDLE_MAX_OPERATIONS=20
 EOF
 
 info "Running migrations..."

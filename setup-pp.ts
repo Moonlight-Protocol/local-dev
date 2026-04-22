@@ -285,6 +285,7 @@ async function main() {
     councilId: state.COUNCIL_ID,
     label: PP_LABEL,
     contactEmail: "pp@local-dev.moonlight.test",
+    callbackEndpoint: PROVIDER_URL,
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, ppKeypair);
 

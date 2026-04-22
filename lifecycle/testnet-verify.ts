@@ -379,13 +379,13 @@ async function main() {
   // ── Step 12: Bundle flow ───────────────────────────────────────────
   console.log(`\n[12/12] Bundle flow (deposit ${DEPOSIT_AMOUNT}, send ${SEND_AMOUNT}, withdraw ${WITHDRAW_AMOUNT})`);
 
-  const horizonUrl = "https://horizon-testnet.stellar.org";
+  const horizonUrl = Deno.env.get("HORIZON_URL") ?? "https://horizon-testnet.stellar.org";
   const networkConfig = NetworkConfig.CustomNet({
     networkPassphrase: NETWORK_PASSPHRASE,
     rpcUrl: RPC_URL,
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
-    allowHttp: false,
+    allowHttp: RPC_URL.startsWith("http://"),
   });
   const e2eConfig: Config = {
     networkPassphrase: NETWORK_PASSPHRASE,

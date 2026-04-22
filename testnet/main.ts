@@ -37,7 +37,8 @@ import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
 // ─── Testnet endpoints ──────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "https://friendbot.stellar.org";
-const NETWORK_PASSPHRASE = "Test SDF Network ; September 2015";
+const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
+  "Test SDF Network ; September 2015";
 const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "https://council-api-testnet.moonlightprotocol.io";
 const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "https://provider-api-testnet.moonlightprotocol.io";
 
@@ -337,13 +338,13 @@ async function main() {
   // ── 11. Payment flow ──────────────────────────────────────────────
   console.log(`\n[11/12] Payment flow (deposit ${DEPOSIT_AMOUNT}, send ${SEND_AMOUNT}, withdraw ${WITHDRAW_AMOUNT})`);
 
-  const horizonUrl = "https://horizon-testnet.stellar.org";
+  const horizonUrl = Deno.env.get("HORIZON_URL") ?? "https://horizon-testnet.stellar.org";
   const networkConfig = NetworkConfig.CustomNet({
     networkPassphrase: NETWORK_PASSPHRASE,
     rpcUrl: RPC_URL,
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
-    allowHttp: false,
+    allowHttp: RPC_URL.startsWith("http://"),
   });
   const e2eConfig: Config = {
     networkPassphrase: NETWORK_PASSPHRASE,
