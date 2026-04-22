@@ -35,6 +35,7 @@ usage() {
   echo "  governance    UC2 governance flows (40+ checks)"
   echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
   echo "  pos-instant   POS crypto instant payment (temp P256 hop)"
+  echo "  playwright    Full UI flow (Freighter + 3 frontends, ~6min)"
   echo "  clean         Remove all test containers and volumes"
   exit 1
 }
@@ -81,11 +82,13 @@ run_suite() {
   }
   trap cleanup EXIT INT TERM
 
-  WASM_DIR="${WASM_DIR}" \
+  WASM_DIR="${WASM_DIR:-}" \
   PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-${BASE_DIR}/provider-platform}" \
   COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-${BASE_DIR}/council-platform}" \
   PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-${BASE_DIR}/pay-platform}" \
   MOONLIGHT_PAY_PATH="${MOONLIGHT_PAY_PATH:-${BASE_DIR}/moonlight-pay}" \
+  PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-${BASE_DIR}/provider-console}" \
+  COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-${BASE_DIR}/council-console}" \
   docker compose -f "$compose_file" -p "$project_name" up -d
 
   # Stream test-runner logs and wait for it to finish
@@ -135,6 +138,11 @@ clean_all() {
 }
 
 case "$SUITE" in
+  playwright)
+    # No WASMs needed — council-console downloads them during its Docker build
+    run_suite "$SUITE"
+    ;;
+
   e2e|otel|governance|lifecycle|pos-instant)
     ensure_wasms
     run_suite "$SUITE"
