@@ -1,0 +1,368 @@
+## Playwright full-flow test.
+## Runs all 3 UIs (provider-console, council-console, moonlight-pay) with
+## backing platform services. A headed Chromium browser with the Freighter
+## wallet extension drives the entire user journey (14 steps).
+##
+## No setup container — the test itself creates councils, providers, and
+## payments through the UI, just like a real user.
+
+services:
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --limits unlimited
+    healthcheck:
+      test: >
+        curl -sf http://localhost:8000/soroban/rpc -X POST
+        -H "Content-Type: application/json"
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+        | grep -q healthy
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: postgres
+    volumes:
+      - ./test/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      SPAN_STORAGE_TYPE: badger
+      BADGER_EPHEMERAL: "false"
+      BADGER_DIRECTORY_KEY: /badger/keys
+      BADGER_DIRECTORY_VALUE: /badger/values
+    volumes:
+      - ./.traces/playwright:/badger
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
+      interval: 2s
+      timeout: 3s
+      retries: 15
+
+  # ── Backend platforms ──────────────────────────────────────────
+
+  provider:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      stellar:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${PROVIDER_PLATFORM_PATH:-../provider-platform}:/app-src:ro
+      - ./test/provider-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+      PORT: "3000"
+      MODE: development
+      ALLOWED_ORIGINS: "http://provider-console:3020"
+      LOG_LEVEL: TRACE
+      SERVICE_DOMAIN: localhost
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      NETWORK: local
+      NETWORK_FEE: "1000000000"
+      SERVICE_AUTH_SECRET: test-auth-secret
+      SERVICE_FEE: "100"
+      CHALLENGE_TTL: "900"
+      SESSION_TTL: "21600"
+      MEMPOOL_SLOT_CAPACITY: "100"
+      MEMPOOL_EXPENSIVE_OP_WEIGHT: "10"
+      MEMPOOL_CHEAP_OP_WEIGHT: "1"
+      MEMPOOL_EXECUTOR_INTERVAL_MS: "5000"
+      MEMPOOL_VERIFIER_INTERVAL_MS: "10000"
+      MEMPOOL_TTL_CHECK_INTERVAL_MS: "60000"
+      MEMPOOL_MAX_RETRY_ATTEMPTS: "3"
+      BUNDLE_MAX_OPERATIONS: "20"
+      EVENT_WATCHER_INTERVAL_MS: "5000"
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "provider-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3000/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF\");
+          Deno.exit(r.status < 500 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  council:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      stellar:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${COUNCIL_PLATFORM_PATH:-../council-platform}:/app-src:ro
+      - ./test/council-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/council_platform_db
+      PORT: "8080"
+      MODE: development
+      ALLOWED_ORIGINS: "http://council-console:3030"
+      LOG_LEVEL: TRACE
+      SERVICE_DOMAIN: localhost
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      NETWORK: local
+      NETWORK_FEE: "1000000000"
+      SERVICE_AUTH_SECRET: test-auth-secret
+      CHALLENGE_TTL: "900"
+      SESSION_TTL: "21600"
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "council-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:8080/api/v1/health\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  pay:
+    image: denoland/deno:2.7.9
+    depends_on:
+      db:
+        condition: service_healthy
+      stellar:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ${PAY_PLATFORM_PATH:-../pay-platform}:/app-src:ro
+      - ./test/pay-entrypoint.sh:/entrypoint.sh:ro
+    working_dir: /app
+    entrypoint: ["sh", "/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/pay_platform_db
+      PORT: "3025"
+      MODE: development
+      ALLOWED_ORIGINS: "http://moonlight-pay:3050"
+      SERVICE_DOMAIN: pay
+      SERVICE_AUTH_SECRET: test-auth-secret
+      CHALLENGE_TTL: "300000"
+      SESSION_TTL: "86400000"
+      ADMIN_WALLETS: "GA6NODWA2DQPPSLACHV3M2W3ZBGMLHNSCMUCHF4DTIVLDER2THB5BYYJ"
+      PAY_SERVICE_SK: "SAV7Z6BV2FLTJBP5TGJDI3PAAL5SWX6DDOCU5J3GGYYQ5FGJ6J5CGMUQ"
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      OTEL_DENO: "true"
+      OTEL_SERVICE_NAME: "pay-platform"
+      OTEL_EXPORTER_OTLP_ENDPOINT: "http://jaeger:4318"
+      OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3025/api/v1/health\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+
+  # ── Frontend services ──────────────────────────────────────────
+
+  provider-console:
+    image: denoland/deno:latest
+    depends_on:
+      provider:
+        condition: service_healthy
+    volumes:
+      - ${PROVIDER_CONSOLE_PATH:-../provider-console}:/app-src:ro
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Copying provider-console source..."
+        cd /app-src && tar cf - --exclude=node_modules --exclude=.git --exclude=.env . | (cd /app && tar xf -)
+        cd /app
+        cat > public/config.js <<'JSEOF'
+        window.__CONSOLE_CONFIG__ = {
+          apiBaseUrl: "http://provider:3000/api/v1",
+          stellarNetwork: "standalone",
+          horizonUrl: "http://stellar:8000",
+          environment: "development",
+          allowlist: ["*"],
+        };
+        JSEOF
+        echo "Installing dependencies..."
+        deno install
+        echo "Building..."
+        deno task build
+        echo "Serving on port 3020..."
+        exec deno task serve
+    environment:
+      PORT: "3020"
+      ENVIRONMENT: development
+      CSP_CONNECT_HOSTS: "http://*:*"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3020/\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 30s
+
+  council-console:
+    image: denoland/deno:latest
+    depends_on:
+      council:
+        condition: service_healthy
+    volumes:
+      - ${COUNCIL_CONSOLE_PATH:-../council-console}:/app-src:ro
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Copying council-console source..."
+        cd /app-src && tar cf - --exclude=node_modules --exclude=.git --exclude=.env . | (cd /app && tar xf -)
+        cd /app
+        cat > public/config.js <<'JSEOF'
+        window.__CONSOLE_CONFIG__ = {
+          environment: "development",
+          stellarNetwork: "standalone",
+          rpcUrl: "http://stellar:8000/soroban/rpc",
+          horizonUrl: "http://stellar:8000",
+          friendbotUrl: "http://stellar:8000/friendbot",
+          platformUrl: "http://council:8080",
+          allowlist: ["*"],
+        };
+        JSEOF
+        echo "Installing dependencies..."
+        deno install
+        echo "Building (includes WASM download)..."
+        deno task build
+        echo "Serving on port 3030..."
+        exec deno task serve
+    environment:
+      PORT: "3030"
+      MODE: development
+      CSP_CONNECT_HOSTS: "http://*:*"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3030/\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  moonlight-pay:
+    image: denoland/deno:latest
+    depends_on:
+      pay:
+        condition: service_healthy
+    volumes:
+      - ${MOONLIGHT_PAY_PATH:-../moonlight-pay}:/app-src:ro
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+        echo "Copying moonlight-pay source..."
+        cd /app-src && tar cf - --exclude=node_modules --exclude=.git --exclude=.env . | (cd /app && tar xf -)
+        cd /app
+        cat > public/config.js <<'JSEOF'
+        window.__PAY_CONFIG__ = {
+          environment: "development",
+          stellarNetwork: "standalone",
+          payPlatformUrl: "http://pay:3025",
+          rpcUrl: "http://stellar:8000/soroban/rpc",
+          allowlist: ["*"],
+          adminWallets: ["*"],
+        };
+        JSEOF
+        echo "Installing dependencies..."
+        deno install --allow-scripts
+        echo "Building..."
+        deno task build
+        echo "Serving on port 3050..."
+        exec deno task serve
+    environment:
+      PORT: "3050"
+      MODE: development
+      CSP_CONNECT_HOSTS: "http://*:*"
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3050/\");
+          Deno.exit(r.status === 200 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 40
+      start_period: 60s
+
+  # ── Playwright test runner ─────────────────────────────────────
+
+  test-runner:
+    image: mcr.microsoft.com/playwright:v1.59.1-noble
+    depends_on:
+      provider-console:
+        condition: service_healthy
+      council-console:
+        condition: service_healthy
+      moonlight-pay:
+        condition: service_healthy
+      jaeger:
+        condition: service_healthy
+    volumes:
+      - ./playwright:/playwright-src:ro
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+        cp -r /playwright-src/. /app/
+        echo "Installing npm dependencies..."
+        npm install
+        echo "Running Playwright tests..."
+        xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" \
+          npx playwright test --project=chromium
+    environment:
+      TARGET: local
+      PROVIDER_CONSOLE_URL: http://provider-console:3020
+      COUNCIL_CONSOLE_URL: http://council-console:3030
+      MOONLIGHT_PAY_URL: http://moonlight-pay:3050
+      PROVIDER_API_URL: http://provider:3000
+      COUNCIL_API_URL: http://council:8080
+      PAY_API_URL: http://pay:3025
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      FREIGHTER_EXTENSION_PATH: /app/freighter-extension
+      JAEGER_QUERY_URL: http://jaeger:16686
