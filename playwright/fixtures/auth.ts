@@ -174,11 +174,17 @@ export async function loginMoonlightPay(
   await popup2.waitForLoadState("domcontentloaded");
   await popup2.waitForTimeout(1500);
 
-  // Register for popup 3 BEFORE confirming popup 2
-  const popup3Promise = context.waitForEvent("page", { timeout: 30_000 });
+  // Register for popup 3 BEFORE confirming popup 2.
+  // Use a longer timeout — in Docker/xvfb, the authenticate() fetch to
+  // pay-platform can take several seconds before signMessage fires.
+  const popup3Promise = context.waitForEvent("page", { timeout: 60_000 });
 
   await popup2.waitForSelector(SEL_APPROVE_BUTTON, { timeout: 10_000 });
   await popup2.click(SEL_APPROVE_BUTTON);
+
+  // Wait for popup 2 to close — Freighter needs time between consecutive
+  // signMessage calls, and moving on too early can cause the next one to fail.
+  await popup2.waitForEvent("close", { timeout: 10_000 }).catch(() => {});
 
   // Handle popup 3 (authenticate)
   const popup3 = await popup3Promise;

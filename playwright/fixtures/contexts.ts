@@ -83,11 +83,24 @@ export async function createUserContext(
     args.push(`--unsafely-treat-insecure-origin-as-secure=${insecureOrigins.join(",")}`);
   }
 
+  // Video recording options (set via VIDEO_RECORD=1 env var)
+  const recordVideo = process.env.VIDEO_RECORD === "1"
+    ? {
+        dir: path.join(__dirname, "..", "test-results", "videos", profile.name.replace(/\s/g, "-")),
+        size: {
+          width: parseInt(process.env.VIDEO_WIDTH ?? "1280", 10),
+          height: parseInt(process.env.VIDEO_HEIGHT ?? "720", 10),
+        },
+      }
+    : undefined;
+
   // Launch a persistent context with the extension
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
     viewport: { width: 1280, height: 800 },
     args,
+    recordVideo,
+    ...(process.env.VIDEO_SLOWMO ? { slowMo: parseInt(process.env.VIDEO_SLOWMO, 10) } : {}),
   });
 
   // Give the extension time to initialize

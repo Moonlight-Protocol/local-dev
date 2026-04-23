@@ -158,7 +158,7 @@ await fetch(`${COUNCIL_API}/council/channels?councilId=${channelAuthId}`, {
   body: JSON.stringify({ channelContractId: privacyChannelId, assetCode: "XLM" }),
 });
 
-// 3d. PP submits join request with callbackEndpoint (council stores service_url)
+// 3d. PP submits join request with providerUrl (council stores it for discovery)
 const joinRes = await fetch(`${COUNCIL_API}/public/provider/join-request`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -167,6 +167,7 @@ const joinRes = await fetch(`${COUNCIL_API}/public/provider/join-request`, {
     councilId: channelAuthId,
     label: "Test PP",
     callbackEndpoint: PROVIDER_URL,
+    providerUrl: PROVIDER_URL,
   }),
 });
 if (!joinRes.ok) throw new Error(`Join request failed: ${joinRes.status} ${await joinRes.text()}`);
@@ -191,6 +192,7 @@ const councilRes = await payApi(PAY_API, "/admin/councils", {
     networkPassphrase: NETWORK_PASSPHRASE,
     channels: [{ assetCode: "XLM", assetContractId: assetId, privacyChannelId }],
     jurisdictions: ["US", "GB", "DE"],
+    providers: [{ publicKey: keys.pp.publicKey(), label: "Test PP", providerUrl: PROVIDER_URL }],
     active: true,
   }),
 });
