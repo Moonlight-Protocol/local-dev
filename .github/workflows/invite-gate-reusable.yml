@@ -1,0 +1,120 @@
+name: Invite Gate (Reusable)
+
+on:
+  workflow_call:
+    inputs:
+      provider_console_ref:
+        description: "provider-console branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
+      council_console_ref:
+        description: "council-console branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
+      moonlight_pay_ref:
+        description: "moonlight-pay branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
+    secrets:
+      E2E_TRIGGER_TOKEN:
+        required: true
+
+env:
+  ORG: moonlight-protocol
+
+jobs:
+  invite-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: moonlight-protocol/local-dev
+          ref: main
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+
+      - name: Checkout provider-console
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/provider-console
+          ref: ${{ inputs.provider_console_ref }}
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: provider-console
+
+      - name: Checkout council-console
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/council-console
+          ref: ${{ inputs.council_console_ref }}
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: council-console
+
+      - name: Checkout moonlight-pay
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/moonlight-pay
+          ref: ${{ inputs.moonlight_pay_ref }}
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: moonlight-pay
+
+      - name: Checkout provider-platform
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/provider-platform
+          ref: main
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: provider-platform
+
+      - name: Checkout council-platform
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/council-platform
+          ref: main
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: council-platform
+
+      - name: Checkout pay-platform
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.ORG }}/pay-platform
+          ref: main
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          path: pay-platform
+
+      - name: Run invite-gate tests
+        env:
+          PROVIDER_CONSOLE_PATH: ./provider-console
+          COUNCIL_CONSOLE_PATH: ./council-console
+          MOONLIGHT_PAY_PATH: ./moonlight-pay
+          PROVIDER_PLATFORM_PATH: ./provider-platform
+          COUNCIL_PLATFORM_PATH: ./council-platform
+          PAY_PLATFORM_PATH: ./pay-platform
+        run: |
+          set +e
+          docker compose -f docker-compose.invite-gate.yml up -d
+          UP_EXIT=$?
+          if [ "$UP_EXIT" -ne 0 ]; then
+            echo "--- docker compose up failed (exit $UP_EXIT) ---"
+            echo "--- stellar logs ---"
+            docker compose -f docker-compose.invite-gate.yml logs stellar
+            echo "--- db logs ---"
+            docker compose -f docker-compose.invite-gate.yml logs db
+            docker compose -f docker-compose.invite-gate.yml down
+            exit $UP_EXIT
+          fi
+          EXIT_CODE=$(docker wait $(docker compose -f docker-compose.invite-gate.yml ps -q test-runner))
+          echo "--- provider logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs provider
+          echo "--- council logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs council
+          echo "--- pay logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs pay
+          echo "--- provider-console logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs provider-console
+          echo "--- council-console logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs council-console
+          echo "--- moonlight-pay logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs moonlight-pay
+          echo "--- test-runner logs ---"
+          docker compose -f docker-compose.invite-gate.yml logs test-runner
+          docker compose -f docker-compose.invite-gate.yml down
+          exit $EXIT_CODE

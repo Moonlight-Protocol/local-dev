@@ -36,6 +36,7 @@ usage() {
   echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
   echo "  pos-instant   POS crypto instant payment (temp P256 hop)"
   echo "  playwright    Full UI flow (Freighter + 3 frontends, ~6min)"
+  echo "  invite-gate   Invite-only allowlist gate (blocked + allowed wallets)"
   echo "  clean         Remove all test containers and volumes"
   exit 1
 }
@@ -138,7 +139,7 @@ clean_all() {
 }
 
 case "$SUITE" in
-  playwright)
+  playwright|invite-gate)
     # No WASMs needed — council-console downloads them during its Docker build
     run_suite "$SUITE"
     ;;
