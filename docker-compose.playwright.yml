@@ -74,6 +74,7 @@ services:
       ALLOWED_ORIGINS: "http://provider-console:3020"
       LOG_LEVEL: TRACE
       SERVICE_DOMAIN: localhost
+      PROVIDER_BASE_URL: http://provider:3000
       STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
       NETWORK: local
       NETWORK_FEE: "1000000000"

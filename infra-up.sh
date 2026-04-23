@@ -235,6 +235,7 @@ PORT=$PROVIDER_PORT
 MODE=development
 LOG_LEVEL=TRACE
 SERVICE_DOMAIN=localhost
+PROVIDER_BASE_URL=http://localhost:${PROVIDER_PORT}
 
 DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/provider_platform_db
 
