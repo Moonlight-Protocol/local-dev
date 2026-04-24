@@ -56,5 +56,10 @@ and apply any repo-specific rules found there alongside the universal rules abov
 
 ## What to review
 
-Run `git diff main...HEAD` and read every changed file on the current branch.
+First, ensure the local `main` branch is up to date:
+```
+git fetch origin main
+```
+
+Then run `git diff origin/main...HEAD` and read every changed file on the current branch.
 Review all of them against the criteria above.
