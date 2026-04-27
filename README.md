@@ -38,6 +38,53 @@ You can also override individual repo paths:
 PROVIDER_PLATFORM_PATH=~/other/provider-platform ./up.sh
 ```
 
+## Running a parallel/isolated stack
+
+Every port and the postgres container name are env-overridable, so you can run a second stack alongside an existing one without conflict. Setup scripts read URLs (not ports), so both must be set.
+
+```bash
+# Override file (lives outside the repo so it never gets committed)
+cat > ~/my-stack.env <<'EOF'
+# Postgres (private)
+export PG_PORT=5542
+export PG_CONTAINER=my-stack-db
+
+# Platform service ports (used by infra-up.sh)
+export PROVIDER_PORT=3110
+export COUNCIL_PLATFORM_PORT=3115
+export PAY_PLATFORM_PORT=3125
+export PROVIDER_CONSOLE_PORT=3120
+export COUNCIL_CONSOLE_PORT=3130
+export MOONLIGHT_PAY_PORT=3150
+export NETWORK_DASHBOARD_PORT=3140
+
+# Setup-script URLs (used by setup-c.sh / setup-pp.sh / setup-pay.sh)
+# These do NOT derive from *_PORT — they must be set explicitly.
+export PROVIDER_URL=http://localhost:3110
+export COUNCIL_URL=http://localhost:3115
+export PAY_PLATFORM_URL=http://localhost:3125
+EOF
+
+set -a; source ~/my-stack.env; set +a
+./up.sh
+./setup-c.sh && ./setup-pp.sh && ./setup-pay.sh
+```
+
+Playwright's `playwright/helpers/urls.ts` reads the same `*_PORT` env vars, so the override file works for tests too.
+
+**Stellar and Jaeger are shared between stacks.** `STELLAR_RPC_PORT` (8000) and `JAEGER_OTLP_PORT` (4318) default to the same values across stacks, and `infra-up.sh` reuses an already-running container at those ports instead of starting a new one. That means parallel stacks share one Stellar ledger and one Jaeger trace store. To isolate them, override `JAEGER_CONTAINER`, `JAEGER_UI_PORT`, and start your own Stellar quickstart on a different `STELLAR_RPC_PORT`.
+
+Full list of overrides: `infra-up.sh:42-54` (ports + container names) and the jsdoc headers of `setup-c.ts`, `setup-pp.ts`, `setup-pay.ts` (URLs).
+
+## WASM contract artifacts
+
+`setup-c.sh` deploys two compiled contracts that must exist before the script runs:
+
+- `e2e/wasms/channel_auth_contract.wasm`
+- `e2e/wasms/privacy_channel.wasm`
+
+These are produced by [`soroban-core`](https://github.com/Moonlight-Protocol/soroban-core)'s release pipeline and are **not checked into local-dev**. Download them from the [soroban-core releases page](https://github.com/Moonlight-Protocol/soroban-core/releases) and place them under `e2e/wasms/`. The released WASMs are the same artifacts deployed on testnet/mainnet — they must match the release, not a local build.
+
 ## Infrastructure vs Application
 
 `local-dev` cleanly separates **infrastructure** (long-lived services) from **application setup** (contracts, councils, PPs).
