@@ -48,6 +48,7 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localh
 export JAEGER_URL="${JAEGER_URL:-http://localhost:16686}"
 export PROVIDER_SERVICE_NAME="${PROVIDER_SERVICE_NAME:-provider-platform}"
 export SDK_SERVICE_NAME="${SDK_SERVICE_NAME:-moonlight-e2e}"
+export COUNCIL_SERVICE_NAME="${COUNCIL_SERVICE_NAME:-council-platform}"
 
 run_payment() {
   info "Suite 1: testnet payment flow → localhost"

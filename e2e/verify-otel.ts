@@ -11,6 +11,11 @@
  *      the E2E time window (for application-level span checks, since the
  *      provider's withSpan creates separate root traces from the HTTP spans)
  *
+ * Scope: this verifier covers only the SDK driver + provider-platform.
+ * The local-CI docker-compose.yml does not run council-platform, so cp#28
+ * spans (Channel/Custody/KeyDerivation/Escrow) are exercised and asserted
+ * only by the lifecycle/testnet flows that hit a deployed cp instance.
+ *
  * Prerequisites:
  *   - Jaeger running on localhost:16686 (started by up.sh)
  *   - E2E test completed with OTEL_DENO=true (writes e2e-trace-ids.json)

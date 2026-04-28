@@ -17,6 +17,12 @@ export interface VerifyOtelLocalConfig {
   pollTimeoutMs?: number;
   providerServiceName: string;
   sdkServiceName: string;
+  /**
+   * council-platform service.name. When set, asserts cp#28 spans are present
+   * and trace-linked to the SDK driver. Leave undefined for flows that don't
+   * run cp (e.g. local-CI e2e/docker-compose.yml).
+   */
+  councilServiceName?: string;
 }
 
 interface JaegerTracesResponse {
@@ -139,6 +145,7 @@ export async function verifyOtelTracesLocal(
     pollTimeoutMs = 30000,
     providerServiceName,
     sdkServiceName,
+    councilServiceName,
   } = config;
   const PROVIDER_SERVICE = providerServiceName;
   const SDK_SERVICE = sdkServiceName;
@@ -199,6 +206,7 @@ export async function verifyOtelTracesLocal(
     allSpans,
     providerService: PROVIDER_SERVICE,
     sdkService: SDK_SERVICE,
+    councilService: councilServiceName,
     traceData,
     searchBackgroundTraces: async (prefixes, startUs, endUs, minExpected) => {
       return await searchTraceCountByPrefixes(

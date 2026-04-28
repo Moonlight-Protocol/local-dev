@@ -33,6 +33,7 @@ import { prepareReceive } from "../e2e/receive.ts";
 import { send } from "../e2e/send.ts";
 import { withdraw } from "../e2e/withdraw.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
+import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
 // ─── Testnet endpoints ──────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
@@ -242,7 +243,12 @@ async function main() {
   if (!addChannelRes.ok) {
     throw new Error(`Add channel failed: ${addChannelRes.status} ${await addChannelRes.text()}`);
   }
-  console.log("  Channel added");
+  const addChannelBody = await addChannelRes.json();
+  const channelDbId: string = addChannelBody.data?.id;
+  if (!channelDbId) {
+    throw new Error("Add channel response missing data.id");
+  }
+  console.log(`  Channel added (id ${channelDbId})`);
 
   // ── 8. Register PP + join via provider-platform ───────────────────
   console.log("\n[8/12] Register PP and submit join request");
@@ -334,6 +340,20 @@ async function main() {
   console.log("\n[10/12] Waiting for membership to become ACTIVE");
   await pollMembershipActive(ppOperator.publicKey(), dashboardJwt);
   console.log("  Membership ACTIVE");
+
+  // ── Drive cp signing/escrow APIs to emit cp#28 spans ──────────────
+  const ppCouncilJwt = await walletAuth(COUNCIL_URL, "/api/v1/admin/auth", ppOperator);
+  await exerciseCouncilSpans({
+    councilUrl: COUNCIL_URL,
+    ppCouncilJwt,
+    adminCouncilJwt,
+    councilId: channelAuthId,
+    channelContractId,
+    channelDbId,
+    recipientAddress: ppOperator.publicKey(),
+    senderAddress: ppOperator.publicKey(),
+    assetCode: "XLM",
+  });
 
   // ── 11. Payment flow ──────────────────────────────────────────────
   console.log(`\n[11/12] Payment flow (deposit ${DEPOSIT_AMOUNT}, send ${SEND_AMOUNT}, withdraw ${WITHDRAW_AMOUNT})`);

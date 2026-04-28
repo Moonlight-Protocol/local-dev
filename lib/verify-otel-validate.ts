@@ -21,6 +21,12 @@ export interface ValidateNormalizedSpansConfig {
   allSpans: NormalizedSpan[];
   providerService: string;
   sdkService: string;
+  /**
+   * Optional council-platform service.name. When set, runs the cp#28 assert
+   * block (Channel/Custody/KeyDerivation/Escrow + sdk↔cp continuity). Omit on
+   * flows that don't drive cp (e.g. local-CI e2e).
+   */
+  councilService?: string;
   traceData: E2ETraceData;
   /**
    * Backend-specific search for background-service traces (Executor/Verifier/Mempool).
@@ -39,14 +45,20 @@ export interface ValidateNormalizedSpansConfig {
 export async function validateNormalizedSpans(
   config: ValidateNormalizedSpansConfig,
 ): Promise<VerifyOtelResult> {
-  const { allSpans, providerService, sdkService, traceData, searchBackgroundTraces } = config;
+  const { allSpans, providerService, sdkService, councilService, traceData, searchBackgroundTraces } = config;
 
   const sdkSpans = allSpans.filter((s) => s.serviceName === sdkService);
   const providerSpans = allSpans.filter((s) => s.serviceName === providerService);
+  const councilSpans = councilService
+    ? allSpans.filter((s) => s.serviceName === councilService)
+    : [];
 
   console.log(`\n[3/3] Validating traces...`);
   console.log(`  SDK spans: ${sdkSpans.length}`);
   console.log(`  Provider spans: ${providerSpans.length}`);
+  if (councilService) {
+    console.log(`  Council spans: ${councilSpans.length}`);
+  }
 
   let passed = 0;
   let failed = 0;
@@ -163,6 +175,62 @@ export async function validateNormalizedSpans(
   const sdkSpanIds = new Set(sdkSpans.map((s) => s.spanId));
   const providerWithSdkParent = providerSpans.filter((s) => sdkSpanIds.has(s.parentSpanId));
   assertMin("Provider spans with SDK parent", providerWithSdkParent.length, 5);
+
+  // Council-platform checks (cp#28 — only when councilService is provided).
+  // Thresholds are set at ~50% of expected counts: catches "everything broke"
+  // without flaking on minor count variations (e.g. cp internally calling
+  // deriveP256Keypair extra times for cache misses). Tighten after observing
+  // real counts in the first few runs.
+  if (councilService) {
+    console.log(`\n  Council-platform (${councilService}):`);
+
+    // 1 GET /channels/:id call → 1 Channel.queryState span
+    assertMin(
+      "Channel.queryState spans",
+      byName(councilSpans, "Channel.queryState"),
+      1,
+    );
+    // 2 Custody-touching calls (register + keys); accept >=1
+    assertMin(
+      "Custody.* spans",
+      byPrefix(councilSpans, "Custody."),
+      1,
+    );
+    // 2+ KeyDerivation calls (derive on register + sign on spend); accept >=1
+    assertMin(
+      "KeyDerivation.* spans",
+      byPrefix(councilSpans, "KeyDerivation."),
+      1,
+    );
+    // 4 Escrow.* calls (create, getSummary, getRecipientUtxos, releaseForRecipient); accept >=2
+    assertMin(
+      "Escrow.* spans",
+      byPrefix(councilSpans, "Escrow."),
+      2,
+    );
+
+    // sdk↔cp trace continuity. Driver wraps each cp call in withE2ESpan, so cp
+    // spans should land on traces shared with the SDK service. 8 cp calls →
+    // 8 shared trace IDs expected; floor at 4 (50%) for robustness.
+    const councilTraceIds = new Set(councilSpans.map((s) => s.traceId));
+    const sharedSdkCouncilTraceIds = [...sdkTraceIds].filter((id) =>
+      councilTraceIds.has(id)
+    );
+    assertMin(
+      "Shared trace IDs (SDK ↔ Council)",
+      sharedSdkCouncilTraceIds.length,
+      4,
+    );
+
+    const councilWithSdkParent = councilSpans.filter((s) =>
+      sdkSpanIds.has(s.parentSpanId)
+    );
+    assertMin(
+      "Council spans with SDK parent",
+      councilWithSdkParent.length,
+      4,
+    );
+  }
 
   console.log(`\n  Results: ${passed} passed, ${failed} failed`);
   return { passed, failed };
