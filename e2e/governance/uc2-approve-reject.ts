@@ -1,5 +1,5 @@
 import { Keypair, Address, Contract, TransactionBuilder, rpc } from "npm:@stellar/stellar-sdk";
-import { Buffer } from "npm:buffer";
+import { Buffer } from "node:buffer";
 
 const PROVIDER_API = Deno.env.get("PROVIDER_API") ?? "http://localhost:3010/api/v1";
 const COUNCIL_API = Deno.env.get("COUNCIL_API") ?? "http://localhost:3015/api/v1";

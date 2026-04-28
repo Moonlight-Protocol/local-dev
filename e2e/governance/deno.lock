@@ -1,7 +1,8 @@
 {
   "version": "5",
   "specifiers": {
-    "npm:@stellar/stellar-sdk@14.2.0": "14.2.0",
+    "npm:@stellar/stellar-sdk@*": "15.0.1",
+    "npm:@stellar/stellar-sdk@^15.0.1": "15.0.1",
     "npm:buffer@*": "6.0.3",
     "npm:buffer@6.0.3": "6.0.3",
     "npm:stellar-sdk@*": "13.3.0"
@@ -19,10 +20,13 @@
     "@stellar/js-xdr@3.1.2": {
       "integrity": "sha512-VVolPL5goVEIsvuGqDc5uiKxV03lzfWdvYg1KikvwheDmTBO68CKDji3bAZ/kppZrx5iTA8z3Ld5yuytcvhvOQ=="
     },
+    "@stellar/js-xdr@4.0.0": {
+      "integrity": "sha512-+NmNa7Tk5BI5XFdy/6xGTqAN4J9a9KgCrCGhj2uEUTCBhLkch0M+QbKzNH8zEnejWe0p8w+0q5hUVX6L3OzoVA=="
+    },
     "@stellar/stellar-base@13.1.0": {
       "integrity": "sha512-90EArG+eCCEzDGj3OJNoCtwpWDwxjv+rs/RNPhvg4bulpjN/CSRj+Ys/SalRcfM4/WRC5/qAfjzmJBAuquWhkA==",
       "dependencies": [
-        "@stellar/js-xdr",
+        "@stellar/js-xdr@3.1.2",
         "base32.js",
         "bignumber.js",
         "buffer",
@@ -33,30 +37,31 @@
         "sodium-native"
       ]
     },
-    "@stellar/stellar-base@14.1.0": {
-      "integrity": "sha512-A8kFli6QGy22SRF45IjgPAJfUNGjnI+R7g4DF5NZYVsD1kGf7B4ITyc4OPclLV9tqNI4/lXxafGEw0JEUbHixw==",
+    "@stellar/stellar-base@15.0.0": {
+      "integrity": "sha512-XQhxUr9BYiEcFcgc4oWcCMR9QJCny/GmmGsuwPKf/ieIcOeb5149KLHYx9mJCA0ea8QbucR2/GzV58QbXOTxQA==",
       "dependencies": [
         "@noble/curves",
-        "@stellar/js-xdr",
+        "@stellar/js-xdr@4.0.0",
         "base32.js",
         "bignumber.js",
         "buffer",
         "sha.js"
       ]
     },
-    "@stellar/stellar-sdk@14.2.0": {
-      "integrity": "sha512-7nh2ogzLRMhfkIC0fGjn1LHUzk3jqVw8tjAuTt5ADWfL9CSGBL18ILucE9igz2L/RU2AZgeAvhujAnW91Ut/oQ==",
+    "@stellar/stellar-sdk@15.0.1": {
+      "integrity": "sha512-iZjWKXtfohsPh+CX9wRyQNIlXLeA9VyuQB6UMC7AFBD9XnR92eOjnlfeONzk/Bsrkk6+UPlpzSy2MuF+ydHP1A==",
       "dependencies": [
-        "@stellar/stellar-base@14.1.0",
+        "@stellar/stellar-base@15.0.0",
         "axios",
         "bignumber.js",
+        "commander",
         "eventsource",
         "feaxios",
         "randombytes",
         "toml",
         "urijs"
       ],
-      "scripts": true
+      "bin": true
     },
     "asynckit@0.4.0": {
       "integrity": "sha512-Oei9OH4tRh0YqU3GxhX79dM/mwVgvbZJaSNaRk+bshkj0S5cfHcgYakreBjrHwatXKbz+IoIdYLxrKim2MjW0Q=="
@@ -67,8 +72,8 @@
         "possible-typed-array-names"
       ]
     },
-    "axios@1.13.6": {
-      "integrity": "sha512-ChTCHMouEe2kn713WHbQGcuYrr6fXTBiu460OTwWrWob16g1bXn4vtz07Ope7ewMozJAnEquLk5lWQWtBig9DQ==",
+    "axios@1.14.0": {
+      "integrity": "sha512-3Y8yrqLSwjuzpXuZ0oIYZ/XGgLwUIBU3uLvbcpb0pidD9ctpShJd43KSlEEkVQg6DS0G9NKyzOvBfUtDKEyHvQ==",
       "dependencies": [
         "follow-redirects",
         "form-data",
@@ -135,6 +140,9 @@
       "dependencies": [
         "delayed-stream"
       ]
+    },
+    "commander@14.0.3": {
+      "integrity": "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="
     },
     "define-data-property@1.1.4": {
       "integrity": "sha512-rBMvIzlpA8v6E+SJZoo++HAYqsLrkg7MSfIinMPFhmkorw7X+dOXVJQs+QT69zGkzMyfDnIMN2Wid1+NbL3T+A==",
@@ -289,8 +297,8 @@
     "possible-typed-array-names@1.1.0": {
       "integrity": "sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg=="
     },
-    "proxy-from-env@1.1.0": {
-      "integrity": "sha512-D+zkORCbA9f1tdWRK0RaCR3GPv50cMxcrz4X8k5LTSUD1Dkw47mKJEZQNunItRTkWwgtaUSo1RVFRIG9ZXiFYg=="
+    "proxy-from-env@2.1.0": {
+      "integrity": "sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA=="
     },
     "randombytes@2.1.0": {
       "integrity": "sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==",
@@ -387,7 +395,7 @@
   },
   "workspace": {
     "dependencies": [
-      "npm:@stellar/stellar-sdk@14.2.0",
+      "npm:@stellar/stellar-sdk@^15.0.1",
       "npm:buffer@6.0.3"
     ]
   }

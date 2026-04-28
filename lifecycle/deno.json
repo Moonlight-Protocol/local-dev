@@ -6,10 +6,10 @@
     "testnet-verify": "OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf deno run --allow-all testnet-verify.ts"
   },
   "imports": {
-    "@colibri/core": "jsr:@colibri/core@^0.16.1",
-    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.7.0",
+    "@colibri/core": "jsr:@colibri/core@^0.20.2",
+    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.8.0",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
-    "stellar-sdk": "npm:@stellar/stellar-sdk@14.2.0",
+    "stellar-sdk": "npm:@stellar/stellar-sdk@^15.0.1",
     "buffer": "npm:buffer@6.0.3",
     "postgres": "npm:postgres@3.4.7"
   }
