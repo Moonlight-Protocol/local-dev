@@ -16,6 +16,13 @@ export interface VerifyOtelConfig {
   pollTimeoutMs?: number;
   providerServiceName: string;
   sdkServiceName: string;
+  /**
+   * council-platform service.name. When set, the verifier asserts cp#28 spans
+   * (Channel/Custody/KeyDerivation/Escrow) are present and trace-linked to the
+   * SDK driver. Set this for flows that drive cp; leave undefined otherwise to
+   * preserve previous behavior.
+   */
+  councilServiceName?: string;
 }
 
 export interface VerifyOtelResult {
@@ -160,7 +167,15 @@ async function searchTraceCount(
  * Throws on connectivity failure.
  */
 export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<VerifyOtelResult> {
-  const { tempoUrl, tempoAuth, traceIdsPath, pollTimeoutMs = 30000, providerServiceName, sdkServiceName } = config;
+  const {
+    tempoUrl,
+    tempoAuth,
+    traceIdsPath,
+    pollTimeoutMs = 30000,
+    providerServiceName,
+    sdkServiceName,
+    councilServiceName,
+  } = config;
   const PROVIDER_SERVICE = providerServiceName;
   const SDK_SERVICE = sdkServiceName;
 
@@ -214,6 +229,7 @@ export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<Verify
     allSpans,
     providerService: PROVIDER_SERVICE,
     sdkService: SDK_SERVICE,
+    councilService: councilServiceName,
     traceData,
     searchBackgroundTraces: async (prefixes, startUs, endUs, minExpected) => {
       const startS = Math.floor(startUs / 1_000_000);

@@ -34,6 +34,11 @@ if (!SDK_SERVICE_NAME) {
   console.error("❌ SDK_SERVICE_NAME env var is required");
   Deno.exit(1);
 }
+const COUNCIL_SERVICE_NAME = Deno.env.get("COUNCIL_SERVICE_NAME");
+if (!COUNCIL_SERVICE_NAME) {
+  console.error("❌ COUNCIL_SERVICE_NAME env var is required");
+  Deno.exit(1);
+}
 
 const TRACE_IDS_PATH = (() => {
   const localPath = new URL("./e2e-trace-ids.json", import.meta.url).pathname;
@@ -52,6 +57,7 @@ const result = await verifyOtelTraces({
   pollTimeoutMs: Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "30000"),
   providerServiceName: PROVIDER_SERVICE_NAME,
   sdkServiceName: SDK_SERVICE_NAME,
+  councilServiceName: COUNCIL_SERVICE_NAME,
 });
 
 if (result.failed > 0) {

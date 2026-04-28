@@ -6,7 +6,7 @@ Scripts to verify that the deployed Moonlight testnet infrastructure works end-t
 
 - Deno installed
 - Contract WASMs available at `../e2e/wasms/` (build with `stellar contract build` in soroban-core, or copy from a release)
-- For OTEL verification against deployed testnet: `TEMPO_URL`, `TEMPO_AUTH`, `PROVIDER_SERVICE_NAME`, `SDK_SERVICE_NAME` env vars set
+- For OTEL verification against deployed testnet: `TEMPO_URL`, `TEMPO_AUTH`, `PROVIDER_SERVICE_NAME`, `SDK_SERVICE_NAME`, `COUNCIL_SERVICE_NAME` env vars set
 - For OTEL verification against local stack: nothing extra — see [Run against the local stack](#run-against-the-local-stack) below
 
 ## Test Suites
@@ -77,6 +77,7 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 | `JAEGER_URL` | `http://localhost:16686` | Suites 2, 4 (local) |
 | `PROVIDER_SERVICE_NAME` | (none) | Suites 2, 4 |
 | `SDK_SERVICE_NAME` | (none) | Suites 2, 4 |
+| `COUNCIL_SERVICE_NAME` | (none) | Suites 2, 4 (cp#28 spans + sdk↔cp continuity) |
 | `TRACE_POLL_TIMEOUT_MS` | `30000` | Suites 2, 4 |
 
 ## Run Order
@@ -130,6 +131,7 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export JAEGER_URL=http://localhost:16686  # optional — this is the default
 export PROVIDER_SERVICE_NAME=provider-platform
 export SDK_SERVICE_NAME=moonlight-e2e
+export COUNCIL_SERVICE_NAME=council-platform
 
 cd testnet && deno run --allow-all main.ts                # suite 1
 deno run --allow-all verify-otel-local.ts                 # suite 2 (Jaeger)
