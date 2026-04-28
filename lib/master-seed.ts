@@ -9,7 +9,8 @@
  *
  * See /Users/theahaco/repos/pm-theahaco/key-derivation.md for the full spec.
  */
-import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
+import { Keypair } from "stellar-sdk";
+import { Buffer } from "node:buffer";
 
 const encoder = new TextEncoder();
 
@@ -21,7 +22,7 @@ const encoder = new TextEncoder();
 export async function masterSeedFromSecret(stellarSecret: string): Promise<Uint8Array> {
   const keypair = Keypair.fromSecret(stellarSecret);
   return new Uint8Array(
-    await crypto.subtle.digest("SHA-256", keypair.rawSecretKey()),
+    await crypto.subtle.digest("SHA-256", new Uint8Array(keypair.rawSecretKey())),
   );
 }
 
