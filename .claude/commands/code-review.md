@@ -46,6 +46,15 @@ For each problem:
 2. What the problem is
 3. Severity: BLOCKING, HIGH, or LOW
 
+### Default severities
+
+When a rule does not specify its own severity, assign as follows:
+- **Security** issues: BLOCKING by default; LOW only if clearly defense-in-depth or unreachable.
+- **Reliability** issues: BLOCKING if data loss or production downtime is plausible; HIGH otherwise.
+- **Code quality** issues: HIGH if it blocks understanding or maintenance; LOW for stylistic concerns.
+- **Architecture** issues: HIGH by default; BLOCKING only when the design flaw makes future change unsafe.
+- **Commit hygiene** issues: LOW (as called out per-rule).
+
 Nothing else. No preamble, no summary, no commentary, no opinions.
 
 ## Project-specific rules
