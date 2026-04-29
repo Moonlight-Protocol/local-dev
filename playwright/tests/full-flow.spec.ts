@@ -20,26 +20,30 @@
  * All user keys are derived from a single MASTER_SECRET (or the hardcoded
  * local-dev default). See helpers/keys.ts for the derivation.
  */
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { execSync } from "child_process";
-import { getUrls, getTarget, type ServiceUrls } from "../helpers/urls";
+import { getTarget, getUrls, type ServiceUrls } from "../helpers/urls";
 import { deriveAllProfiles, type DerivedProfiles } from "../helpers/keys";
 import {
-  createUserContext,
   closeAllContexts,
+  createUserContext,
   type UserContext,
 } from "../fixtures/contexts";
 import {
-  loginWithFreighter,
   loginMoonlightPay,
+  loginWithFreighter,
   verifyAuthenticated,
 } from "../fixtures/auth";
-import { withWalletApproval, approveNextPopup, SEL_APPROVE_BUTTON } from "../fixtures/freighter";
+import {
+  approveNextPopup,
+  SEL_APPROVE_BUTTON,
+  withWalletApproval,
+} from "../fixtures/freighter";
 import {
   buildOtelConfig,
   checkOtelConnectivity,
-  verifyOtelTraces,
   formatOtelResults,
+  verifyOtelTraces,
 } from "../helpers/otel-verify";
 
 // ─── Config ─────────────────────────────────────────────────────────
@@ -183,11 +187,19 @@ test.describe("Full UC Flow", () => {
 
     // Select a jurisdiction (open picker, type, click first match)
     const jurisdictionPicker = councilPage.locator("#jurisdiction-picker");
-    if (await jurisdictionPicker.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    if (
+      await jurisdictionPicker.isVisible({ timeout: 3_000 }).catch(() => false)
+    ) {
       await councilPage.fill("#jurisdiction-filter", "United States");
       await councilPage.waitForTimeout(500);
-      const jurisdictionOption = councilPage.locator("#jurisdiction-list .jurisdiction-option, .jurisdiction-option").first();
-      if (await jurisdictionOption.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      const jurisdictionOption = councilPage.locator(
+        "#jurisdiction-list .jurisdiction-option, .jurisdiction-option",
+      ).first();
+      if (
+        await jurisdictionOption.isVisible({ timeout: 2_000 }).catch(() =>
+          false
+        )
+      ) {
         await jurisdictionOption.click();
       }
     }
@@ -328,7 +340,9 @@ test.describe("Full UC Flow", () => {
   test("Step 5: Provider requests joining council", async () => {
     // After Step 4, we should be on /setup/join. If not, navigate there.
     const councilUrlInput = providerPage.locator("#council-url, #jc-url");
-    const onJoinStep = await councilUrlInput.first().isVisible({ timeout: 5_000 }).catch(() => false);
+    const onJoinStep = await councilUrlInput.first().isVisible({
+      timeout: 5_000,
+    }).catch(() => false);
 
     if (!onJoinStep) {
       // Maybe we're on /home — use the join council modal
@@ -348,7 +362,8 @@ test.describe("Full UC Flow", () => {
     await urlInput.fill(`${urls.councilApi}?council=${councilId}`);
 
     // Discover
-    const discoverBtn = providerPage.locator("#discover-btn, #jc-discover-btn").first();
+    const discoverBtn = providerPage.locator("#discover-btn, #jc-discover-btn")
+      .first();
     await discoverBtn.click();
 
     await providerPage.waitForSelector("#council-info, #jc-info, #jc-confirm", {
@@ -476,7 +491,11 @@ test.describe("Full UC Flow", () => {
     await loginMoonlightPay(merchantCtx.context, merchantPage);
 
     await merchantPage.waitForLoadState("networkidle");
-    await verifyAuthenticated(merchantPage, ".nav-address, .onboarding-stepper", 30_000);
+    await verifyAuthenticated(
+      merchantPage,
+      ".nav-address, .onboarding-stepper",
+      30_000,
+    );
   });
 
   // ── Step 10: Merchant creates an account ──────────────────────────
@@ -552,9 +571,12 @@ test.describe("Full UC Flow", () => {
         }
 
         // Complete setup — button becomes enabled once treasury has balance > 0
-        await merchantPage.waitForSelector("#opex-complete-btn:not([disabled])", {
-          timeout: 60_000,
-        });
+        await merchantPage.waitForSelector(
+          "#opex-complete-btn:not([disabled])",
+          {
+            timeout: 60_000,
+          },
+        );
         await merchantPage.click("#opex-complete-btn");
         await merchantPage.waitForLoadState("networkidle");
       }
@@ -580,7 +602,8 @@ test.describe("Full UC Flow", () => {
     posPage = await posCtx.context.newPage();
 
     const separator = posUrl.includes("?") ? "&" : "?";
-    const posUrlWithAmount = `${posUrl}${separator}amount=1&description=Playwright+test+payment`;
+    const posUrlWithAmount =
+      `${posUrl}${separator}amount=1&description=Playwright+test+payment`;
 
     await posPage.goto(posUrlWithAmount);
     await posPage.waitForLoadState("networkidle");
@@ -610,18 +633,23 @@ test.describe("Full UC Flow", () => {
     await posPage.waitForTimeout(1000);
 
     // Register popup listener BEFORE clicking Freighter in the wallet picker
-    const popup1Promise = posCtx.context.waitForEvent("page", { timeout: 30_000 });
+    const popup1Promise = posCtx.context.waitForEvent("page", {
+      timeout: 30_000,
+    });
 
     // Click Freighter in the Stellar Wallets Kit modal (may be in shadow DOM)
-    const freighterOption = posPage.locator('text=Freighter').first();
-    if (await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    const freighterOption = posPage.locator("text=Freighter").first();
+    if (
+      await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
+    ) {
       await freighterOption.click();
     } else {
       await posPage.evaluate(() => {
         const modal = document.querySelector("stellar-wallets-modal");
         if (modal?.shadowRoot) {
-          const btn = modal.shadowRoot.querySelector('[data-wallet-id]') as HTMLElement
-            ?? modal.shadowRoot.querySelector("button") as HTMLElement;
+          const btn =
+            modal.shadowRoot.querySelector("[data-wallet-id]") as HTMLElement ??
+              modal.shadowRoot.querySelector("button") as HTMLElement;
           btn?.click();
         }
       });
@@ -709,7 +737,9 @@ test.describe("Full UC Flow", () => {
     // Jaeger is near-instant locally; Tempo needs ~60s on testnet/mainnet
     const waitMs = otelConfig.backend === "jaeger" ? 5_000 : 60_000;
     console.log(
-      `Waiting ${waitMs / 1000}s for trace ingestion into ${otelConfig.backend}...`,
+      `Waiting ${
+        waitMs / 1000
+      }s for trace ingestion into ${otelConfig.backend}...`,
     );
     await new Promise((r) => setTimeout(r, waitMs));
 

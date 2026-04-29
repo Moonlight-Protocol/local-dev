@@ -47,7 +47,9 @@ export async function deployChannelAuth(
   networkPassphrase: string,
   wasmHash: Buffer,
   salt?: Buffer,
-): Promise<{ contractId: string; txResponse: rpc.Api.GetSuccessfulTransactionResponse }> {
+): Promise<
+  { contractId: string; txResponse: rpc.Api.GetSuccessfulTransactionResponse }
+> {
   console.log("  Deploying Channel Auth contract...");
 
   salt ??= Buffer.from(crypto.getRandomValues(new Uint8Array(32)));
@@ -138,10 +140,9 @@ function computeNativeSacId(networkPassphrase: string): string {
   const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
     new xdr.HashIdPreimageContractId({
       networkId,
-      contractIdPreimage:
-        xdr.ContractIdPreimage.contractIdPreimageFromAsset(
-          Asset.native().toXDRObject(),
-        ),
+      contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAsset(
+        Asset.native().toXDRObject(),
+      ),
     }),
   );
   const contractIdHash = hash(preimage.toXDR());

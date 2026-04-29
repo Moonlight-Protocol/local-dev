@@ -1,0 +1,24 @@
+name: Fmt + Lint
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  fmt-lint:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: [testnet, lifecycle, e2e, e2e/pos-instant, e2e/governance]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: deno fmt --check
+        working-directory: ${{ matrix.dir }}
+        run: deno fmt --check
+      - name: deno lint
+        working-directory: ${{ matrix.dir }}
+        run: deno lint

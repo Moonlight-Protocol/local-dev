@@ -26,15 +26,17 @@
 import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
 import { mnemonicToSeed } from "npm:bip39@3.1.0";
-import { fundAccounts, formatResults } from "./setup-accounts.ts";
+import { formatResults, fundAccounts } from "./setup-accounts.ts";
 
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
+const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
+  "http://localhost:8000/friendbot";
 const WALLET_SEED_DIR = Deno.env.get("WALLET_SEED_DIR") ??
   new URL("../browser-wallet", import.meta.url).pathname;
-const SEED_FILES = (Deno.env.get("SEED_FILES") ?? ".env.seed.user1,.env.seed.user2")
-  .split(",")
-  .map((s) => s.trim())
-  .filter((s) => s.length > 0);
+const SEED_FILES =
+  (Deno.env.get("SEED_FILES") ?? ".env.seed.user1,.env.seed.user2")
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
 const DERIVATION_INDEX = Number(Deno.env.get("DERIVATION_INDEX") ?? "0");
 
 // ─── SLIP-0010 derivation (matches browser-wallet/src/keys/keys.ts) ────
@@ -75,7 +77,10 @@ function concatBytes(...parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
-async function hmacSha512(key: Uint8Array, data: Uint8Array): Promise<Uint8Array> {
+async function hmacSha512(
+  key: Uint8Array,
+  data: Uint8Array,
+): Promise<Uint8Array> {
   const cryptoKey = await crypto.subtle.importKey(
     "raw",
     key as unknown as BufferSource,
@@ -83,7 +88,11 @@ async function hmacSha512(key: Uint8Array, data: Uint8Array): Promise<Uint8Array
     false,
     ["sign"],
   );
-  const sig = await crypto.subtle.sign("HMAC", cryptoKey, data as unknown as BufferSource);
+  const sig = await crypto.subtle.sign(
+    "HMAC",
+    cryptoKey,
+    data as unknown as BufferSource,
+  );
   return new Uint8Array(sig);
 }
 
@@ -92,7 +101,10 @@ async function slip10MasterKeyFromSeed(seed: Uint8Array): Promise<ExtendedKey> {
   return { key: i.slice(0, 32), chainCode: i.slice(32, 64) };
 }
 
-async function ckdPriv(parent: ExtendedKey, index: number): Promise<ExtendedKey> {
+async function ckdPriv(
+  parent: ExtendedKey,
+  index: number,
+): Promise<ExtendedKey> {
   if (index < HARDENED_OFFSET) {
     throw new Error("ed25519 derivation requires hardened index");
   }
@@ -171,14 +183,19 @@ async function main() {
       console.error(`  ✗ ${fileName}: not found at ${fullPath}`);
       continue;
     }
-    const kp = await deriveStellarKeypairFromMnemonic(entry.mnemonic, DERIVATION_INDEX);
+    const kp = await deriveStellarKeypairFromMnemonic(
+      entry.mnemonic,
+      DERIVATION_INDEX,
+    );
     entry.publicKey = kp.publicKey();
     entries.push(entry);
     console.log(`  ${fileName.padEnd(20)} → ${entry.publicKey}`);
   }
 
   if (entries.length === 0) {
-    console.error("\nNo seed files found. Set WALLET_SEED_DIR or SEED_FILES env vars.");
+    console.error(
+      "\nNo seed files found. Set WALLET_SEED_DIR or SEED_FILES env vars.",
+    );
     Deno.exit(1);
   }
 
@@ -195,8 +212,12 @@ async function main() {
   }
 
   console.log(`\n=== Funded ${results.length} extension account(s) ===\n`);
-  console.log("Both browser extensions can now deposit XLM into the privacy channel.");
-  console.log("Refresh chain state in each extension to pick up the new balance.\n");
+  console.log(
+    "Both browser extensions can now deposit XLM into the privacy channel.",
+  );
+  console.log(
+    "Refresh chain state in each extension to pick up the new balance.\n",
+  );
 }
 
 if (import.meta.main) {

@@ -1,4 +1,4 @@
-import { NetworkConfig, type ContractId } from "@colibri/core";
+import { type ContractId, NetworkConfig } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
 
 export interface Config {

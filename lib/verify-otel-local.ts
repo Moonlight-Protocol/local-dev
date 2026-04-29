@@ -8,8 +8,15 @@
  * Span-count assertions live in lib/verify-otel-validate.ts (shared with the
  * Tempo verifier). This file owns Jaeger-specific fetch/normalize/search.
  */
-import { type E2ETraceData, loadTraceData, type VerifyOtelResult } from "./verify-otel.ts";
-import { type NormalizedSpan, validateNormalizedSpans } from "./verify-otel-validate.ts";
+import {
+  type E2ETraceData,
+  loadTraceData,
+  type VerifyOtelResult,
+} from "./verify-otel.ts";
+import {
+  type NormalizedSpan,
+  validateNormalizedSpans,
+} from "./verify-otel-validate.ts";
 
 export interface VerifyOtelLocalConfig {
   jaegerUrl: string;
@@ -50,8 +57,11 @@ interface JaegerSpan {
 function normalizeJaegerTrace(trace: JaegerTrace): NormalizedSpan[] {
   const spans: NormalizedSpan[] = [];
   for (const span of trace.spans ?? []) {
-    const serviceName = trace.processes?.[span.processID]?.serviceName ?? "unknown";
-    const parentRef = (span.references ?? []).find((r) => r.refType === "CHILD_OF");
+    const serviceName = trace.processes?.[span.processID]?.serviceName ??
+      "unknown";
+    const parentRef = (span.references ?? []).find((r) =>
+      r.refType === "CHILD_OF"
+    );
     spans.push({
       traceId: span.traceID,
       spanId: span.spanID,
@@ -84,7 +94,9 @@ async function fetchTraceById(
       if (spans.length > 0) return spans;
     } else if (res.status !== 404) {
       const body = await res.text().catch(() => "(could not read body)");
-      console.error(`  Jaeger returned HTTP ${res.status} for trace ${traceId}: ${body}`);
+      console.error(
+        `  Jaeger returned HTTP ${res.status} for trace ${traceId}: ${body}`,
+      );
     }
 
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -165,7 +177,9 @@ export async function verifyOtelTracesLocal(
     console.log(`  Jaeger reachable (${services.length} services registered)`);
     for (const required of [PROVIDER_SERVICE, SDK_SERVICE]) {
       if (!services.includes(required)) {
-        console.log(`  ⚠️  Service '${required}' not registered with Jaeger yet`);
+        console.log(
+          `  ⚠️  Service '${required}' not registered with Jaeger yet`,
+        );
       }
     }
   } catch (err) {

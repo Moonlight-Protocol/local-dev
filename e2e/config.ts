@@ -1,4 +1,4 @@
-import { NetworkConfig, type ContractId } from "@colibri/core";
+import { type ContractId, NetworkConfig } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
 
 export interface Config {
@@ -53,7 +53,8 @@ export function loadConfig(): Config {
     Deno.env.get("E2E_CHANNEL_AUTH_ID") ?? env["E2E_CHANNEL_AUTH_ID"]
   ) as ContractId;
   const channelAssetContractId = (
-    Deno.env.get("E2E_CHANNEL_ASSET_CONTRACT_ID") ?? env["E2E_CHANNEL_ASSET_CONTRACT_ID"]
+    Deno.env.get("E2E_CHANNEL_ASSET_CONTRACT_ID") ??
+      env["E2E_CHANNEL_ASSET_CONTRACT_ID"]
   ) as ContractId;
 
   if (!channelContractId || !channelAuthId || !channelAssetContractId) {
@@ -70,8 +71,8 @@ export function loadConfig(): Config {
     allowHttp: true,
   });
 
-  const providerSecretKey =
-    Deno.env.get("E2E_PROVIDER_SK") ?? env["E2E_PROVIDER_SK"];
+  const providerSecretKey = Deno.env.get("E2E_PROVIDER_SK") ??
+    env["E2E_PROVIDER_SK"];
 
   return {
     networkPassphrase,

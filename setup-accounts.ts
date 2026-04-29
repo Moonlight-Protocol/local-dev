@@ -21,7 +21,8 @@
  */
 import { StrKey } from "npm:@stellar/stellar-sdk@14.2.0";
 
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
+const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
+  "http://localhost:8000/friendbot";
 
 export interface FundResult {
   publicKey: string;
@@ -61,7 +62,11 @@ async function fundOne(publicKey: string): Promise<FundResult> {
       ) {
         return { publicKey, status: "ALREADY_FUNDED" };
       }
-      return { publicKey, status: "FAILED", error: `400: ${body.slice(0, 200)}` };
+      return {
+        publicKey,
+        status: "FAILED",
+        error: `400: ${body.slice(0, 200)}`,
+      };
     }
     const body = await res.text();
     return {
@@ -107,7 +112,9 @@ async function main() {
   if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
     console.log("Usage: setup-accounts.sh <pubkey> [<pubkey> ...]");
     console.log("");
-    console.log("Funds one or more Stellar accounts via Friendbot. Idempotent.");
+    console.log(
+      "Funds one or more Stellar accounts via Friendbot. Idempotent.",
+    );
     console.log("");
     console.log("Env:");
     console.log(`  FRIENDBOT_URL  default ${FRIENDBOT_URL}`);

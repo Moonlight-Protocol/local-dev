@@ -7,7 +7,10 @@
  * Span-count assertions live in lib/verify-otel-validate.ts so the
  * Jaeger-backed verify-otel-local.ts can share them.
  */
-import { type NormalizedSpan, validateNormalizedSpans } from "./verify-otel-validate.ts";
+import {
+  type NormalizedSpan,
+  validateNormalizedSpans,
+} from "./verify-otel-validate.ts";
 
 export interface VerifyOtelConfig {
   tempoUrl: string;
@@ -57,7 +60,10 @@ interface TempoSpan {
   name: string;
   startTimeUnixNano: string;
   endTimeUnixNano: string;
-  attributes?: { key: string; value: { stringValue?: string; intValue?: string } }[];
+  attributes?: {
+    key: string;
+    value: { stringValue?: string; intValue?: string };
+  }[];
   events?: { name: string }[];
   status?: { code: number };
 }
@@ -122,7 +128,9 @@ async function fetchTraceById(
       if (spans.length > 0) return spans;
     } else if (res.status !== 404) {
       const body = await res.text().catch(() => "(could not read body)");
-      console.error(`  Tempo returned HTTP ${res.status} for trace ${traceId}: ${body}`);
+      console.error(
+        `  Tempo returned HTTP ${res.status} for trace ${traceId}: ${body}`,
+      );
     }
 
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -146,7 +154,8 @@ async function searchTraceCount(
 
   while (Date.now() < deadline) {
     const q = encodeURIComponent(traceql);
-    const url = `${tempoUrl}/api/search?q=${q}&start=${startEpochS}&end=${endEpochS}&limit=50`;
+    const url =
+      `${tempoUrl}/api/search?q=${q}&start=${startEpochS}&end=${endEpochS}&limit=50`;
     const res = await fetch(url, { headers: { Authorization: tempoAuth } });
 
     if (res.ok) {
@@ -166,7 +175,9 @@ async function searchTraceCount(
  * Verify OTEL traces in Grafana Cloud Tempo. Returns pass/fail counts.
  * Throws on connectivity failure.
  */
-export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<VerifyOtelResult> {
+export async function verifyOtelTraces(
+  config: VerifyOtelConfig,
+): Promise<VerifyOtelResult> {
   const {
     tempoUrl,
     tempoAuth,
@@ -179,7 +190,9 @@ export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<Verify
   const PROVIDER_SERVICE = providerServiceName;
   const SDK_SERVICE = sdkServiceName;
 
-  console.log("\n[OTEL] Verifying OpenTelemetry traces in Grafana Cloud Tempo\n");
+  console.log(
+    "\n[OTEL] Verifying OpenTelemetry traces in Grafana Cloud Tempo\n",
+  );
 
   // 1. Verify Tempo connectivity
   console.log("[1/3] Checking Tempo connectivity...");
@@ -202,7 +215,9 @@ export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<Verify
   const traceData = loadTraceData(traceIdsPath);
   console.log(`  Trace IDs: ${traceData.traceIds.length}`);
   console.log(
-    `  Time window: ${new Date(traceData.startTimeUs / 1000).toISOString()} → ${new Date(traceData.endTimeUs / 1000).toISOString()}`,
+    `  Time window: ${new Date(traceData.startTimeUs / 1000).toISOString()} → ${
+      new Date(traceData.endTimeUs / 1000).toISOString()
+    }`,
   );
 
   const allSpans: NormalizedSpan[] = [];
@@ -234,7 +249,9 @@ export async function verifyOtelTraces(config: VerifyOtelConfig): Promise<Verify
     searchBackgroundTraces: async (prefixes, startUs, endUs, minExpected) => {
       const startS = Math.floor(startUs / 1_000_000);
       const endS = Math.ceil(endUs / 1_000_000);
-      const traceqlPrefixes = prefixes.map((p) => `${p.replace(/\./g, "\\\\.")}.*`).join("|");
+      const traceqlPrefixes = prefixes.map((p) =>
+        `${p.replace(/\./g, "\\\\.")}.*`
+      ).join("|");
       return await searchTraceCount(
         tempoUrl,
         tempoAuth,

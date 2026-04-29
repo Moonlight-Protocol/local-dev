@@ -19,10 +19,15 @@ const encoder = new TextEncoder();
  * The secret key's raw 32-byte Ed25519 seed is hashed to produce
  * the master seed (so the master seed ≠ the secret key itself).
  */
-export async function masterSeedFromSecret(stellarSecret: string): Promise<Uint8Array> {
+export async function masterSeedFromSecret(
+  stellarSecret: string,
+): Promise<Uint8Array> {
   const keypair = Keypair.fromSecret(stellarSecret);
   return new Uint8Array(
-    await crypto.subtle.digest("SHA-256", new Uint8Array(keypair.rawSecretKey())),
+    await crypto.subtle.digest(
+      "SHA-256",
+      new Uint8Array(keypair.rawSecretKey()),
+    ),
   );
 }
 
@@ -39,7 +44,9 @@ export async function deriveKeypair(
 ): Promise<Keypair> {
   const roleBytes = encoder.encode(role);
   const indexBytes = encoder.encode(String(index));
-  const input = new Uint8Array(masterSeed.length + roleBytes.length + indexBytes.length);
+  const input = new Uint8Array(
+    masterSeed.length + roleBytes.length + indexBytes.length,
+  );
   input.set(masterSeed, 0);
   input.set(roleBytes, masterSeed.length);
   input.set(indexBytes, masterSeed.length + roleBytes.length);

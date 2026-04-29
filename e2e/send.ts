@@ -1,7 +1,10 @@
-import { MoonlightOperation, type MoonlightTracer } from "@moonlight/moonlight-sdk";
+import {
+  MoonlightOperation,
+  type MoonlightTracer,
+} from "@moonlight/moonlight-sdk";
 import { fromDecimals } from "@colibri/core";
 import type { Config } from "./config.ts";
-import { setupAccount, getLatestLedger } from "./account.ts";
+import { getLatestLedger, setupAccount } from "./account.ts";
 import { submitBundle, waitForBundle } from "./bundle.ts";
 
 const SEND_FEE = 0.1; // LOW entropy fee

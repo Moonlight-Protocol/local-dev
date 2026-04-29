@@ -4,7 +4,7 @@
  * Local stack sends traces to Jaeger (port 16686).
  * Testnet/mainnet send traces to Grafana Cloud Tempo.
  */
-import { getTarget, getJaegerUrl } from "./urls";
+import { getJaegerUrl, getTarget } from "./urls";
 
 export interface OtelVerifyConfig {
   /** "jaeger" for local, "tempo" for testnet/mainnet */
@@ -107,7 +107,8 @@ async function searchTempo(
     try {
       const traceql = `{resource.service.name="${service}"}`;
       const q = encodeURIComponent(traceql);
-      const url = `${tempoUrl}/api/search?q=${q}&start=${startEpochS}&end=${endEpochS}&limit=50`;
+      const url =
+        `${tempoUrl}/api/search?q=${q}&start=${startEpochS}&end=${endEpochS}&limit=50`;
       const res = await fetch(url, {
         headers: { Authorization: tempoAuth },
       });
@@ -166,8 +167,7 @@ export function buildOtelConfig(
 
   return {
     backend: "tempo",
-    tempoUrl:
-      process.env.TEMPO_URL ??
+    tempoUrl: process.env.TEMPO_URL ??
       "https://tempo-prod-13-prod-ca-east-0.grafana.net/tempo",
     tempoAuth: process.env.TEMPO_AUTH ?? "",
     startEpochS,

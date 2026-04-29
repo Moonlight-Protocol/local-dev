@@ -15,7 +15,8 @@ export async function authenticate(
     );
     if (!challengeRes.ok) {
       throw new Error(
-        `Auth challenge failed: ${challengeRes.status} ${await challengeRes.text()}`,
+        `Auth challenge failed: ${challengeRes.status} ${await challengeRes
+          .text()}`,
       );
     }
     const challengeData = await challengeRes.json();
@@ -23,10 +24,13 @@ export async function authenticate(
   });
 
   // 2. Co-sign the challenge transaction
-  const signedXdr = withE2ESpan("auth.sign_challenge", async () => {
-    const tx = TransactionBuilder.fromXDR(challengeXdr, config.networkPassphrase);
+  const signedXdr = withE2ESpan("auth.sign_challenge", () => {
+    const tx = TransactionBuilder.fromXDR(
+      challengeXdr,
+      config.networkPassphrase,
+    );
     tx.sign(keypair);
-    return tx.toXDR();
+    return Promise.resolve(tx.toXDR());
   });
 
   // 3. Submit signed challenge

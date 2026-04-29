@@ -16,10 +16,10 @@ import { addProvider } from "./lib/admin.ts";
 import { extractEvents, verifyEvent } from "./lib/events.ts";
 // Resolved relative to /app/ at runtime (setup-e2e.ts is copied to /app/setup.ts)
 import {
-  masterSeedFromSecret,
   deriveKeypair,
-  ROLES,
   LOCAL_DEV_MASTER_SECRET,
+  masterSeedFromSecret,
+  ROLES,
 } from "./lib/master-seed.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
@@ -60,19 +60,32 @@ async function waitForFriendbot(): Promise<void> {
   throw new Error("Friendbot did not become ready after 180s");
 }
 
-async function createEncryptor(secret: string): Promise<(plaintext: string) => Promise<string>> {
+async function createEncryptor(
+  secret: string,
+): Promise<(plaintext: string) => Promise<string>> {
   return async (plaintext: string): Promise<string> => {
     const salt = crypto.getRandomValues(new Uint8Array(16));
     const keyMaterial = await crypto.subtle.importKey(
-      "raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"],
+      "raw",
+      new TextEncoder().encode(secret),
+      "PBKDF2",
+      false,
+      ["deriveKey"],
     );
     const key = await crypto.subtle.deriveKey(
       { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
-      keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt"],
+      keyMaterial,
+      { name: "AES-GCM", length: 256 },
+      false,
+      ["encrypt"],
     );
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const encrypted = new Uint8Array(
-      await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext)),
+      await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv },
+        key,
+        new TextEncoder().encode(plaintext),
+      ),
     );
     const combined = new Uint8Array(salt.length + iv.length + encrypted.length);
     combined.set(salt);
@@ -102,8 +115,15 @@ async function main() {
   await fundAccount(treasury.publicKey());
 
   console.log("[setup-e2e] Deploying Channel Auth...");
-  const channelAuthWasm = await Deno.readFile(`${WASM_DIR}/channel_auth_contract.wasm`);
-  const channelAuthHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, channelAuthWasm);
+  const channelAuthWasm = await Deno.readFile(
+    `${WASM_DIR}/channel_auth_contract.wasm`,
+  );
+  const channelAuthHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthWasm,
+  );
   const { contractId: channelAuthId, txResponse: authDeployTx } =
     await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash);
   const deployEvents = extractEvents(authDeployTx);
@@ -112,16 +132,37 @@ async function main() {
   }
 
   console.log("[setup-e2e] Deploying SAC + Privacy Channel...");
-  const assetContractId = await getOrDeployNativeSac(server, admin, NETWORK_PASSPHRASE);
-  const privacyChannelWasm = await Deno.readFile(`${WASM_DIR}/privacy_channel.wasm`);
-  const privacyChannelHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, privacyChannelWasm);
+  const assetContractId = await getOrDeployNativeSac(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+  );
+  const privacyChannelWasm = await Deno.readFile(
+    `${WASM_DIR}/privacy_channel.wasm`,
+  );
+  const privacyChannelHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelWasm,
+  );
   const channelContractId = await deployPrivacyChannel(
-    server, admin, NETWORK_PASSPHRASE,
-    privacyChannelHash, channelAuthId, assetContractId,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelHash,
+    channelAuthId,
+    assetContractId,
   );
 
   console.log("[setup-e2e] Registering provider on-chain...");
-  const addTx = await addProvider(server, admin, NETWORK_PASSPHRASE, channelAuthId, provider.publicKey());
+  const addTx = await addProvider(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthId,
+    provider.publicKey(),
+  );
   if (verifyEvent(extractEvents(addTx), "provider_added", true).found) {
     console.log("  ProviderAdded event verified");
   }

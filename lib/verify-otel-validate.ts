@@ -45,10 +45,19 @@ export interface ValidateNormalizedSpansConfig {
 export async function validateNormalizedSpans(
   config: ValidateNormalizedSpansConfig,
 ): Promise<VerifyOtelResult> {
-  const { allSpans, providerService, sdkService, councilService, traceData, searchBackgroundTraces } = config;
+  const {
+    allSpans,
+    providerService,
+    sdkService,
+    councilService,
+    traceData,
+    searchBackgroundTraces,
+  } = config;
 
   const sdkSpans = allSpans.filter((s) => s.serviceName === sdkService);
-  const providerSpans = allSpans.filter((s) => s.serviceName === providerService);
+  const providerSpans = allSpans.filter((s) =>
+    s.serviceName === providerService
+  );
   const councilSpans = councilService
     ? allSpans.filter((s) => s.serviceName === councilService)
     : [];
@@ -74,7 +83,8 @@ export async function validateNormalizedSpans(
   }
 
   function byPrefix(spans: NormalizedSpan[], ...prefixes: string[]): number {
-    return spans.filter((s) => prefixes.some((p) => s.name.startsWith(p))).length;
+    return spans.filter((s) => prefixes.some((p) => s.name.startsWith(p)))
+      .length;
   }
 
   function byName(spans: NormalizedSpan[], ...names: string[]): number {
@@ -91,12 +101,22 @@ export async function validateNormalizedSpans(
   );
   assertMin(
     "Auth challenge create spans",
-    byName(providerSpans, "P_CreateChallenge", "P_CreateChallengeDB", "P_CreateChallengeMemory"),
+    byName(
+      providerSpans,
+      "P_CreateChallenge",
+      "P_CreateChallengeDB",
+      "P_CreateChallengeMemory",
+    ),
     4,
   );
   assertMin(
     "Auth challenge verify spans",
-    byName(providerSpans, "P_VerifyChallenge", "P_CompareChallenge", "P_GenerateChallengeJWT"),
+    byName(
+      providerSpans,
+      "P_VerifyChallenge",
+      "P_CompareChallenge",
+      "P_GenerateChallengeJWT",
+    ),
     4,
   );
   assertMin(
@@ -105,7 +125,11 @@ export async function validateNormalizedSpans(
     3,
   );
   assertMin("Bundle.* helper spans", byPrefix(providerSpans, "Bundle."), 9);
-  assertMin("Spans with events", providerSpans.filter((s) => s.hasEvents).length, 15);
+  assertMin(
+    "Spans with events",
+    providerSpans.filter((s) => s.hasEvents).length,
+    15,
+  );
   assertMin("HTTP request spans", byPrefix(providerSpans, "GET ", "POST "), 5);
 
   // Background service spans (Executor/Verifier/Mempool) — backend search injected
@@ -117,7 +141,11 @@ export async function validateNormalizedSpans(
     endUs,
     1,
   );
-  assertMin("Background service traces (Executor/Verifier/Mempool)", bgCount, 1);
+  assertMin(
+    "Background service traces (Executor/Verifier/Mempool)",
+    bgCount,
+    1,
+  );
 
   // SDK checks
   console.log("\n  SDK (moonlight-e2e):");
@@ -141,7 +169,12 @@ export async function validateNormalizedSpans(
 
   assertMin(
     "Auth E2E spans (auth.*)",
-    byName(sdkSpans, "auth.get_challenge", "auth.sign_challenge", "auth.verify_challenge"),
+    byName(
+      sdkSpans,
+      "auth.get_challenge",
+      "auth.sign_challenge",
+      "auth.verify_challenge",
+    ),
     6,
   );
   assertMin(
@@ -150,30 +183,48 @@ export async function validateNormalizedSpans(
     6,
   );
   assertMin("PrivacyChannel spans", byPrefix(sdkSpans, "PrivacyChannel."), 4);
-  assertMin("UtxoBasedAccount spans", byPrefix(sdkSpans, "UtxoBasedAccount."), 8);
-  assertMin("SDK spans with events", sdkSpans.filter((s) => s.hasEvents).length, 10);
+  assertMin(
+    "UtxoBasedAccount spans",
+    byPrefix(sdkSpans, "UtxoBasedAccount."),
+    8,
+  );
+  assertMin(
+    "SDK spans with events",
+    sdkSpans.filter((s) => s.hasEvents).length,
+    10,
+  );
 
   // Distributed tracing
   console.log("\n  Distributed tracing:");
 
   const providerTraceIds = new Set(providerSpans.map((s) => s.traceId));
   const sdkTraceIds = new Set(sdkSpans.map((s) => s.traceId));
-  const sharedTraceIds = [...sdkTraceIds].filter((id) => providerTraceIds.has(id));
-  const providerOnlyTraceIds = [...providerTraceIds].filter((id) => !sdkTraceIds.has(id));
+  const sharedTraceIds = [...sdkTraceIds].filter((id) =>
+    providerTraceIds.has(id)
+  );
+  const providerOnlyTraceIds = [...providerTraceIds].filter((id) =>
+    !sdkTraceIds.has(id)
+  );
   assertMin("Shared trace IDs (SDK ↔ Provider)", sharedTraceIds.length, 1);
 
   // Every provider span triggered by the E2E should share a trace ID with the SDK.
   // Provider-only trace IDs indicate broken context propagation.
   if (providerOnlyTraceIds.length === 0) {
-    console.log(`  ✅ All provider traces linked to SDK (0 orphaned trace IDs)`);
+    console.log(
+      `  ✅ All provider traces linked to SDK (0 orphaned trace IDs)`,
+    );
     passed++;
   } else {
-    console.log(`  ❌ ${providerOnlyTraceIds.length} provider trace ID(s) not linked to SDK`);
+    console.log(
+      `  ❌ ${providerOnlyTraceIds.length} provider trace ID(s) not linked to SDK`,
+    );
     failed++;
   }
 
   const sdkSpanIds = new Set(sdkSpans.map((s) => s.spanId));
-  const providerWithSdkParent = providerSpans.filter((s) => sdkSpanIds.has(s.parentSpanId));
+  const providerWithSdkParent = providerSpans.filter((s) =>
+    sdkSpanIds.has(s.parentSpanId)
+  );
   assertMin("Provider spans with SDK parent", providerWithSdkParent.length, 5);
 
   // Council-platform checks (cp#28 — only when councilService is provided).

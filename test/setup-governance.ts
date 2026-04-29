@@ -71,21 +71,45 @@ async function main() {
   await fundAccount(treasury.publicKey());
 
   console.log("[setup-governance] Deploying Channel Auth...");
-  const channelAuthWasm = await Deno.readFile(`${WASM_DIR}/channel_auth_contract.wasm`);
-  const channelAuthHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, channelAuthWasm);
+  const channelAuthWasm = await Deno.readFile(
+    `${WASM_DIR}/channel_auth_contract.wasm`,
+  );
+  const channelAuthHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthWasm,
+  );
   const { contractId: channelAuthId, txResponse: authDeployTx } =
     await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash);
-  if (verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found) {
+  if (
+    verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found
+  ) {
     console.log("  ContractInitialized event verified");
   }
 
   console.log("[setup-governance] Deploying SAC + Privacy Channel...");
-  const assetContractId = await getOrDeployNativeSac(server, admin, NETWORK_PASSPHRASE);
-  const privacyChannelWasm = await Deno.readFile(`${WASM_DIR}/privacy_channel.wasm`);
-  const privacyChannelHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, privacyChannelWasm);
+  const assetContractId = await getOrDeployNativeSac(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+  );
+  const privacyChannelWasm = await Deno.readFile(
+    `${WASM_DIR}/privacy_channel.wasm`,
+  );
+  const privacyChannelHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelWasm,
+  );
   const channelContractId = await deployPrivacyChannel(
-    server, admin, NETWORK_PASSPHRASE,
-    privacyChannelHash, channelAuthId, assetContractId,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelHash,
+    channelAuthId,
+    assetContractId,
   );
 
   const providerEnv = `PORT=${PROVIDER_INTERNAL_PORT}

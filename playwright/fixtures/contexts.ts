@@ -15,12 +15,12 @@ import path from "path";
 import os from "os";
 import fs from "fs";
 import {
+  addLocalNetwork,
   openFreighterPopup,
   setupFreighterAccount,
   switchToTestnet,
-  addLocalNetwork,
 } from "./freighter";
-import { getTarget, getFriendbotUrl, getUrls } from "../helpers/urls";
+import { getFriendbotUrl, getTarget, getUrls } from "../helpers/urls";
 
 export interface UserProfile {
   /** Human-readable name for this user context */
@@ -38,10 +38,9 @@ export interface UserContext {
   userDataDir: string;
 }
 
-const FREIGHTER_PASSWORD =
-  process.env.FREIGHTER_PASSWORD ?? "What-a-useless-req";
-const EXTENSION_PATH =
-  process.env.FREIGHTER_EXTENSION_PATH ||
+const FREIGHTER_PASSWORD = process.env.FREIGHTER_PASSWORD ??
+  "What-a-useless-req";
+const EXTENSION_PATH = process.env.FREIGHTER_EXTENSION_PATH ||
   path.join(__dirname, "..", "freighter-extension");
 
 /**
@@ -69,7 +68,11 @@ export async function createUserContext(
   // http://council-console:3030) where crypto.subtle is unavailable
   // (requires a secure context). Mark them as secure so WebCrypto works.
   const urls = getUrls();
-  const insecureOrigins = [urls.councilConsole, urls.providerConsole, urls.moonlightPay]
+  const insecureOrigins = [
+    urls.councilConsole,
+    urls.providerConsole,
+    urls.moonlightPay,
+  ]
     .filter((u) => !u.includes("localhost"))
     .map((u) => new URL(u).origin);
 
@@ -80,18 +83,26 @@ export async function createUserContext(
     "--disable-default-apps",
   ];
   if (insecureOrigins.length > 0) {
-    args.push(`--unsafely-treat-insecure-origin-as-secure=${insecureOrigins.join(",")}`);
+    args.push(
+      `--unsafely-treat-insecure-origin-as-secure=${insecureOrigins.join(",")}`,
+    );
   }
 
   // Video recording options (set via VIDEO_RECORD=1 env var)
   const recordVideo = process.env.VIDEO_RECORD === "1"
     ? {
-        dir: path.join(__dirname, "..", "test-results", "videos", profile.name.replace(/\s/g, "-")),
-        size: {
-          width: parseInt(process.env.VIDEO_WIDTH ?? "1280", 10),
-          height: parseInt(process.env.VIDEO_HEIGHT ?? "720", 10),
-        },
-      }
+      dir: path.join(
+        __dirname,
+        "..",
+        "test-results",
+        "videos",
+        profile.name.replace(/\s/g, "-"),
+      ),
+      size: {
+        width: parseInt(process.env.VIDEO_WIDTH ?? "1280", 10),
+        height: parseInt(process.env.VIDEO_HEIGHT ?? "720", 10),
+      },
+    }
     : undefined;
 
   // Launch a persistent context with the extension
@@ -100,7 +111,9 @@ export async function createUserContext(
     viewport: { width: 1280, height: 800 },
     args,
     recordVideo,
-    ...(process.env.VIDEO_SLOWMO ? { slowMo: parseInt(process.env.VIDEO_SLOWMO, 10) } : {}),
+    ...(process.env.VIDEO_SLOWMO
+      ? { slowMo: parseInt(process.env.VIDEO_SLOWMO, 10) }
+      : {}),
   });
 
   // Give the extension time to initialize
@@ -137,7 +150,9 @@ export async function createUserContext(
   // Fallback: wait for a service worker to appear
   if (!extensionId) {
     try {
-      const sw = await context.waitForEvent("serviceworker", { timeout: 10_000 });
+      const sw = await context.waitForEvent("serviceworker", {
+        timeout: 10_000,
+      });
       const match = sw.url().match(/chrome-extension:\/\/([a-z]+)/);
       if (match) extensionId = match[1];
     } catch {
@@ -154,7 +169,11 @@ export async function createUserContext(
 
   // Open the Freighter popup and run full onboarding (import key + set password)
   const freighterPage = await openFreighterPopup(context, extensionId);
-  await setupFreighterAccount(freighterPage, profile.secretKey, FREIGHTER_PASSWORD);
+  await setupFreighterAccount(
+    freighterPage,
+    profile.secretKey,
+    FREIGHTER_PASSWORD,
+  );
 
   // Switch network based on target
   const target = getTarget();
@@ -170,7 +189,9 @@ export async function createUserContext(
     try {
       const res = await fetch(`${friendbotUrl}?addr=${profile.publicKey}`);
       if (!res.ok && res.status !== 400) {
-        console.warn(`Friendbot funding failed for ${profile.name}: ${res.status}`);
+        console.warn(
+          `Friendbot funding failed for ${profile.name}: ${res.status}`,
+        );
       }
     } catch (err) {
       console.warn(`Friendbot unreachable for ${profile.name}: ${err}`);

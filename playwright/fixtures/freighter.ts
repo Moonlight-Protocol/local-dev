@@ -11,7 +11,7 @@
  * its UI, update the selectors here.
  */
 import { type BrowserContext, type Page } from "@playwright/test";
-import { getStellarRpcUrl, getFriendbotUrl } from "../helpers/urls";
+import { getFriendbotUrl, getStellarRpcUrl } from "../helpers/urls";
 
 // ─── Selectors (Freighter v5.39.0) ──────────────────────────────
 
@@ -71,7 +71,9 @@ export async function setupFreighterAccount(
   // ── Phase 1: Complete onboarding with a throwaway mnemonic wallet ──
 
   // Welcome screen → "Create new wallet"
-  const createBtn = freighterPage.locator('button:has-text("Create new wallet")');
+  const createBtn = freighterPage.locator(
+    'button:has-text("Create new wallet")',
+  );
   await createBtn.waitFor({ state: "visible", timeout: 10_000 });
   await createBtn.click();
   await freighterPage.waitForTimeout(1000);
@@ -83,7 +85,8 @@ export async function setupFreighterAccount(
   await passwordInputs.nth(1).fill(password);
   await freighterPage.locator('input[type="checkbox"]').check({ force: true });
   await freighterPage.waitForTimeout(500);
-  await freighterPage.locator('button[data-testid="account-creator-submit"]').click({ timeout: 10_000 });
+  await freighterPage.locator('button[data-testid="account-creator-submit"]')
+    .click({ timeout: 10_000 });
   await freighterPage.waitForTimeout(2000);
 
   // Recovery phrase screen → skip
@@ -97,15 +100,16 @@ export async function setupFreighterAccount(
   await freighterPage.waitForTimeout(2000);
 
   // Fill the secret key (input[name="privateKey"])
-  await freighterPage.locator('#privateKey-input').fill(secretKey);
+  await freighterPage.locator("#privateKey-input").fill(secretKey);
   // Fill the wallet password (input[name="password"])
-  await freighterPage.locator('#password-input').fill(password);
+  await freighterPage.locator("#password-input").fill(password);
   // Check the authorization checkbox ("I'm aware Freighter can't recover...")
-  await freighterPage.locator('#authorization-input').check({ force: true });
+  await freighterPage.locator("#authorization-input").check({ force: true });
   await freighterPage.waitForTimeout(500);
 
   // Click Import
-  await freighterPage.locator('button[data-testid="import-account-button"]').click({ timeout: 10_000 });
+  await freighterPage.locator('button[data-testid="import-account-button"]')
+    .click({ timeout: 10_000 });
   await freighterPage.waitForTimeout(3000);
 
   // ── Phase 3: Switch to the imported account ──
@@ -157,7 +161,9 @@ export async function switchToTestnet(
   await freighterPage.goto(extUrl);
   await freighterPage.waitForTimeout(1500);
 
-  const networkSelector = freighterPage.locator('[data-testid="network-selector-open"]');
+  const networkSelector = freighterPage.locator(
+    '[data-testid="network-selector-open"]',
+  );
   if (await networkSelector.isVisible({ timeout: 3_000 }).catch(() => false)) {
     const text = await networkSelector.textContent() ?? "";
     if (text.includes("Test Net")) {
@@ -165,7 +171,9 @@ export async function switchToTestnet(
     }
     await networkSelector.click();
     await freighterPage.waitForTimeout(500);
-    await freighterPage.locator('.AccountHeader__network-selector__row:has-text("Test Net")').click();
+    await freighterPage.locator(
+      '.AccountHeader__network-selector__row:has-text("Test Net")',
+    ).click();
     await freighterPage.waitForTimeout(1000);
   }
 }
@@ -194,20 +202,26 @@ export async function addLocalNetwork(
   await freighterPage.waitForTimeout(1500);
 
   // Fill the form
-  await freighterPage.locator('#networkName').fill("Local");
-  await freighterPage.locator('#networkUrl').fill(baseUrl);
-  await freighterPage.locator('#sorobanRpcUrl').fill(rpcUrl);
-  await freighterPage.locator('#networkPassphrase').fill("Standalone Network ; February 2017");
-  await freighterPage.locator('#friendbotUrl').fill(friendbotUrl);
+  await freighterPage.locator("#networkName").fill("Local");
+  await freighterPage.locator("#networkUrl").fill(baseUrl);
+  await freighterPage.locator("#sorobanRpcUrl").fill(rpcUrl);
+  await freighterPage.locator("#networkPassphrase").fill(
+    "Standalone Network ; February 2017",
+  );
+  await freighterPage.locator("#friendbotUrl").fill(friendbotUrl);
 
   // Check "Allow connecting to non-HTTPS networks"
-  await freighterPage.locator('#isAllowHttpSelected-input').check({ force: true });
+  await freighterPage.locator("#isAllowHttpSelected-input").check({
+    force: true,
+  });
   // Check "Switch to this network"
-  await freighterPage.locator('#isSwitchSelected-input').check({ force: true });
+  await freighterPage.locator("#isSwitchSelected-input").check({ force: true });
   await freighterPage.waitForTimeout(500);
 
   // Click "Add network"
-  await freighterPage.locator('[data-testid="NetworkForm__add"]').click({ timeout: 10_000 });
+  await freighterPage.locator('[data-testid="NetworkForm__add"]').click({
+    timeout: 10_000,
+  });
   await freighterPage.waitForTimeout(2000);
 }
 

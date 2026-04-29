@@ -10,22 +10,22 @@
  * derived admin key in each frontend's allowlist. A random keypair is used
  * for the blocked test — guaranteed not in any allowlist.
  */
-import { test, expect, type Page } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { Keypair } from "@stellar/stellar-sdk";
 import { getUrls, type ServiceUrls } from "../helpers/urls";
 import {
   deriveKeypair,
-  masterSeedFromSecret,
   LOCAL_DEV_MASTER_SECRET,
+  masterSeedFromSecret,
   ROLES,
 } from "../helpers/keys";
 import {
-  createUserContext,
   closeAllContexts,
+  createUserContext,
   type UserContext,
   type UserProfile,
 } from "../fixtures/contexts";
-import { loginWithFreighter, loginMoonlightPay } from "../fixtures/auth";
+import { loginMoonlightPay, loginWithFreighter } from "../fixtures/auth";
 
 const urls: ServiceUrls = getUrls();
 

@@ -10,13 +10,13 @@
  *   - fundAccount: fund a Stellar account via Friendbot
  *   - generateP256PublicKey: generate a random P256 public key for merchant UTXOs
  */
-import { Keypair, authorizeEntry } from "stellar-sdk";
+import { authorizeEntry, Keypair } from "stellar-sdk";
 import { Buffer } from "node:buffer";
 import {
-  masterSeedFromSecret,
   deriveKeypair,
-  ROLES,
   LOCAL_DEV_MASTER_SECRET,
+  masterSeedFromSecret,
+  ROLES,
 } from "../lib/master-seed.ts";
 
 // ─── Master seed key derivation ───────────────────────────────
@@ -66,7 +66,7 @@ export async function fundAccount(
   throw new Error(`Friendbot failed for ${publicKey}`);
 }
 
-export async function payApi(
+export function payApi(
   payApiUrl: string,
   path: string,
   opts: RequestInit = {},
@@ -160,9 +160,41 @@ export function createTestSigner(
 
 function buildPkcs8P256(rawPrivateKey: Uint8Array): ArrayBuffer {
   const header = new Uint8Array([
-    0x30, 0x41, 0x02, 0x01, 0x00, 0x30, 0x13, 0x06, 0x07, 0x2a, 0x86, 0x48,
-    0xce, 0x3d, 0x02, 0x01, 0x06, 0x08, 0x2a, 0x86, 0x48, 0xce, 0x3d, 0x03,
-    0x01, 0x07, 0x04, 0x27, 0x30, 0x25, 0x02, 0x01, 0x01, 0x04, 0x20,
+    0x30,
+    0x41,
+    0x02,
+    0x01,
+    0x00,
+    0x30,
+    0x13,
+    0x06,
+    0x07,
+    0x2a,
+    0x86,
+    0x48,
+    0xce,
+    0x3d,
+    0x02,
+    0x01,
+    0x06,
+    0x08,
+    0x2a,
+    0x86,
+    0x48,
+    0xce,
+    0x3d,
+    0x03,
+    0x01,
+    0x07,
+    0x04,
+    0x27,
+    0x30,
+    0x25,
+    0x02,
+    0x01,
+    0x01,
+    0x04,
+    0x20,
   ]);
   const result = new Uint8Array(header.length + 32);
   result.set(header);
@@ -234,7 +266,8 @@ export async function walletAuth(
   });
   if (!chRes.ok) {
     throw new Error(
-      `Auth challenge failed (${apiBaseUrl}${authPath}): ${chRes.status} ${await chRes.text()}`,
+      `Auth challenge failed (${apiBaseUrl}${authPath}): ${chRes.status} ${await chRes
+        .text()}`,
     );
   }
   const { data: { nonce } } = await chRes.json();
@@ -248,7 +281,8 @@ export async function walletAuth(
   });
   if (!vfRes.ok) {
     throw new Error(
-      `Auth verify failed (${apiBaseUrl}${authPath}): ${vfRes.status} ${await vfRes.text()}`,
+      `Auth verify failed (${apiBaseUrl}${authPath}): ${vfRes.status} ${await vfRes
+        .text()}`,
     );
   }
   const { data: { token } } = await vfRes.json();

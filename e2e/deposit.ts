@@ -1,8 +1,11 @@
 import { Keypair } from "stellar-sdk";
-import { MoonlightOperation, type MoonlightTracer } from "@moonlight/moonlight-sdk";
-import { fromDecimals, type Ed25519PublicKey } from "@colibri/core";
+import {
+  MoonlightOperation,
+  type MoonlightTracer,
+} from "@moonlight/moonlight-sdk";
+import { type Ed25519PublicKey, fromDecimals } from "@colibri/core";
 import type { Config } from "./config.ts";
-import { setupAccount, getLatestLedger } from "./account.ts";
+import { getLatestLedger, setupAccount } from "./account.ts";
 import { submitBundle, waitForBundle } from "./bundle.ts";
 
 const DEPOSIT_FEE = 0.05; // LOW entropy fee
@@ -26,7 +29,10 @@ export async function deposit(
   }
 
   // 2. Create CREATE operation for the reserved UTXO
-  const createOp = MoonlightOperation.create(reserved[0].publicKey, depositAmount);
+  const createOp = MoonlightOperation.create(
+    reserved[0].publicKey,
+    depositAmount,
+  );
 
   // 3. Get expiration
   const ledgerSequence = await getLatestLedger(config.rpcUrl);
