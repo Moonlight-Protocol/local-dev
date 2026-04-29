@@ -21,8 +21,11 @@
  */
 import { StrKey } from "npm:@stellar/stellar-sdk@14.2.0";
 
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
-  "http://localhost:8000/friendbot";
+const DEFAULT_FRIENDBOT_URL = "http://localhost:8000/friendbot";
+
+function getFriendbotUrl(): string {
+  return Deno.env.get("FRIENDBOT_URL") ?? DEFAULT_FRIENDBOT_URL;
+}
 
 export interface FundResult {
   publicKey: string;
@@ -45,7 +48,7 @@ async function fundOne(publicKey: string): Promise<FundResult> {
   }
 
   try {
-    const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
+    const res = await fetch(`${getFriendbotUrl()}?addr=${publicKey}`);
     if (res.status === 200) {
       return { publicKey, status: "FUNDED" };
     }
@@ -117,12 +120,12 @@ async function main() {
     );
     console.log("");
     console.log("Env:");
-    console.log(`  FRIENDBOT_URL  default ${FRIENDBOT_URL}`);
+    console.log(`  FRIENDBOT_URL  default ${DEFAULT_FRIENDBOT_URL}`);
     Deno.exit(args.length === 0 ? 1 : 0);
   }
 
   console.log("\n=== local-dev — Account Funder ===\n");
-  console.log(`  Friendbot: ${FRIENDBOT_URL}`);
+  console.log(`  Friendbot: ${getFriendbotUrl()}`);
   console.log(`  Accounts:  ${args.length}\n`);
 
   const results = await fundAccounts(args);

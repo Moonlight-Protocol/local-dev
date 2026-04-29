@@ -4,3 +4,9 @@ e2e/.env
 node_modules/
 .traces/
 .local-dev-state
+recording/runs/
+recording/test-results/
+recording/playwright/node_modules
+recording/playwright/test-results/
+recording/playwright/dist/
+recording/playwright/playwright-report/
