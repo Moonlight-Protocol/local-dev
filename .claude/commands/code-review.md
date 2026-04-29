@@ -23,7 +23,7 @@ Just list problems. If there are none, say "No issues found."
 - Weak error handling (not failing closed, not parsing responses defensively)
 
 ### Code quality
-- Types that are `unknown` with `as` casts instead of concrete
+- Weak typing where stronger types are available (e.g. in TypeScript: `unknown` with `as` casts instead of concrete types; in other typed languages: equivalent escape hatches)
 - Duplicate type declarations
 - Module-level side effects that crash unhelpfully
 - Missing test coverage (positive, negative, edge cases)
