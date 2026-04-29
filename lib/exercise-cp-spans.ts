@@ -56,9 +56,14 @@ async function getJson(url: string, jwt: string): Promise<Response> {
   });
 }
 
-function ensureOk(res: Response, label: string, body: string): void {
+function logResult(res: Response, label: string, body: string): void {
   if (!res.ok) {
-    throw new Error(`${label} failed: ${res.status} ${body}`);
+    // The goal is to *exercise* cp's withSpan-wrapped handlers so the
+    // cp#28 spans emit. The handler runs (and its span emits) even on
+    // 4xx/5xx — e.g. Escrow.releaseForRecipient legitimately 500s on a
+    // freshly-created council with no on-chain UTXOs to release. Log
+    // the failure and move on; the verifier asserts on span counts.
+    console.log(`    ⚠️  ${label} returned ${res.status}: ${body.slice(0, 200)}`);
   }
 }
 
@@ -87,7 +92,7 @@ export async function exerciseCouncilSpans(
       adminCouncilJwt,
     );
     const text = await res.text();
-    ensureOk(res, "GET /council/channels/:id", text);
+    logResult(res, "GET /council/channels/:id", text);
     console.log("    Channel.queryState: triggered");
   });
 
@@ -99,7 +104,7 @@ export async function exerciseCouncilSpans(
       { councilId, externalId, channelContractId },
     );
     const text = await res.text();
-    ensureOk(res, "POST /council/sign/register", text);
+    logResult(res, "POST /council/sign/register", text);
     console.log("    Custody.registerUser + KeyDerivation.deriveP256Keypair: triggered");
   });
 
@@ -111,7 +116,7 @@ export async function exerciseCouncilSpans(
       { councilId, externalId, channelContractId, indices: [0, 1, 2] },
     );
     const text = await res.text();
-    ensureOk(res, "POST /council/sign/keys", text);
+    logResult(res, "POST /council/sign/keys", text);
     console.log("    Custody.getUserPublicKeys: triggered");
   });
 
@@ -128,7 +133,7 @@ export async function exerciseCouncilSpans(
       },
     );
     const text = await res.text();
-    ensureOk(res, "POST /council/sign/spend", text);
+    logResult(res, "POST /council/sign/spend", text);
     console.log("    KeyDerivation.signWithDerivedKey: triggered");
   });
 
@@ -140,7 +145,7 @@ export async function exerciseCouncilSpans(
       `&councilId=${encodeURIComponent(councilId)}&count=1`;
     const res = await getJson(url, ppCouncilJwt);
     const text = await res.text();
-    ensureOk(res, "GET /council/recipient/:addr/utxos", text);
+    logResult(res, "GET /council/recipient/:addr/utxos", text);
     console.log("    Escrow.getRecipientUtxos: triggered");
   });
 
@@ -159,7 +164,7 @@ export async function exerciseCouncilSpans(
       },
     );
     const text = await res.text();
-    ensureOk(res, "POST /council/escrow", text);
+    logResult(res, "POST /council/escrow", text);
     console.log("    Escrow.create: triggered");
   });
 
@@ -172,7 +177,7 @@ export async function exerciseCouncilSpans(
       ppCouncilJwt,
     );
     const text = await res.text();
-    ensureOk(res, "GET /council/escrow/:addr", text);
+    logResult(res, "GET /council/escrow/:addr", text);
     console.log("    Escrow.getSummary: triggered");
   });
 
@@ -186,7 +191,7 @@ export async function exerciseCouncilSpans(
       { channelContractId },
     );
     const text = await res.text();
-    ensureOk(res, "POST /council/escrow/:addr/release", text);
+    logResult(res, "POST /council/escrow/:addr/release", text);
     console.log("    Escrow.releaseForRecipient: triggered");
   });
 

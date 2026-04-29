@@ -209,9 +209,11 @@ export async function validateNormalizedSpans(
       2,
     );
 
-    // sdk↔cp trace continuity. Driver wraps each cp call in withE2ESpan, so cp
-    // spans should land on traces shared with the SDK service. 8 cp calls →
-    // 8 shared trace IDs expected; floor at 4 (50%) for robustness.
+    // sdk↔cp trace continuity. Under OTEL_DENO=true Deno auto-instruments the
+    // whole driver script, so all withE2ESpan calls inherit a single root
+    // context — sibling cp calls share one trace ID. Floor at 1 (matches the
+    // SDK↔Provider analogue above). The "Council spans with SDK parent" check
+    // below is what actually proves end-to-end traceparent propagation.
     const councilTraceIds = new Set(councilSpans.map((s) => s.traceId));
     const sharedSdkCouncilTraceIds = [...sdkTraceIds].filter((id) =>
       councilTraceIds.has(id)
@@ -219,7 +221,7 @@ export async function validateNormalizedSpans(
     assertMin(
       "Shared trace IDs (SDK ↔ Council)",
       sharedSdkCouncilTraceIds.length,
-      4,
+      1,
     );
 
     const councilWithSdkParent = councilSpans.filter((s) =>
