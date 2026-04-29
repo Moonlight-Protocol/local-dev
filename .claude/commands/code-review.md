@@ -36,7 +36,7 @@ Just list problems. If there are none, say "No issues found."
 
 ### Commit hygiene
 - No `Co-Authored-By` or similar AI-attribution trailers in any commit. If present, list as LOW.
-- Every commit uses a conventional prefix (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `style:`, `test:`). Free-form messages without a prefix should be listed as LOW.
+- Every commit uses a conventional prefix (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `style:`, `test:`, `perf:`, `ci:`, `build:`, `revert:`). Free-form messages without a prefix should be listed as LOW.
 - Commits are atomic (one logical change each) and sequential. Unrelated changes bundled in a single commit should be listed as LOW.
 
 ## Output format
