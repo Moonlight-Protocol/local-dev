@@ -39,24 +39,6 @@ Just list problems. If there are none, say "No issues found."
 - Every commit uses a conventional prefix (`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `style:`, `test:`, `perf:`, `ci:`, `build:`, `revert:`). Free-form messages without a prefix should be listed as LOW.
 - Commits are atomic (one logical change each) and sequential. Unrelated changes bundled in a single commit should be listed as LOW.
 
-## Output format
-
-For each problem:
-1. File and line(s)
-2. What the problem is
-3. Severity: BLOCKING, HIGH, or LOW
-
-### Default severities
-
-When a rule does not specify its own severity, assign as follows:
-- **Security** issues: BLOCKING by default; LOW only if clearly defense-in-depth or unreachable.
-- **Reliability** issues: BLOCKING if data loss or production downtime is plausible; HIGH otherwise.
-- **Code quality** issues: HIGH if it blocks understanding or maintenance; LOW for stylistic concerns.
-- **Architecture** issues: HIGH by default; BLOCKING only when the design flaw makes future change unsafe.
-- **Commit hygiene** issues: LOW (as called out per-rule).
-
-Nothing else. No preamble, no summary, no commentary, no opinions.
-
 ## Project-specific rules
 
 Before reviewing, check whether the project under review (the repo whose root is
@@ -79,6 +61,24 @@ Common capsule names (when present, read these first):
 `.specs/` is typically not versioned (each developer maintains their own
 local capsules). If the repo has no `.specs/` directory, skip this section
 and review against the universal rules only.
+
+## Output format
+
+For each problem:
+1. File and line(s)
+2. What the problem is
+3. Severity: BLOCKING, HIGH, or LOW
+
+### Default severities
+
+When a rule does not specify its own severity, assign as follows:
+- **Security** issues: BLOCKING by default; LOW only if clearly defense-in-depth or unreachable.
+- **Reliability** issues: BLOCKING if data loss or production downtime is plausible; HIGH otherwise.
+- **Code quality** issues: HIGH if it blocks understanding or maintenance; LOW for stylistic concerns.
+- **Architecture** issues: HIGH by default; BLOCKING only when the design flaw makes future change unsafe.
+- **Commit hygiene** issues: LOW (as called out per-rule).
+
+Nothing else. No preamble, no summary, no commentary, no opinions.
 
 ## What to review
 
