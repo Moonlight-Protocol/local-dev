@@ -241,7 +241,7 @@ DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/provider_platform_d
 
 NETWORK=local
 STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
-NETWORK_FEE=1000000000
+NETWORK_FEE=1000000
 
 SERVICE_AUTH_SECRET=local-dev-stable-auth-secret
 CHALLENGE_TTL=900
@@ -302,7 +302,7 @@ DATABASE_URL=postgresql://admin:devpass@localhost:${PG_PORT}/council_platform_db
 
 NETWORK=local
 STELLAR_RPC_URL=http://localhost:${STELLAR_RPC_PORT}/soroban/rpc
-NETWORK_FEE=1000000000
+NETWORK_FEE=1000000
 
 SERVICE_AUTH_SECRET=local-dev-stable-auth-secret
 CHALLENGE_TTL=900
