@@ -52,6 +52,7 @@ import { send } from "../e2e/send.ts";
 import { withdraw } from "../e2e/withdraw.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
+import { assertNotMainnet } from "../lib/assert-not-mainnet.ts";
 
 // ─── Testnet endpoints ────────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "https://soroban-testnet.stellar.org";
@@ -170,6 +171,11 @@ async function pollMembershipActive(
 
 // ─── Main flow ────────────────────────────────────────────────────────
 async function main() {
+  assertNotMainnet({
+    scriptName: "lifecycle/testnet-verify.ts",
+    urls: { COUNCIL_URL, PROVIDER_URL },
+  });
+
   const startTime = Date.now();
 
   console.log("\n=== Moonlight Protocol — Testnet Lifecycle Verification ===\n");
