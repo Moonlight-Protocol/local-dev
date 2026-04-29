@@ -59,9 +59,26 @@ Nothing else. No preamble, no summary, no commentary, no opinions.
 
 ## Project-specific rules
 
-Before reviewing, check if a `.specs/` directory exists in the current project.
-If it does, read the relevant capsules (especially `git-workflow.md` and `env-config.md`)
-and apply any repo-specific rules found there alongside the universal rules above.
+Before reviewing, check whether the project under review (the repo whose root is
+the current working directory) contains a `.specs/` directory at its root.
+
+`.specs/` is an optional, per-project directory of Markdown "capsules" that
+extend the universal rules above with project-specific checks. Each capsule is
+a single `.md` file in `.specs/` whose contents are additional review rules.
+
+If `.specs/` exists, read every `*.md` file inside it and apply its rules
+alongside the universal rules above. Capsule rules should each declare their
+own severity; if a capsule rule omits severity, fall back to the default
+ladder in `## Output format`.
+
+Common capsule names (when present, read these first):
+- `git-workflow.md` — branch, commit, and merge conventions
+- `env-config.md` — environment variables, secrets, deployment config
+- `migrations.md` — database migration rules
+
+`.specs/` is typically not versioned (each developer maintains their own
+local capsules). If the repo has no `.specs/` directory, skip this section
+and review against the universal rules only.
 
 ## What to review
 
