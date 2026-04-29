@@ -16,7 +16,7 @@ Just list problems. If there are none, say "No issues found."
 - Auth flow weaknesses (replay, timing, enumeration attacks)
 
 ### Reliability
-- Data loss on restart (cursor persistence, challenge state)
+- Data loss on restart (in-flight job state, queued work, unflushed buffers)
 - Concurrent execution bugs (overlapping polls, race conditions)
 - Missing pagination handling
 - Database queries that load all rows into memory
