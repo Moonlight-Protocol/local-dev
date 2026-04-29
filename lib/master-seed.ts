@@ -9,7 +9,7 @@
  *
  * See /Users/theahaco/repos/pm-theahaco/key-derivation.md for the full spec.
  */
-import { Keypair } from "stellar-sdk";
+import { Keypair } from "npm:@stellar/stellar-sdk@^15.0.1";
 import { Buffer } from "node:buffer";
 
 const encoder = new TextEncoder();
