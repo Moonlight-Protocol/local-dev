@@ -32,7 +32,7 @@ Just list problems. If there are none, say "No issues found."
 ### Architecture
 - Implicit middleware ordering
 - Singletons that aren't testable or resettable
-- Event sourcing bugs (state not recoverable from events)
+- Event sourcing bugs (state not recoverable from events) — only when the project uses event sourcing
 
 ### Commit hygiene
 - No `Co-Authored-By` or similar AI-attribution trailers in any commit. If present, list as LOW.
