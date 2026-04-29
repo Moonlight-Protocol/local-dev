@@ -82,6 +82,12 @@ and review against the universal rules only.
 
 ## What to review
 
+This command reviews the project whose checkout is the current working
+directory. Run it from the root of the repo under review — not from
+`local-dev` or any other shared toolbox checkout. To use this baseline in
+another repo, copy `.claude/commands/code-review.md` into that repo's
+`.claude/commands/` so it is picked up by Claude Code there.
+
 First, ensure the local `main` branch is up to date:
 ```
 git fetch origin main
