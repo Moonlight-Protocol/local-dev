@@ -11,7 +11,9 @@ async function queryServices(): Promise<string[]> {
 }
 
 async function queryTraces(service: string, limit = 20) {
-  const res = await fetch(`${JAEGER_QUERY_URL}/api/traces?service=${service}&limit=${limit}`);
+  const res = await fetch(
+    `${JAEGER_QUERY_URL}/api/traces?service=${service}&limit=${limit}`,
+  );
   const body = await res.json();
   return body.data ?? [];
 }
@@ -37,21 +39,41 @@ const services = await queryServices();
 console.log("  Registered services:", services.join(", "));
 
 check("pay-platform service registered", services.includes("pay-platform"));
-check("provider-platform service registered", services.includes("provider-platform"));
-check("council-platform service registered", services.includes("council-platform"));
+check(
+  "provider-platform service registered",
+  services.includes("provider-platform"),
+);
+check(
+  "council-platform service registered",
+  services.includes("council-platform"),
+);
 
 if (services.includes("pay-platform")) {
   console.log("\n  Pay-platform:");
   const traces = await queryTraces("pay-platform");
-  const spanCount = traces.reduce((n: number, t: { spans: unknown[] }) => n + t.spans.length, 0);
-  check("Pay-platform has traces", traces.length > 0, `${traces.length} traces, ${spanCount} spans`);
+  const spanCount = traces.reduce(
+    (n: number, t: { spans: unknown[] }) => n + t.spans.length,
+    0,
+  );
+  check(
+    "Pay-platform has traces",
+    traces.length > 0,
+    `${traces.length} traces, ${spanCount} spans`,
+  );
 }
 
 if (services.includes("provider-platform")) {
   console.log("\n  Provider-platform:");
   const traces = await queryTraces("provider-platform");
-  const spanCount = traces.reduce((n: number, t: { spans: unknown[] }) => n + t.spans.length, 0);
-  check("Provider-platform has traces", traces.length > 0, `${traces.length} traces, ${spanCount} spans`);
+  const spanCount = traces.reduce(
+    (n: number, t: { spans: unknown[] }) => n + t.spans.length,
+    0,
+  );
+  check(
+    "Provider-platform has traces",
+    traces.length > 0,
+    `${traces.length} traces, ${spanCount} spans`,
+  );
 }
 
 console.log(`\n  Results: ${passed} passed, ${failed} failed`);

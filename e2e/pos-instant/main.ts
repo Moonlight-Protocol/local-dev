@@ -21,7 +21,8 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
     environment: "test",
     stellarNetwork: "standalone",
     payPlatformUrl: PAY_URL,
-    rpcUrl: Deno.env.get("STELLAR_RPC_URL") ?? "http://stellar:8000/soroban/rpc",
+    rpcUrl: Deno.env.get("STELLAR_RPC_URL") ??
+      "http://stellar:8000/soroban/rpc",
   },
 };
 
@@ -52,7 +53,8 @@ const elapsed = () => `${((Date.now() - startTime) / 1000).toFixed(1)}s`;
 
 console.log("\n=== POS Instant Payment E2E Test ===\n");
 
-const { channelAuthId, privacyChannelId, assetId, councilUrl } = loadContractsEnv();
+const { channelAuthId, privacyChannelId, assetId, councilUrl } =
+  loadContractsEnv();
 const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? councilUrl;
 const COUNCIL_API = Deno.env.get("COUNCIL_API") ?? `${COUNCIL_URL}/api/v1`;
 console.log(`  Channel Auth:    ${channelAuthId}`);
@@ -82,7 +84,11 @@ console.log(`  Funded (${elapsed()})`);
 
 // [2] Create merchant on pay-platform + store UTXOs
 console.log("\n[2/5] Creating merchant account + UTXOs...");
-const merchantJwt = await getPayJwt(PAY_API, merchant.publicKey(), merchant.secret());
+const merchantJwt = await getPayJwt(
+  PAY_API,
+  merchant.publicKey(),
+  merchant.secret(),
+);
 const createRes = await payApi(PAY_API, "/account", {
   method: "POST",
   headers: { Authorization: `Bearer ${merchantJwt}` },
@@ -93,7 +99,9 @@ const createRes = await payApi(PAY_API, "/account", {
   }),
 });
 if (createRes.status !== 201 && createRes.status !== 200) {
-  throw new Error(`Create merchant failed: ${createRes.status} ${await createRes.text()}`);
+  throw new Error(
+    `Create merchant failed: ${createRes.status} ${await createRes.text()}`,
+  );
 }
 
 const utxoPayloads = [];
@@ -110,7 +118,9 @@ const utxoRes = await payApi(PAY_API, "/utxo/receive", {
   body: JSON.stringify({ utxos: utxoPayloads }),
 });
 if (utxoRes.status !== 201 && utxoRes.status !== 200) {
-  throw new Error(`Store UTXOs failed: ${utxoRes.status} ${await utxoRes.text()}`);
+  throw new Error(
+    `Store UTXOs failed: ${utxoRes.status} ${await utxoRes.text()}`,
+  );
 }
 // Register OpEx account for the merchant (instant flow requires this)
 const opexKeypair = Keypair.random();
@@ -124,38 +134,65 @@ const opexRes = await payApi(PAY_API, "/account/opex", {
     feePct: 1,
   }),
 });
-if (!opexRes.ok) throw new Error(`OpEx registration failed: ${opexRes.status} ${await opexRes.text()}`);
-console.log(`  Merchant + ${utxoPayloads.length} UTXOs + OpEx created (${elapsed()})`);
+if (!opexRes.ok) {
+  throw new Error(
+    `OpEx registration failed: ${opexRes.status} ${await opexRes.text()}`,
+  );
+}
+console.log(
+  `  Merchant + ${utxoPayloads.length} UTXOs + OpEx created (${elapsed()})`,
+);
 
 // [3] Seed council via council-platform + pay-platform (production-like flow)
 console.log("\n[3/5] Seeding council config...");
 
 // 3a. Admin authenticates to council-platform
 const councilAdminJwt = await walletAuth(
-  COUNCIL_API, "/admin/auth",
-  keys.admin.publicKey(), keys.admin.secret(),
+  COUNCIL_API,
+  "/admin/auth",
+  keys.admin.publicKey(),
+  keys.admin.secret(),
 );
 
 // 3b. Create council metadata on council-platform
 const metaRes = await fetch(`${COUNCIL_API}/council/metadata`, {
   method: "PUT",
-  headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${councilAdminJwt}`,
+  },
   body: JSON.stringify({ councilId: channelAuthId, name: "Test Council" }),
 });
-if (!metaRes.ok) throw new Error(`Council metadata failed: ${metaRes.status} ${await metaRes.text()}`);
+if (!metaRes.ok) {
+  throw new Error(
+    `Council metadata failed: ${metaRes.status} ${await metaRes.text()}`,
+  );
+}
 
 // 3c. Add jurisdictions + channel
 for (const code of ["US", "GB", "DE"]) {
-  await fetch(`${COUNCIL_API}/council/jurisdictions?councilId=${channelAuthId}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
-    body: JSON.stringify({ countryCode: code, label: code }),
-  });
+  await fetch(
+    `${COUNCIL_API}/council/jurisdictions?councilId=${channelAuthId}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${councilAdminJwt}`,
+      },
+      body: JSON.stringify({ countryCode: code, label: code }),
+    },
+  );
 }
 await fetch(`${COUNCIL_API}/council/channels?councilId=${channelAuthId}`, {
   method: "POST",
-  headers: { "Content-Type": "application/json", Authorization: `Bearer ${councilAdminJwt}` },
-  body: JSON.stringify({ channelContractId: privacyChannelId, assetCode: "XLM" }),
+  headers: {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${councilAdminJwt}`,
+  },
+  body: JSON.stringify({
+    channelContractId: privacyChannelId,
+    assetCode: "XLM",
+  }),
 });
 
 // 3d. PP submits join request with providerUrl (council stores it for discovery)
@@ -170,18 +207,33 @@ const joinRes = await fetch(`${COUNCIL_API}/public/provider/join-request`, {
     providerUrl: PROVIDER_URL,
   }),
 });
-if (!joinRes.ok) throw new Error(`Join request failed: ${joinRes.status} ${await joinRes.text()}`);
+if (!joinRes.ok) {
+  throw new Error(
+    `Join request failed: ${joinRes.status} ${await joinRes.text()}`,
+  );
+}
 const { data: joinData } = await joinRes.json();
 
 // 3e. Admin approves → council-platform creates provider record with service_url
-const approveRes = await fetch(`${COUNCIL_API}/council/provider-requests/${joinData.id}/approve`, {
-  method: "POST",
-  headers: { Authorization: `Bearer ${councilAdminJwt}` },
-});
-if (!approveRes.ok) throw new Error(`Approve failed: ${approveRes.status} ${await approveRes.text()}`);
+const approveRes = await fetch(
+  `${COUNCIL_API}/council/provider-requests/${joinData.id}/approve`,
+  {
+    method: "POST",
+    headers: { Authorization: `Bearer ${councilAdminJwt}` },
+  },
+);
+if (!approveRes.ok) {
+  throw new Error(
+    `Approve failed: ${approveRes.status} ${await approveRes.text()}`,
+  );
+}
 
 // 3f. Create council on pay-platform (councilUrl tells it where to fetch PP data)
-const payAdminJwt = await getPayJwt(PAY_API, keys.payAdmin.publicKey(), keys.payAdmin.secret());
+const payAdminJwt = await getPayJwt(
+  PAY_API,
+  keys.payAdmin.publicKey(),
+  keys.payAdmin.secret(),
+);
 const councilRes = await payApi(PAY_API, "/admin/councils", {
   method: "POST",
   headers: { Authorization: `Bearer ${payAdminJwt}` },
@@ -190,13 +242,25 @@ const councilRes = await payApi(PAY_API, "/admin/councils", {
     channelAuthId,
     councilUrl: COUNCIL_URL,
     networkPassphrase: NETWORK_PASSPHRASE,
-    channels: [{ assetCode: "XLM", assetContractId: assetId, privacyChannelId }],
+    channels: [{
+      assetCode: "XLM",
+      assetContractId: assetId,
+      privacyChannelId,
+    }],
     jurisdictions: ["US", "GB", "DE"],
-    providers: [{ publicKey: keys.pp.publicKey(), label: "Test PP", providerUrl: PROVIDER_URL }],
+    providers: [{
+      publicKey: keys.pp.publicKey(),
+      label: "Test PP",
+      providerUrl: PROVIDER_URL,
+    }],
     active: true,
   }),
 });
-if (!councilRes.ok) throw new Error(`Council failed: ${councilRes.status} ${await councilRes.text()}`);
+if (!councilRes.ok) {
+  throw new Error(
+    `Council failed: ${councilRes.status} ${await councilRes.text()}`,
+  );
+}
 console.log(`  Council seeded (${elapsed()})`);
 
 // [4] Execute instant payment via the actual moonlight-pay function
@@ -219,7 +283,9 @@ console.log("\n[5/5] Verifying merchant balance...");
 const balanceRes = await payApi(PAY_API, "/transactions/balance", {
   headers: { Authorization: `Bearer ${merchantJwt}` },
 });
-if (!balanceRes.ok) throw new Error(`Balance check failed: ${balanceRes.status}`);
+if (!balanceRes.ok) {
+  throw new Error(`Balance check failed: ${balanceRes.status}`);
+}
 const { data: balance } = await balanceRes.json();
 console.log(`  Merchant balance: ${balance.balanceXlm} XLM`);
 // With 1% fee, merchant receives 99% of the payment
@@ -227,7 +293,9 @@ const expectedMin = PAYMENT_STROOPS * 99n / 100n;
 if (BigInt(balance.balanceStroops) >= expectedMin) {
   console.log("  ✅ Merchant received funds");
 } else {
-  throw new Error(`Expected balance >= ${expectedMin}, got ${balance.balanceStroops}`);
+  throw new Error(
+    `Expected balance >= ${expectedMin}, got ${balance.balanceStroops}`,
+  );
 }
 
 console.log(`\n✅ POS instant payment test passed in ${elapsed()}`);

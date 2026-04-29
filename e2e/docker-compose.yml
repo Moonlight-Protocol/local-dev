@@ -2,13 +2,16 @@ services:
   jaeger:
     image: jaegertracing/jaeger:latest
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC
-      - "4318:4318"     # OTLP HTTP
+      - "16686:16686" # Jaeger UI
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
+      test: [
+        "CMD-SHELL",
+        "wget -qO- http://localhost:16686/api/services || exit 1",
+      ]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -104,18 +107,18 @@ services:
       - sh
       - -c
       - |
-        cp /src/*.ts /src/deno.json . && cp /src/deno.lock . 2>/dev/null || true
-        deno install
-        echo "Waiting for provider..."
-        for i in $(seq 1 60); do
-          if deno eval "try { await fetch('$$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
-            echo "Provider is ready."
-            break
-          fi
-          if [ "$$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
-          sleep 2
-        done
-        deno run --allow-all main.ts
+          cp /src/*.ts /src/deno.json . && cp /src/deno.lock . 2>/dev/null || true
+          deno install
+          echo "Waiting for provider..."
+          for i in $(seq 1 60); do
+            if deno eval "try { await fetch('$$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+              echo "Provider is ready."
+              break
+            fi
+            if [ "$$i" -eq 60 ]; then echo "Provider not ready after 60s"; exit 1; fi
+            sleep 2
+          done
+          deno run --allow-all main.ts
 
 volumes:
   shared-config:

@@ -40,7 +40,8 @@ if (!COUNCIL_SERVICE_NAME) {
   Deno.exit(1);
 }
 
-const TRACE_IDS_PATH = new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH =
+  new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
 
 const result = await verifyOtelTraces({
   tempoUrl: TEMPO_URL,

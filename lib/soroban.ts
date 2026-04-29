@@ -1,4 +1,9 @@
-import { Keypair, TransactionBuilder, rpc, xdr } from "npm:@stellar/stellar-sdk@14.2.0";
+import {
+  Keypair,
+  rpc,
+  TransactionBuilder,
+  xdr,
+} from "npm:@stellar/stellar-sdk@14.2.0";
 
 const FEE = "10000000"; // 1 XLM — generous for Soroban operations
 

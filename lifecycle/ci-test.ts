@@ -23,7 +23,7 @@
  */
 import { Keypair } from "stellar-sdk";
 import { Buffer } from "node:buffer";
-import { NetworkConfig, type ContractId } from "@colibri/core";
+import { type ContractId, NetworkConfig } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
 import type { Config } from "../e2e/config.ts";
 import { createServer } from "../lib/soroban.ts";
@@ -73,14 +73,20 @@ async function fundAccount(publicKey: string): Promise<void> {
  * Wallet auth: challenge → sign → verify → JWT.
  * Used for both council-platform admin auth and provider-platform dashboard auth.
  */
-async function walletAuth(baseUrl: string, route: string, keypair: Keypair): Promise<string> {
+async function walletAuth(
+  baseUrl: string,
+  route: string,
+  keypair: Keypair,
+): Promise<string> {
   const challengeRes = await fetch(`${baseUrl}${route}/challenge`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ publicKey: keypair.publicKey() }),
   });
   if (!challengeRes.ok) {
-    throw new Error(`Challenge failed for ${baseUrl}${route}: ${challengeRes.status}`);
+    throw new Error(
+      `Challenge failed for ${baseUrl}${route}: ${challengeRes.status}`,
+    );
   }
   const { data: { nonce } } = await challengeRes.json();
 
@@ -94,7 +100,9 @@ async function walletAuth(baseUrl: string, route: string, keypair: Keypair): Pro
     body: JSON.stringify({ nonce, signature, publicKey: keypair.publicKey() }),
   });
   if (!verifyRes.ok) {
-    throw new Error(`Verify failed for ${baseUrl}${route}: ${verifyRes.status}`);
+    throw new Error(
+      `Verify failed for ${baseUrl}${route}: ${verifyRes.status}`,
+    );
   }
   const { data: { token } } = await verifyRes.json();
   return token;
@@ -115,7 +123,9 @@ async function signJoinEnvelope<T>(payload: T, keypair: Keypair): Promise<{
   const hash = new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)),
   );
-  const signature = Buffer.from(keypair.sign(Buffer.from(hash))).toString("base64");
+  const signature = Buffer.from(keypair.sign(Buffer.from(hash))).toString(
+    "base64",
+  );
   return {
     payload,
     signature,
@@ -132,7 +142,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${encodeURIComponent(ppPublicKey)}`,
+      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+        encodeURIComponent(ppPublicKey)
+      }`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -142,7 +154,9 @@ async function pollMembershipActive(
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error(
-    `Membership for ${ppPublicKey} did not become ACTIVE after ${maxAttempts * intervalMs}ms`,
+    `Membership for ${ppPublicKey} did not become ACTIVE after ${
+      maxAttempts * intervalMs
+    }ms`,
   );
 }
 
@@ -194,7 +208,11 @@ async function main() {
 
   // ─── Step 2: Admin authenticates to council-platform ────────────────────
   console.log("\n[2/11] Admin authenticates to council-platform");
-  const adminCouncilJwt = await walletAuth(COUNCIL_URL, "/api/v1/admin/auth", admin);
+  const adminCouncilJwt = await walletAuth(
+    COUNCIL_URL,
+    "/api/v1/admin/auth",
+    admin,
+  );
   console.log("  Admin JWT acquired");
 
   // ─── Step 3: Admin creates the council ─────────────────────────────────
@@ -214,14 +232,18 @@ async function main() {
   });
   if (!createRes.ok) {
     const body = await createRes.json().catch(() => ({}));
-    throw new Error(`Create council failed: ${createRes.status} ${JSON.stringify(body)}`);
+    throw new Error(
+      `Create council failed: ${createRes.status} ${JSON.stringify(body)}`,
+    );
   }
   console.log("  Council created");
 
   // ─── Step 4: Admin adds the channel ────────────────────────────────────
   console.log("\n[4/11] Admin adds the channel");
   const addChannelRes = await fetch(
-    `${COUNCIL_URL}/api/v1/council/channels?councilId=${encodeURIComponent(channelAuthId)}`,
+    `${COUNCIL_URL}/api/v1/council/channels?councilId=${
+      encodeURIComponent(channelAuthId)
+    }`,
     {
       method: "POST",
       headers: {
@@ -238,13 +260,21 @@ async function main() {
   );
   if (!addChannelRes.ok) {
     const body = await addChannelRes.json().catch(() => ({}));
-    throw new Error(`Add channel failed: ${addChannelRes.status} ${JSON.stringify(body)}`);
+    throw new Error(
+      `Add channel failed: ${addChannelRes.status} ${JSON.stringify(body)}`,
+    );
   }
   console.log("  Channel added");
 
   // ─── Step 5: PP operator authenticates to provider-platform dashboard ──
-  console.log("\n[5/11] PP operator authenticates to provider-platform dashboard");
-  const dashboardJwt = await walletAuth(PROVIDER_URL, "/api/v1/dashboard/auth", ppOperator);
+  console.log(
+    "\n[5/11] PP operator authenticates to provider-platform dashboard",
+  );
+  const dashboardJwt = await walletAuth(
+    PROVIDER_URL,
+    "/api/v1/dashboard/auth",
+    ppOperator,
+  );
   console.log("  Dashboard JWT acquired");
 
   // ─── Step 6: PP operator registers the PP ──────────────────────────────
@@ -268,7 +298,9 @@ async function main() {
   });
   if (!regRes.ok) {
     const body = await regRes.json().catch(() => ({}));
-    throw new Error(`PP register failed: ${regRes.status} ${body.message || ""}`);
+    throw new Error(
+      `PP register failed: ${regRes.status} ${body.message || ""}`,
+    );
   }
   console.log(`  PP registered: ${ppKeypair.publicKey()}`);
 
@@ -300,15 +332,21 @@ async function main() {
   });
   if (!joinRes.ok) {
     const body = await joinRes.json().catch(() => ({}));
-    throw new Error(`Join request failed: ${joinRes.status} ${JSON.stringify(body)}`);
+    throw new Error(
+      `Join request failed: ${joinRes.status} ${JSON.stringify(body)}`,
+    );
   }
   const joinBody = await joinRes.json();
-  console.log(`  Join request submitted: ${joinBody.data?.joinRequestId} (PENDING)`);
+  console.log(
+    `  Join request submitted: ${joinBody.data?.joinRequestId} (PENDING)`,
+  );
 
   // ─── Step 8: Admin lists and approves the join request ─────────────────
   console.log("\n[8/11] Admin approves the join request");
   const listRes = await fetch(
-    `${COUNCIL_URL}/api/v1/council/provider-requests?councilId=${encodeURIComponent(channelAuthId)}`,
+    `${COUNCIL_URL}/api/v1/council/provider-requests?councilId=${
+      encodeURIComponent(channelAuthId)
+    }`,
     { headers: { "Authorization": `Bearer ${adminCouncilJwt}` } },
   );
   if (!listRes.ok) {
@@ -333,7 +371,9 @@ async function main() {
   );
   if (!approveRes.ok) {
     const body = await approveRes.json().catch(() => ({}));
-    throw new Error(`Approve failed: ${approveRes.status} ${JSON.stringify(body)}`);
+    throw new Error(
+      `Approve failed: ${approveRes.status} ${JSON.stringify(body)}`,
+    );
   }
   console.log("  Join request approved (DB updated)");
 
@@ -364,7 +404,9 @@ async function main() {
   console.log("  Membership ACTIVE");
 
   // ─── Step 11: Run the bundle flow (deposit/send/withdraw) ──────────────
-  console.log(`\n[11/11] Bundle flow (deposit ${DEPOSIT_AMOUNT}, send ${SEND_AMOUNT}, withdraw ${WITHDRAW_AMOUNT})`);
+  console.log(
+    `\n[11/11] Bundle flow (deposit ${DEPOSIT_AMOUNT}, send ${SEND_AMOUNT}, withdraw ${WITHDRAW_AMOUNT})`,
+  );
   const alice = Keypair.random();
   const bob = Keypair.random();
   console.log(`  Alice: ${alice.publicKey()}`);
@@ -381,7 +423,11 @@ async function main() {
 
   const bobJwt = await authenticate(bob, e2eConfig);
   console.log("  Bob authenticated");
-  const receiverOps = await prepareReceive(bob.secret(), SEND_AMOUNT, e2eConfig);
+  const receiverOps = await prepareReceive(
+    bob.secret(),
+    SEND_AMOUNT,
+    e2eConfig,
+  );
   await send(alice.secret(), receiverOps, SEND_AMOUNT, aliceJwt, e2eConfig);
   console.log(`  Send ${SEND_AMOUNT} XLM complete`);
 

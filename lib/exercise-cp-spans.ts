@@ -88,7 +88,9 @@ export async function exerciseCouncilSpans(
   // 1. Channel.queryState — admin-only handler
   await withE2ESpan("e2e.cp.get_channel", async () => {
     const res = await getJson(
-      `${councilUrl}/api/v1/council/channels/${encodeURIComponent(channelDbId)}`,
+      `${councilUrl}/api/v1/council/channels/${
+        encodeURIComponent(channelDbId)
+      }`,
       adminCouncilJwt,
     );
     const text = await res.text();
@@ -105,7 +107,9 @@ export async function exerciseCouncilSpans(
     );
     const text = await res.text();
     logResult(res, "POST /council/sign/register", text);
-    console.log("    Custody.registerUser + KeyDerivation.deriveP256Keypair: triggered");
+    console.log(
+      "    Custody.registerUser + KeyDerivation.deriveP256Keypair: triggered",
+    );
   });
 
   // 3. Custody.getUserPublicKeys (covers KeyDerivation.deriveP256Keypair via cache miss path)
@@ -139,9 +143,10 @@ export async function exerciseCouncilSpans(
 
   // 5. Escrow.getRecipientUtxos
   await withE2ESpan("e2e.cp.recipient_utxos", async () => {
-    const url = `${councilUrl}/api/v1/council/recipient/${
-      encodeURIComponent(recipientAddress)
-    }/utxos?channelContractId=${encodeURIComponent(channelContractId)}` +
+    const url =
+      `${councilUrl}/api/v1/council/recipient/${
+        encodeURIComponent(recipientAddress)
+      }/utxos?channelContractId=${encodeURIComponent(channelContractId)}` +
       `&councilId=${encodeURIComponent(councilId)}&count=1`;
     const res = await getJson(url, ppCouncilJwt);
     const text = await res.text();

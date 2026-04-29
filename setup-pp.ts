@@ -50,8 +50,10 @@ import { createServer } from "./lib/soroban.ts";
 import { addProvider } from "./lib/admin.ts";
 import { extractEvents, verifyEvent } from "./lib/events.ts";
 
-const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "http://localhost:8000/soroban/rpc";
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
+const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ??
+  "http://localhost:8000/soroban/rpc";
+const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
+  "http://localhost:8000/friendbot";
 const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
   "Standalone Network ; February 2017";
 const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "http://localhost:3010";
@@ -98,7 +100,14 @@ async function loadState(): Promise<State> {
     if (eqIdx === -1) continue;
     env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
   }
-  const required = ["ADMIN_SK", "ADMIN_PK", "COUNCIL_ID", "CHANNEL_ID", "ASSET_ID", "COUNCIL_URL"];
+  const required = [
+    "ADMIN_SK",
+    "ADMIN_PK",
+    "COUNCIL_ID",
+    "CHANNEL_ID",
+    "ASSET_ID",
+    "COUNCIL_URL",
+  ];
   for (const key of required) {
     if (!env[key]) {
       throw new Error(
@@ -153,7 +162,8 @@ async function walletAuth(
   });
   if (!challengeRes.ok) {
     throw new Error(
-      `Auth challenge failed (${baseUrl}${authRoute}): ${challengeRes.status} ${await challengeRes.text()}`,
+      `Auth challenge failed (${baseUrl}${authRoute}): ${challengeRes.status} ${await challengeRes
+        .text()}`,
     );
   }
   const { data: { nonce } } = await challengeRes.json();
@@ -169,7 +179,8 @@ async function walletAuth(
   });
   if (!verifyRes.ok) {
     throw new Error(
-      `Auth verify failed (${baseUrl}${authRoute}): ${verifyRes.status} ${await verifyRes.text()}`,
+      `Auth verify failed (${baseUrl}${authRoute}): ${verifyRes.status} ${await verifyRes
+        .text()}`,
     );
   }
   const { data: { token } } = await verifyRes.json();
@@ -180,13 +191,17 @@ async function walletAuth(
 async function signJoinEnvelope<T>(
   payload: T,
   keypair: Keypair,
-): Promise<{ payload: T; signature: string; publicKey: string; timestamp: number }> {
+): Promise<
+  { payload: T; signature: string; publicKey: string; timestamp: number }
+> {
   const timestamp = Date.now();
   const canonical = JSON.stringify({ payload, timestamp });
   const hash = new Uint8Array(
     await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical)),
   );
-  const signature = Buffer.from(keypair.sign(Buffer.from(hash))).toString("base64");
+  const signature = Buffer.from(keypair.sign(Buffer.from(hash))).toString(
+    "base64",
+  );
   return {
     payload,
     signature,
@@ -204,7 +219,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${encodeURIComponent(ppPublicKey)}`,
+      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+        encodeURIComponent(ppPublicKey)
+      }`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -214,7 +231,9 @@ async function pollMembershipActive(
     await new Promise((r) => setTimeout(r, intervalMs));
   }
   throw new Error(
-    `Membership for ${ppPublicKey} did not become ACTIVE after ${maxAttempts * intervalMs}ms. ` +
+    `Membership for ${ppPublicKey} did not become ACTIVE after ${
+      maxAttempts * intervalMs
+    }ms. ` +
       `Check provider-platform's event watcher logs.`,
   );
 }
@@ -246,7 +265,9 @@ async function main() {
   await fundAccount(ppOperator.publicKey());
   console.log("  PP Operator funded");
 
-  console.log("\n[4/10] PP operator authenticates to provider-platform dashboard");
+  console.log(
+    "\n[4/10] PP operator authenticates to provider-platform dashboard",
+  );
   const dashboardJwt = await walletAuth(
     PROVIDER_URL,
     "/api/v1/dashboard/auth",
@@ -311,7 +332,9 @@ async function main() {
     );
   }
   const joinBody = await joinRes.json();
-  console.log(`  Join request submitted: ${joinBody.data?.joinRequestId} (PENDING)`);
+  console.log(
+    `  Join request submitted: ${joinBody.data?.joinRequestId} (PENDING)`,
+  );
 
   console.log("\n[7/10] Admin authenticates to council-platform");
   const adminJwt = await walletAuth(
@@ -323,7 +346,9 @@ async function main() {
 
   console.log("\n[8/10] Admin approves the join request");
   const listRes = await fetch(
-    `${state.COUNCIL_URL}/api/v1/council/provider-requests?councilId=${encodeURIComponent(state.COUNCIL_ID)}`,
+    `${state.COUNCIL_URL}/api/v1/council/provider-requests?councilId=${
+      encodeURIComponent(state.COUNCIL_ID)
+    }`,
     { headers: { "Authorization": `Bearer ${adminJwt}` } },
   );
   if (!listRes.ok) {
@@ -386,7 +411,9 @@ async function main() {
   console.log(`  Channel ID:    ${state.CHANNEL_ID}`);
   console.log(`  Provider URL:  ${PROVIDER_URL}`);
   console.log("");
-  console.log("The browser-wallet (or any client) can now authenticate against the");
+  console.log(
+    "The browser-wallet (or any client) can now authenticate against the",
+  );
   console.log("provider and submit bundles targeting the privacy channel.");
   console.log("");
 }

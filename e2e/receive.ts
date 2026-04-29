@@ -1,4 +1,7 @@
-import { MoonlightOperation, type MoonlightTracer } from "@moonlight/moonlight-sdk";
+import {
+  MoonlightOperation,
+  type MoonlightTracer,
+} from "@moonlight/moonlight-sdk";
 import { fromDecimals } from "@colibri/core";
 import type { Config } from "./config.ts";
 import { setupAccount } from "./account.ts";
@@ -19,7 +22,10 @@ export async function prepareReceive(
   }
 
   // 2. Create CREATE operation
-  const createOp = MoonlightOperation.create(reserved[0].publicKey, amountBigInt);
+  const createOp = MoonlightOperation.create(
+    reserved[0].publicKey,
+    amountBigInt,
+  );
 
   // 3. Return MLXDR (no submission — shared out-of-band with sender)
   return [createOp.toMLXDR()];

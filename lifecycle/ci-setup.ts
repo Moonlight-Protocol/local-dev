@@ -76,9 +76,14 @@ async function main() {
 
   // Step 1: Deploy Council (Channel Auth)
   console.log("[ci-setup] Deploying Channel Auth...");
-  const channelAuthWasm = await Deno.readFile("/wasms/channel_auth_contract.wasm");
+  const channelAuthWasm = await Deno.readFile(
+    "/wasms/channel_auth_contract.wasm",
+  );
   const channelAuthHash = await uploadWasm(
-    server, admin, NETWORK_PASSPHRASE, channelAuthWasm,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthWasm,
   );
   const { contractId: channelAuthId, txResponse: authDeployTx } =
     await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash);
@@ -90,16 +95,25 @@ async function main() {
   // Step 2: Deploy Channel (Privacy Channel)
   console.log("[ci-setup] Deploying SAC + Privacy Channel...");
   const assetContractId = await getOrDeployNativeSac(
-    server, admin, NETWORK_PASSPHRASE,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
   );
 
   const privacyChannelWasm = await Deno.readFile("/wasms/privacy_channel.wasm");
   const privacyChannelHash = await uploadWasm(
-    server, admin, NETWORK_PASSPHRASE, privacyChannelWasm,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelWasm,
   );
   const channelContractId = await deployPrivacyChannel(
-    server, admin, NETWORK_PASSPHRASE,
-    privacyChannelHash, channelAuthId, assetContractId,
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelHash,
+    channelAuthId,
+    assetContractId,
   );
 
   // Write provider.env (boot-only env vars for provider-platform).

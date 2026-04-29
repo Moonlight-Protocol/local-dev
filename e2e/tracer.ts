@@ -1,13 +1,16 @@
-import { trace, SpanStatusCode } from "@opentelemetry/api";
-import type { MoonlightTracer, MoonlightSpan } from "@moonlight/moonlight-sdk";
+import { SpanStatusCode, trace } from "@opentelemetry/api";
+import type { MoonlightSpan, MoonlightTracer } from "@moonlight/moonlight-sdk";
 
 const otelTracer = trace.getTracer("moonlight-e2e");
 const collectedTraceIds = new Set<string>();
 const e2eStartTimeUs = Date.now() * 1000; // microseconds for Jaeger API
 
-const TRACE_IDS_PATH = new URL("./e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH =
+  new URL("./e2e-trace-ids.json", import.meta.url).pathname;
 
-function wrapOtelSpan(otelSpan: ReturnType<typeof otelTracer.startSpan>): MoonlightSpan {
+function wrapOtelSpan(
+  otelSpan: ReturnType<typeof otelTracer.startSpan>,
+): MoonlightSpan {
   return {
     addEvent(event, attrs) {
       otelSpan.addEvent(event, attrs);
@@ -15,7 +18,9 @@ function wrapOtelSpan(otelSpan: ReturnType<typeof otelTracer.startSpan>): Moonli
     setError(error) {
       const message = error instanceof Error ? error.message : String(error);
       otelSpan.setStatus({ code: SpanStatusCode.ERROR, message });
-      otelSpan.recordException(error instanceof Error ? error : new Error(message));
+      otelSpan.recordException(
+        error instanceof Error ? error : new Error(message),
+      );
     },
     end() {
       otelSpan.end();
@@ -39,7 +44,7 @@ export const sdkTracer: MoonlightTracer = {
  * Wraps an async e2e flow step in an active OTel span.
  * Any fetch() calls inside the callback will carry W3C traceparent headers.
  */
-export async function withE2ESpan<T>(
+export function withE2ESpan<T>(
   name: string,
   fn: () => Promise<T>,
 ): Promise<T> {

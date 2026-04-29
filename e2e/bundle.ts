@@ -1,7 +1,7 @@
 import type { Config } from "./config.ts";
 import { withE2ESpan } from "./tracer.ts";
 
-export async function submitBundle(
+export function submitBundle(
   jwt: string,
   operationsMLXDR: string[],
   config: Config,
@@ -17,7 +17,10 @@ export async function submitBundle(
           "Content-Type": "application/json",
           "Authorization": `Bearer ${jwt}`,
         },
-        body: JSON.stringify({ operationsMLXDR, channelContractId: config.channelContractId }),
+        body: JSON.stringify({
+          operationsMLXDR,
+          channelContractId: config.channelContractId,
+        }),
       });
 
       if (res.status === 429) {
@@ -36,11 +39,13 @@ export async function submitBundle(
       return data.data.operationsBundleId;
     }
 
-    throw new Error(`Bundle submission failed: rate limited after ${maxRetries} retries`);
+    throw new Error(
+      `Bundle submission failed: rate limited after ${maxRetries} retries`,
+    );
   });
 }
 
-export async function waitForBundle(
+export function waitForBundle(
   jwt: string,
   bundleId: string,
   config: Config,

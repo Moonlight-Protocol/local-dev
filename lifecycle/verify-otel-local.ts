@@ -29,7 +29,8 @@ if (!SDK_SERVICE_NAME) {
 }
 const COUNCIL_SERVICE_NAME = Deno.env.get("COUNCIL_SERVICE_NAME");
 
-const TRACE_IDS_PATH = new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH =
+  new URL("../e2e/e2e-trace-ids.json", import.meta.url).pathname;
 
 const result = await verifyOtelTracesLocal({
   jaegerUrl: JAEGER_URL,

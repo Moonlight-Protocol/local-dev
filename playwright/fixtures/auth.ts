@@ -9,8 +9,12 @@
  *
  * These helpers encapsulate the two-step wallet auth flow.
  */
-import { type BrowserContext, type Page, expect } from "@playwright/test";
-import { withWalletApproval, approveNextPopup, SEL_APPROVE_BUTTON } from "./freighter";
+import { type BrowserContext, expect, type Page } from "@playwright/test";
+import {
+  approveNextPopup,
+  SEL_APPROVE_BUTTON,
+  withWalletApproval,
+} from "./freighter";
 
 /**
  * Connect Freighter wallet on a login page.
@@ -39,16 +43,19 @@ export async function connectWallet(
   // shadow DOM automatically with text selectors.
   await withWalletApproval(context, page, async () => {
     // Try multiple approaches to find the Freighter option in the modal
-    const freighterOption = page.locator('text=Freighter').first();
-    if (await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    const freighterOption = page.locator("text=Freighter").first();
+    if (
+      await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
+    ) {
       await freighterOption.click();
     } else {
       // Fallback: look inside the web component's shadow DOM
       await page.evaluate(() => {
         const modal = document.querySelector("stellar-wallets-modal");
         if (modal?.shadowRoot) {
-          const btn = modal.shadowRoot.querySelector('[data-wallet-id]') as HTMLElement
-            ?? modal.shadowRoot.querySelector("button") as HTMLElement;
+          const btn =
+            modal.shadowRoot.querySelector("[data-wallet-id]") as HTMLElement ??
+              modal.shadowRoot.querySelector("button") as HTMLElement;
           btn?.click();
         }
       });
@@ -144,15 +151,16 @@ export async function loginMoonlightPay(
   // Listen for popup 1 (connection) before clicking Freighter
   const popup1Promise = context.waitForEvent("page", { timeout: 30_000 });
 
-  const freighterOption = page.locator('text=Freighter').first();
+  const freighterOption = page.locator("text=Freighter").first();
   if (await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)) {
     await freighterOption.click();
   } else {
     await page.evaluate(() => {
       const modal = document.querySelector("stellar-wallets-modal");
       if (modal?.shadowRoot) {
-        const btn = modal.shadowRoot.querySelector('[data-wallet-id]') as HTMLElement
-          ?? modal.shadowRoot.querySelector("button") as HTMLElement;
+        const btn =
+          modal.shadowRoot.querySelector("[data-wallet-id]") as HTMLElement ??
+            modal.shadowRoot.querySelector("button") as HTMLElement;
         btn?.click();
       }
     });

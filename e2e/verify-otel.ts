@@ -25,11 +25,14 @@
  */
 
 const JAEGER_URL = Deno.env.get("JAEGER_QUERY_URL") ?? "http://localhost:16686";
-const TRACE_POLL_TIMEOUT_MS = Number(Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "15000");
+const TRACE_POLL_TIMEOUT_MS = Number(
+  Deno.env.get("TRACE_POLL_TIMEOUT_MS") ?? "15000",
+);
 const PROVIDER_SERVICE = "provider-platform";
 const SDK_SERVICE = "moonlight-e2e";
 
-const TRACE_IDS_PATH = new URL("./e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH =
+  new URL("./e2e-trace-ids.json", import.meta.url).pathname;
 
 interface E2ETraceData {
   traceIds: string[];
@@ -101,7 +104,9 @@ async function fetchTraceById(
       }
     } else if (res.status !== 404) {
       const body = await res.text().catch(() => "(could not read body)");
-      console.error(`  Jaeger returned HTTP ${res.status} for trace ${traceId}: ${body}`);
+      console.error(
+        `  Jaeger returned HTTP ${res.status} for trace ${traceId}: ${body}`,
+      );
     }
 
     await new Promise((r) => setTimeout(r, intervalMs));
@@ -167,7 +172,11 @@ async function main() {
   console.log("\n[2/5] Loading trace data from E2E run...");
   const traceData = loadTraceData();
   console.log(`  Trace IDs: ${traceData.traceIds.length}`);
-  console.log(`  Time window: ${new Date(traceData.startTimeUs / 1000).toISOString()} → ${new Date(traceData.endTimeUs / 1000).toISOString()}`);
+  console.log(
+    `  Time window: ${new Date(traceData.startTimeUs / 1000).toISOString()} → ${
+      new Date(traceData.endTimeUs / 1000).toISOString()
+    }`,
+  );
 
   // 3. Fetch E2E traces by ID (SDK + distributed tracing checks)
   console.log("\n[3/5] Fetching E2E traces by ID...");
@@ -181,7 +190,9 @@ async function main() {
       console.error(`  ⚠️  Trace ${id} not found in Jaeger`);
     }
   }
-  console.log(`  Fetched ${e2eTraces.length}/${traceData.traceIds.length} traces`);
+  console.log(
+    `  Fetched ${e2eTraces.length}/${traceData.traceIds.length} traces`,
+  );
 
   // Split E2E spans by service
   const e2eSdkSpans: JaegerSpan[] = [];
@@ -225,14 +236,23 @@ async function main() {
   // 5. Validate
   console.log(`\n[5/5] Validating traces...`);
   console.log(`  SDK spans (from E2E traces): ${e2eSdkSpans.length}`);
-  console.log(`  Provider HTTP spans (from E2E traces): ${e2eProviderHttpSpans.length}`);
-  console.log(`  Provider app spans (from time window): ${providerAppSpans.length}`);
+  console.log(
+    `  Provider HTTP spans (from E2E traces): ${e2eProviderHttpSpans.length}`,
+  );
+  console.log(
+    `  Provider app spans (from time window): ${providerAppSpans.length}`,
+  );
 
   let passed = 0;
   let failed = 0;
 
-  function findByPrefix(spans: JaegerSpan[], ...prefixes: string[]): JaegerSpan[] {
-    return spans.filter((s) => prefixes.some((p) => s.operationName.startsWith(p)));
+  function findByPrefix(
+    spans: JaegerSpan[],
+    ...prefixes: string[]
+  ): JaegerSpan[] {
+    return spans.filter((s) =>
+      prefixes.some((p) => s.operationName.startsWith(p))
+    );
   }
 
   function findByName(spans: JaegerSpan[], ...names: string[]): JaegerSpan[] {
@@ -257,19 +277,30 @@ async function main() {
 
   // Function-level spans (withSpan instrumentation)
   const functionSpans = findByPrefix(
-    allProviderSpans, "P_", "Executor.", "Verifier.", "Mempool.", "Bundle.",
+    allProviderSpans,
+    "P_",
+    "Executor.",
+    "Verifier.",
+    "Mempool.",
+    "Bundle.",
   );
   assertMin("Function-level spans", functionSpans, 20);
 
   // Auth challenge creation: 2 users authenticate
   const challengeCreateSpans = findByName(
-    allProviderSpans, "P_CreateChallenge", "P_CreateChallengeDB", "P_CreateChallengeMemory",
+    allProviderSpans,
+    "P_CreateChallenge",
+    "P_CreateChallengeDB",
+    "P_CreateChallengeMemory",
   );
   assertMin("Auth challenge create spans", challengeCreateSpans, 4);
 
   // Auth challenge verify: 2 users verify
   const challengeVerifySpans = findByName(
-    allProviderSpans, "P_VerifyChallenge", "P_CompareChallenge", "P_GenerateChallengeJWT",
+    allProviderSpans,
+    "P_VerifyChallenge",
+    "P_CompareChallenge",
+    "P_GenerateChallengeJWT",
   );
   assertMin("Auth challenge verify spans", challengeVerifySpans, 4);
 
@@ -290,7 +321,12 @@ async function main() {
   assertMin("HTTP spans (Deno auto-instrumented)", httpSpans, 5);
 
   // Background service spans
-  const backgroundSpans = findByPrefix(allProviderSpans, "Executor.", "Verifier.", "Mempool.");
+  const backgroundSpans = findByPrefix(
+    allProviderSpans,
+    "Executor.",
+    "Verifier.",
+    "Mempool.",
+  );
   assertMin("Background service spans", backgroundSpans, 6);
 
   // =====================================================================
@@ -322,12 +358,19 @@ async function main() {
 
   // Auth E2E spans: 2 users × 3 spans = 6
   const authE2eSpans = findByName(
-    e2eSdkSpans, "auth.get_challenge", "auth.sign_challenge", "auth.verify_challenge",
+    e2eSdkSpans,
+    "auth.get_challenge",
+    "auth.sign_challenge",
+    "auth.verify_challenge",
   );
   assertMin("Auth E2E spans (auth.*)", authE2eSpans, 6);
 
   // Bundle E2E spans: 3 bundles × 2 spans = 6
-  const bundleE2eSpans = findByName(e2eSdkSpans, "bundle.submit", "bundle.wait");
+  const bundleE2eSpans = findByName(
+    e2eSdkSpans,
+    "bundle.submit",
+    "bundle.wait",
+  );
   assertMin("Bundle E2E spans (bundle.*)", bundleE2eSpans, 6);
 
   // PrivacyChannel spans
@@ -339,12 +382,19 @@ async function main() {
   assertMin("UtxoBasedAccount spans", accountSpans, 8);
 
   // MoonlightTransactionBuilder spans (not used in current E2E flow — informational only)
-  const txBuilderSpans = findByPrefix(e2eSdkSpans, "MoonlightTransactionBuilder.");
+  const txBuilderSpans = findByPrefix(
+    e2eSdkSpans,
+    "MoonlightTransactionBuilder.",
+  );
   if (txBuilderSpans.length > 0) {
-    console.log(`  ✅ MoonlightTransactionBuilder spans: ${txBuilderSpans.length}`);
+    console.log(
+      `  ✅ MoonlightTransactionBuilder spans: ${txBuilderSpans.length}`,
+    );
     passed++;
   } else {
-    console.log(`  ⏭️  MoonlightTransactionBuilder spans: 0 (not exercised in E2E flow)`);
+    console.log(
+      `  ⏭️  MoonlightTransactionBuilder spans: 0 (not exercised in E2E flow)`,
+    );
   }
 
   // SDK spans with events
@@ -359,17 +409,27 @@ async function main() {
 
   const providerTraceIds = new Set(e2eProviderHttpSpans.map((s) => s.traceID));
   const sdkTraceIds = new Set(e2eSdkSpans.map((s) => s.traceID));
-  const sharedTraceIds = [...sdkTraceIds].filter((id) => providerTraceIds.has(id));
+  const sharedTraceIds = [...sdkTraceIds].filter((id) =>
+    providerTraceIds.has(id)
+  );
 
   // 5 of 7 E2E steps hit the provider (fund_accounts → friendbot, prepare_receive → local only)
   if (sharedTraceIds.length >= 5) {
     console.log(`  ✅ Shared trace IDs: ${sharedTraceIds.length} (>= 5)`);
     passed++;
   } else {
-    console.log(`  ❌ Shared trace IDs: ${sharedTraceIds.length} (expected >= 5)`);
+    console.log(
+      `  ❌ Shared trace IDs: ${sharedTraceIds.length} (expected >= 5)`,
+    );
     if (sdkTraceIds.size > 0 && providerTraceIds.size > 0) {
-      console.log(`     SDK trace IDs: ${[...sdkTraceIds].slice(0, 3).join(", ")}`);
-      console.log(`     Provider trace IDs: ${[...providerTraceIds].slice(0, 3).join(", ")}`);
+      console.log(
+        `     SDK trace IDs: ${[...sdkTraceIds].slice(0, 3).join(", ")}`,
+      );
+      console.log(
+        `     Provider trace IDs: ${
+          [...providerTraceIds].slice(0, 3).join(", ")
+        }`,
+      );
     }
     failed++;
   }
@@ -383,7 +443,11 @@ async function main() {
       )
     );
     if (providerWithSdkParent.length > 0) {
-      assertMin("Provider HTTP spans with SDK parent (CHILD_OF)", providerWithSdkParent, 5);
+      assertMin(
+        "Provider HTTP spans with SDK parent (CHILD_OF)",
+        providerWithSdkParent,
+        5,
+      );
     } else {
       const allSharedSpans = [...e2eProviderHttpSpans, ...e2eSdkSpans].filter(
         (s) => sharedTraceIds.includes(s.traceID),
@@ -391,11 +455,13 @@ async function main() {
       const allSpanIds = new Set(allSharedSpans.map((s) => s.spanID));
       const providerWithAnyParent = e2eProviderHttpSpans.filter((s) =>
         s.references.some((ref) =>
-          ref.refType === "CHILD_OF" && allSpanIds.has(ref.spanID),
-        ),
+          ref.refType === "CHILD_OF" && allSpanIds.has(ref.spanID)
+        )
       );
       if (providerWithAnyParent.length > 0) {
-        console.log(`  ✅ Provider spans linked via trace hierarchy: ${providerWithAnyParent.length}`);
+        console.log(
+          `  ✅ Provider spans linked via trace hierarchy: ${providerWithAnyParent.length}`,
+        );
         passed++;
       } else {
         console.log(`  ⚠️  Shared trace IDs found but no parent-child refs`);

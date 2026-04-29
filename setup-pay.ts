@@ -40,12 +40,16 @@ import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 const PAY_ADMIN_PK = Deno.env.get("PAY_ADMIN_PK");
 const PAY_ADMIN_SK = Deno.env.get("PAY_ADMIN_SK");
 if (!PAY_ADMIN_PK || !PAY_ADMIN_SK) {
-  throw new Error("PAY_ADMIN_PK and PAY_ADMIN_SK must be set (via setup-pay.sh wrapper)");
+  throw new Error(
+    "PAY_ADMIN_PK and PAY_ADMIN_SK must be set (via setup-pay.sh wrapper)",
+  );
 }
 
-const PAY_PLATFORM_URL = Deno.env.get("PAY_PLATFORM_URL") ?? "http://localhost:3025";
+const PAY_PLATFORM_URL = Deno.env.get("PAY_PLATFORM_URL") ??
+  "http://localhost:3025";
 const PAY_API = `${PAY_PLATFORM_URL}/api/v1`;
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
+const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
+  "http://localhost:8000/friendbot";
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;
 
@@ -76,10 +80,20 @@ async function loadState(): Promise<State> {
     if (eqIdx === -1) continue;
     env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
   }
-  const required = ["COUNCIL_ID", "CHANNEL_ID", "ASSET_ID", "NETWORK_PASSPHRASE", "COUNCIL_URL", "PP_PK", "PROVIDER_URL"];
+  const required = [
+    "COUNCIL_ID",
+    "CHANNEL_ID",
+    "ASSET_ID",
+    "NETWORK_PASSPHRASE",
+    "COUNCIL_URL",
+    "PP_PK",
+    "PROVIDER_URL",
+  ];
   for (const key of required) {
     if (!env[key]) {
-      throw new Error(`State file missing ${key}. Run setup-c.sh and setup-pp.sh first.`);
+      throw new Error(
+        `State file missing ${key}. Run setup-c.sh and setup-pp.sh first.`,
+      );
     }
   }
   return env as unknown as State;
@@ -114,7 +128,8 @@ async function walletAuth(keypair: Keypair): Promise<string> {
   });
   if (!challengeRes.ok) {
     throw new Error(
-      `Auth challenge failed: ${challengeRes.status} ${await challengeRes.text()}`,
+      `Auth challenge failed: ${challengeRes.status} ${await challengeRes
+        .text()}`,
     );
   }
   const { data: { nonce } } = await challengeRes.json();
@@ -213,7 +228,9 @@ async function main() {
   console.log(`  Council Auth:   ${state.COUNCIL_ID}`);
   console.log(`  Council URL:    ${state.COUNCIL_URL}`);
   console.log(`  PP public key:  ${state.PP_PK} (from council-platform)`);
-  console.log(`  Provider URL:   ${state.PROVIDER_URL} (from council-platform)`);
+  console.log(
+    `  Provider URL:   ${state.PROVIDER_URL} (from council-platform)`,
+  );
   if (payServicePk) {
     console.log(`  Service key:    ${payServicePk}`);
   }

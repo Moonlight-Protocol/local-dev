@@ -18,7 +18,8 @@ async function fundAccount(
   const res = await fetch(`${friendbotUrl}?addr=${publicKey}`);
   if (!res.ok) {
     throw new Error(
-      `Friendbot funding failed for ${publicKey}: ${res.status} ${await res.text()}`,
+      `Friendbot funding failed for ${publicKey}: ${res.status} ${await res
+        .text()}`,
     );
   }
 }
@@ -51,36 +52,49 @@ async function main() {
 
   // Step 3: Authenticate Alice
   console.log("\n[3/8] Authenticating Alice with provider...");
-  const aliceJwt = await withE2ESpan("e2e.authenticate_alice", () =>
-    authenticate(alice, config)
+  const aliceJwt = await withE2ESpan(
+    "e2e.authenticate_alice",
+    () => authenticate(alice, config),
   );
   console.log(`  Alice authenticated`);
 
   // Step 4: Authenticate Bob
   console.log("\n[4/8] Authenticating Bob with provider...");
-  const bobJwt = await withE2ESpan("e2e.authenticate_bob", () =>
-    authenticate(bob, config)
+  const bobJwt = await withE2ESpan(
+    "e2e.authenticate_bob",
+    () => authenticate(bob, config),
   );
   console.log(`  Bob authenticated`);
 
   // Step 5: Alice deposits into channel
   console.log(`\n[5/8] Alice depositing ${DEPOSIT_AMOUNT} XLM into channel...`);
-  await withE2ESpan("e2e.deposit", () =>
-    deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, config, sdkTracer)
+  await withE2ESpan(
+    "e2e.deposit",
+    () => deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, config, sdkTracer),
   );
   console.log(`  Deposit complete`);
 
   // Step 6: Bob prepares to receive
   console.log(`\n[6/8] Bob preparing to receive ${SEND_AMOUNT} XLM...`);
-  const receiverOps = await withE2ESpan("e2e.prepare_receive", () =>
-    prepareReceive(bob.secret(), SEND_AMOUNT, config, sdkTracer)
+  const receiverOps = await withE2ESpan(
+    "e2e.prepare_receive",
+    () => prepareReceive(bob.secret(), SEND_AMOUNT, config, sdkTracer),
   );
   console.log(`  Receive prepared (${receiverOps.length} CREATE ops)`);
 
   // Step 7: Alice sends to Bob
   console.log(`\n[7/8] Alice sending ${SEND_AMOUNT} XLM to Bob...`);
-  await withE2ESpan("e2e.send", () =>
-    send(alice.secret(), receiverOps, SEND_AMOUNT, aliceJwt, config, sdkTracer)
+  await withE2ESpan(
+    "e2e.send",
+    () =>
+      send(
+        alice.secret(),
+        receiverOps,
+        SEND_AMOUNT,
+        aliceJwt,
+        config,
+        sdkTracer,
+      ),
   );
   console.log(`  Send complete`);
 
@@ -88,8 +102,17 @@ async function main() {
   console.log(
     `\n[8/8] Bob withdrawing ${WITHDRAW_AMOUNT} XLM to ${bob.publicKey()}...`,
   );
-  await withE2ESpan("e2e.withdraw", () =>
-    withdraw(bob.secret(), bob.publicKey(), WITHDRAW_AMOUNT, bobJwt, config, sdkTracer)
+  await withE2ESpan(
+    "e2e.withdraw",
+    () =>
+      withdraw(
+        bob.secret(),
+        bob.publicKey(),
+        WITHDRAW_AMOUNT,
+        bobJwt,
+        config,
+        sdkTracer,
+      ),
   );
   console.log(`  Withdraw complete`);
 

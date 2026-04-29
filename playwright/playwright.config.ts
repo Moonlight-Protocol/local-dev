@@ -1,8 +1,7 @@
 import { defineConfig } from "@playwright/test";
 import path from "path";
 
-const extensionPath =
-  process.env.FREIGHTER_EXTENSION_PATH ||
+const extensionPath = process.env.FREIGHTER_EXTENSION_PATH ||
   path.join(__dirname, "freighter-extension");
 
 export default defineConfig({

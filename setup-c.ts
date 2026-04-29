@@ -49,8 +49,10 @@ import {
 } from "./lib/deploy.ts";
 import { extractEvents, verifyEvent } from "./lib/events.ts";
 
-const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ?? "http://localhost:8000/soroban/rpc";
-const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ?? "http://localhost:8000/friendbot";
+const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ??
+  "http://localhost:8000/soroban/rpc";
+const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
+  "http://localhost:8000/friendbot";
 const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
   "Standalone Network ; February 2017";
 const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015";
@@ -119,14 +121,18 @@ async function warmupCouncil(): Promise<void> {
 
 /** SEP-43/53 wallet auth: challenge → sign → verify → JWT. */
 async function walletAuth(keypair: Keypair): Promise<string> {
-  const challengeRes = await fetch(`${COUNCIL_URL}/api/v1/admin/auth/challenge`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ publicKey: keypair.publicKey() }),
-  });
+  const challengeRes = await fetch(
+    `${COUNCIL_URL}/api/v1/admin/auth/challenge`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ publicKey: keypair.publicKey() }),
+    },
+  );
   if (!challengeRes.ok) {
     throw new Error(
-      `Council auth challenge failed: ${challengeRes.status} ${await challengeRes.text()}`,
+      `Council auth challenge failed: ${challengeRes.status} ${await challengeRes
+        .text()}`,
     );
   }
   const { data: { nonce } } = await challengeRes.json();
@@ -144,7 +150,8 @@ async function walletAuth(keypair: Keypair): Promise<string> {
   });
   if (!verifyRes.ok) {
     throw new Error(
-      `Council auth verify failed: ${verifyRes.status} ${await verifyRes.text()}`,
+      `Council auth verify failed: ${verifyRes.status} ${await verifyRes
+        .text()}`,
     );
   }
   const { data: { token } } = await verifyRes.json();
@@ -187,23 +194,45 @@ async function main() {
   console.log("\n[3/8] Deploy Channel Auth contract");
   const server = createServer(RPC_URL, true);
   const channelAuthWasm = await Deno.readFile(CHANNEL_AUTH_WASM);
-  const channelAuthHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, channelAuthWasm);
+  const channelAuthHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthWasm,
+  );
   // Fixed salt → deterministic contract ID across runs.
   const channelAuthSalt = hexToFixedBuffer(CHANNEL_AUTH_SALT_HEX);
   const { contractId: channelAuthId, txResponse: authDeployTx } =
-    await deployChannelAuth(server, admin, NETWORK_PASSPHRASE, channelAuthHash, channelAuthSalt);
-  if (verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found) {
+    await deployChannelAuth(
+      server,
+      admin,
+      NETWORK_PASSPHRASE,
+      channelAuthHash,
+      channelAuthSalt,
+    );
+  if (
+    verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found
+  ) {
     console.log("  contract_initialized event verified");
   }
   console.log(`  Channel Auth: ${channelAuthId}`);
 
   console.log("\n[4/8] Deploy native XLM SAC");
-  const assetContractId = await getOrDeployNativeSac(server, admin, NETWORK_PASSPHRASE);
+  const assetContractId = await getOrDeployNativeSac(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+  );
   console.log(`  XLM SAC: ${assetContractId}`);
 
   console.log("\n[5/8] Deploy Privacy Channel contract");
   const privacyChannelWasm = await Deno.readFile(PRIVACY_CHANNEL_WASM);
-  const privacyChannelHash = await uploadWasm(server, admin, NETWORK_PASSPHRASE, privacyChannelWasm);
+  const privacyChannelHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelWasm,
+  );
   // Fixed salt → deterministic contract ID across runs.
   const privacyChannelSalt = hexToFixedBuffer(PRIVACY_CHANNEL_SALT_HEX);
   const channelContractId = await deployPrivacyChannel(
@@ -243,7 +272,9 @@ async function main() {
   console.log(`  Council created: ${channelAuthId}`);
 
   const addChannelRes = await fetch(
-    `${COUNCIL_URL}/api/v1/council/channels?councilId=${encodeURIComponent(channelAuthId)}`,
+    `${COUNCIL_URL}/api/v1/council/channels?councilId=${
+      encodeURIComponent(channelAuthId)
+    }`,
     {
       method: "POST",
       headers: {
@@ -260,7 +291,8 @@ async function main() {
   );
   if (!addChannelRes.ok) {
     throw new Error(
-      `Add channel failed: ${addChannelRes.status} ${await addChannelRes.text()}`,
+      `Add channel failed: ${addChannelRes.status} ${await addChannelRes
+        .text()}`,
     );
   }
   console.log(`  Channel added: ${channelContractId} (XLM)`);
@@ -286,7 +318,9 @@ async function main() {
   console.log(`  Privacy Channel: ${channelContractId}`);
   console.log(`  XLM SAC:         ${assetContractId}`);
   console.log("");
-  console.log("Next: ./setup-pp.sh to register a privacy provider in this council.");
+  console.log(
+    "Next: ./setup-pp.sh to register a privacy provider in this council.",
+  );
   console.log("");
 }
 

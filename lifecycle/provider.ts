@@ -52,10 +52,16 @@ export async function startStellar(): Promise<{
 }> {
   console.log("  Starting Stellar node...");
   await ensureContainer(STELLAR_CONTAINER, [
-    "run", "-d", "--name", STELLAR_CONTAINER,
-    "-p", `${STELLAR_PORT}:8000`,
+    "run",
+    "-d",
+    "--name",
+    STELLAR_CONTAINER,
+    "-p",
+    `${STELLAR_PORT}:8000`,
     "stellar/quickstart:latest",
-    "--local", "--limits", "unlimited",
+    "--local",
+    "--limits",
+    "unlimited",
   ]);
 
   // Wait for RPC health
@@ -67,7 +73,9 @@ export async function startStellar(): Promise<{
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          jsonrpc: "2.0", id: 1, method: "getHealth",
+          jsonrpc: "2.0",
+          id: 1,
+          method: "getHealth",
         }),
       });
       const data = await res.json();
@@ -120,25 +128,44 @@ export async function startProvider(
   // PostgreSQL
   console.log("  Starting PostgreSQL...");
   await ensureContainer(PG_CONTAINER, [
-    "run", "-d", "--name", PG_CONTAINER,
-    "-p", `${PG_PORT}:5432`,
-    "-e", `POSTGRES_USER=${PG_USER}`,
-    "-e", `POSTGRES_PASSWORD=${PG_PASS}`,
-    "-e", `POSTGRES_DB=${PG_DB}`,
+    "run",
+    "-d",
+    "--name",
+    PG_CONTAINER,
+    "-p",
+    `${PG_PORT}:5432`,
+    "-e",
+    `POSTGRES_USER=${PG_USER}`,
+    "-e",
+    `POSTGRES_PASSWORD=${PG_PASS}`,
+    "-e",
+    `POSTGRES_DB=${PG_DB}`,
     "postgres:18",
   ]);
   console.log("  Waiting for PostgreSQL...");
   for (let i = 0; i < 30; i++) {
     const ready = await docker([
-      "exec", PG_CONTAINER, "pg_isready", "-U", PG_USER,
+      "exec",
+      PG_CONTAINER,
+      "pg_isready",
+      "-U",
+      PG_USER,
     ]);
-    if (ready.success) { console.log("  PostgreSQL ready"); break; }
+    if (ready.success) {
+      console.log("  PostgreSQL ready");
+      break;
+    }
     if (i === 29) throw new Error("PostgreSQL did not become ready");
     await sleep(1000);
   }
 
   // Write .env (backup existing)
-  const envBackup = await backupAndWriteEnv(opts, providerPlatformPath, databaseUrl, rpcUrl);
+  const envBackup = await backupAndWriteEnv(
+    opts,
+    providerPlatformPath,
+    databaseUrl,
+    rpcUrl,
+  );
 
   // Install deps + migrations
   await run("deno", ["install"], providerPlatformPath, "install deps");
@@ -161,14 +188,28 @@ export async function startProvider(
 
   const logPath = new URL("./provider.log", import.meta.url).pathname;
   const logFile = await Deno.open(logPath, {
-    write: true, create: true, truncate: true,
+    write: true,
+    create: true,
+    truncate: true,
   });
   const logWriter = logFile.writable.getWriter();
   child.stdout
-    .pipeTo(new WritableStream({ write(chunk) { return logWriter.write(chunk); } }))
+    .pipeTo(
+      new WritableStream({
+        write(chunk) {
+          return logWriter.write(chunk);
+        },
+      }),
+    )
     .catch(() => {});
   child.stderr
-    .pipeTo(new WritableStream({ write(chunk) { return logWriter.write(chunk); } }))
+    .pipeTo(
+      new WritableStream({
+        write(chunk) {
+          return logWriter.write(chunk);
+        },
+      }),
+    )
     .catch(() => {});
 
   const providerUrl = `http://localhost:${PROVIDER_PORT}`;
@@ -178,9 +219,15 @@ export async function startProvider(
   return {
     providerUrl,
     async stopProvider() {
-      try { child.kill("SIGTERM"); } catch { /* dead */ }
-      try { await child.status; } catch { /* ignore */ }
-      try { logWriter.close(); } catch { /* ignore */ }
+      try {
+        child.kill("SIGTERM");
+      } catch { /* dead */ }
+      try {
+        await child.status;
+      } catch { /* ignore */ }
+      try {
+        logWriter.close();
+      } catch { /* ignore */ }
       await restoreEnv(providerPlatformPath, envBackup);
       await removeContainer(PG_CONTAINER);
     },
@@ -194,7 +241,11 @@ async function ensureContainer(
   runArgs: string[],
 ): Promise<void> {
   const check = await docker([
-    "ps", "--filter", `name=^${name}$`, "--format", "{{.Names}}",
+    "ps",
+    "--filter",
+    `name=^${name}$`,
+    "--format",
+    "{{.Names}}",
   ]);
   if (decode(check.stdout).trim() === name) {
     console.log(`  ${name} already running`);
@@ -211,9 +262,11 @@ async function removeContainer(name: string): Promise<void> {
   await docker(["rm", "-f", name]);
 }
 
-async function docker(args: string[]): Promise<Deno.CommandOutput> {
+function docker(args: string[]): Promise<Deno.CommandOutput> {
   return new Deno.Command("docker", {
-    args, stdout: "piped", stderr: "piped",
+    args,
+    stdout: "piped",
+    stderr: "piped",
   }).output();
 }
 
@@ -232,7 +285,10 @@ async function run(
   label: string,
 ): Promise<void> {
   const result = await new Deno.Command(cmd, {
-    args, cwd, stdout: "piped", stderr: "piped",
+    args,
+    cwd,
+    stdout: "piped",
+    stderr: "piped",
   }).output();
   if (!result.success) {
     throw new Error(`${label} failed:\n${decode(result.stderr)}`);
@@ -269,7 +325,8 @@ async function backupAndWriteEnv(
     await Deno.writeTextFile(backupPath, existing);
   } catch { /* no existing .env */ }
 
-  const content = `# Generated by lifecycle E2E test — will be restored after test
+  const content =
+    `# Generated by lifecycle E2E test — will be restored after test
 PORT=${PROVIDER_PORT}
 MODE=development
 LOG_LEVEL=WARN
@@ -316,6 +373,8 @@ async function restoreEnv(
       await Deno.remove(backupPath);
     } catch { /* best effort */ }
   } else {
-    try { await Deno.remove(envPath); } catch { /* ignore */ }
+    try {
+      await Deno.remove(envPath);
+    } catch { /* ignore */ }
   }
 }
