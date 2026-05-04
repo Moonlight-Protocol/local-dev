@@ -1,0 +1,158 @@
+{
+  "panels": [
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "id": 1,
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "query": "{resource.service.name=\"provider-platform${network}\"} | rate()",
+          "queryType": "traceqlmetrics"
+        }
+      ],
+      "title": "Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "query": "{resource.service.name=\"provider-platform${network}\"} | quantile_over_time(duration, 0.5, 0.9, 0.99)",
+          "queryType": "traceqlmetrics"
+        }
+      ],
+      "title": "Request Latency (p50, p90, p99)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "query": "{resource.service.name=\"provider-platform${network}\" && status=error} | rate()",
+          "queryType": "traceqlmetrics"
+        }
+      ],
+      "title": "Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "tempo",
+        "uid": "grafanacloud-traces"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 16
+      },
+      "id": 4,
+      "targets": [
+        {
+          "datasource": {
+            "type": "tempo",
+            "uid": "grafanacloud-traces"
+          },
+          "limit": 20,
+          "query": "{resource.service.name=\"provider-platform${network}\"}",
+          "queryType": "traceql"
+        }
+      ],
+      "title": "Recent Traces",
+      "type": "table"
+    }
+  ],
+  "schemaVersion": 39,
+  "tags": [
+    "moonlight",
+    "provider"
+  ],
+  "templating": {
+    "list": [
+      {
+        "allValue": null,
+        "current": {
+          "selected": true,
+          "text": "testnet",
+          "value": "-testnet"
+        },
+        "datasource": null,
+        "description": "Service-name suffix selector. local emits unsuffixed names; testnet/mainnet emit <service>-<network>.",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Network",
+        "multi": false,
+        "name": "network",
+        "options": [
+          {
+            "selected": false,
+            "text": "local",
+            "value": ""
+          },
+          {
+            "selected": true,
+            "text": "testnet",
+            "value": "-testnet"
+          },
+          {
+            "selected": false,
+            "text": "mainnet",
+            "value": "-mainnet"
+          }
+        ],
+        "query": "local : ,testnet : -testnet,mainnet : -mainnet",
+        "refresh": 0,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "tagValuesQuery": "",
+        "tagsQuery": "",
+        "type": "custom",
+        "useTags": false
+      }
+    ]
+  },
+  "timezone": "browser",
+  "title": "Moonlight Provider Dashboard",
+  "uid": "provider-dashboard"
+}
