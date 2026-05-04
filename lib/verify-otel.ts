@@ -12,20 +12,44 @@ import {
   validateNormalizedSpans,
 } from "./verify-otel-validate.ts";
 
+export type NetworkName = "testnet" | "mainnet" | "local";
+
+export const VALID_NETWORKS: readonly NetworkName[] = [
+  "testnet",
+  "mainnet",
+  "local",
+];
+
+/**
+ * Map a network to the expected service.name values for each platform.
+ *
+ * Deployed apps emit `<service>-<network>` (e.g. provider-platform-testnet).
+ * Local docker-compose emits unsuffixed names. The SDK driver always emits
+ * `moonlight-e2e` regardless of network — it's a client, not a service.
+ */
+export function serviceNamesFor(
+  network: NetworkName,
+): { provider: string; council: string; sdk: string } {
+  if (network === "local") {
+    return {
+      provider: "provider-platform",
+      council: "council-platform",
+      sdk: "moonlight-e2e",
+    };
+  }
+  return {
+    provider: `provider-platform-${network}`,
+    council: `council-platform-${network}`,
+    sdk: "moonlight-e2e",
+  };
+}
+
 export interface VerifyOtelConfig {
   tempoUrl: string;
   tempoAuth: string;
   traceIdsPath: string;
   pollTimeoutMs?: number;
-  providerServiceName: string;
-  sdkServiceName: string;
-  /**
-   * council-platform service.name. When set, the verifier asserts cp#28 spans
-   * (Channel/Custody/KeyDerivation/Escrow) are present and trace-linked to the
-   * SDK driver. Set this for flows that drive cp; leave undefined otherwise to
-   * preserve previous behavior.
-   */
-  councilServiceName?: string;
+  network: NetworkName;
 }
 
 export interface VerifyOtelResult {
@@ -183,12 +207,11 @@ export async function verifyOtelTraces(
     tempoAuth,
     traceIdsPath,
     pollTimeoutMs = 30000,
-    providerServiceName,
-    sdkServiceName,
-    councilServiceName,
+    network,
   } = config;
-  const PROVIDER_SERVICE = providerServiceName;
-  const SDK_SERVICE = sdkServiceName;
+  const names = serviceNamesFor(network);
+  const PROVIDER_SERVICE = names.provider;
+  const SDK_SERVICE = names.sdk;
 
   console.log(
     "\n[OTEL] Verifying OpenTelemetry traces in Grafana Cloud Tempo\n",
@@ -244,7 +267,7 @@ export async function verifyOtelTraces(
     allSpans,
     providerService: PROVIDER_SERVICE,
     sdkService: SDK_SERVICE,
-    councilService: councilServiceName,
+    councilService: names.council,
     traceData,
     searchBackgroundTraces: async (prefixes, startUs, endUs, minExpected) => {
       const startS = Math.floor(startUs / 1_000_000);
