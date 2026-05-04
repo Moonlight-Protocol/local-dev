@@ -10,9 +10,9 @@ required.
 - Deno installed
 - Contract WASMs available at `../e2e/wasms/` (build with
   `stellar contract build` in soroban-core, or copy from a release)
-- For OTEL verification against deployed testnet: `TEMPO_URL`, `TEMPO_AUTH`,
-  `PROVIDER_SERVICE_NAME`, `SDK_SERVICE_NAME`, `COUNCIL_SERVICE_NAME` env vars
-  set
+- For OTEL verification against deployed testnet: `TEMPO_URL`, `TEMPO_AUTH`, and
+  `MOONLIGHT_NETWORK` env vars set (`MOONLIGHT_NETWORK` defaults to `testnet`;
+  valid values: `testnet`, `mainnet`, `local`)
 - For OTEL verification against local stack: nothing extra — see
   [Run against the local stack](#run-against-the-local-stack) below
 
@@ -79,24 +79,22 @@ trace ingestion.
 
 All scripts use sensible testnet defaults. Override via env vars when needed:
 
-| Variable                      | Default                                             | Used by                                       |
-| ----------------------------- | --------------------------------------------------- | --------------------------------------------- |
-| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                   |
-| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                   |
-| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                   |
-| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                   |
-| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                   |
-| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                   |
-| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                   |
-| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                   |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                   |
-| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                           |
-| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                           |
-| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                           |
-| `PROVIDER_SERVICE_NAME`       | (none)                                              | Suites 2, 4                                   |
-| `SDK_SERVICE_NAME`            | (none)                                              | Suites 2, 4                                   |
-| `COUNCIL_SERVICE_NAME`        | (none)                                              | Suites 2, 4 (cp#28 spans + sdk↔cp continuity) |
-| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                   |
+| Variable                      | Default                                             | Used by                                                  |
+| ----------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
+| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                              |
+| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                              |
+| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                              |
+| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                              |
+| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                              |
+| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                              |
+| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                              |
+| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                              |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                              |
+| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                      |
+| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                      |
+| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                      |
+| `MOONLIGHT_NETWORK`           | `testnet`                                           | Suites 2, 4 (Tempo only — derives `<service>-<network>`) |
+| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                              |
 
 ## Run Order
 
@@ -155,9 +153,9 @@ export OTEL_SERVICE_NAME=moonlight-e2e
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 # verifier-only:
 export JAEGER_URL=http://localhost:16686  # optional — this is the default
-export PROVIDER_SERVICE_NAME=provider-platform
-export SDK_SERVICE_NAME=moonlight-e2e
-export COUNCIL_SERVICE_NAME=council-platform
+# Local verifiers (verify-otel-local.ts) hardcode network=local, so they emit
+# unsuffixed service names (provider-platform, council-platform) automatically.
+# When pointing at Tempo, set MOONLIGHT_NETWORK=testnet|mainnet (default testnet).
 
 cd testnet && deno run --allow-all main.ts                # suite 1
 deno run --allow-all verify-otel-local.ts                 # suite 2 (Jaeger)

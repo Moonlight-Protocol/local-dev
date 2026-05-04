@@ -57,12 +57,19 @@ const profiles: DerivedProfiles = deriveAllProfiles(
   process.env.MASTER_SECRET || undefined,
 );
 
-// OTEL service names (match OTEL_SERVICE_NAME in infra-up.sh)
-const OTEL_SERVICES = [
-  process.env.PROVIDER_SERVICE_NAME ?? "provider-platform",
-  process.env.COUNCIL_SERVICE_NAME ?? "council-platform",
-  process.env.PAY_SERVICE_NAME ?? "pay-platform",
-];
+// OTEL service names. Local containers emit unsuffixed names (see infra-up.sh).
+// Deployed testnet/mainnet apps emit `<service>-<network>` (e.g. provider-platform-testnet).
+const OTEL_SERVICES = (() => {
+  const t = getTarget();
+  if (t === "local") {
+    return ["provider-platform", "council-platform", "pay-platform"];
+  }
+  return [
+    `provider-platform-${t}`,
+    `council-platform-${t}`,
+    `pay-platform-${t}`,
+  ];
+})();
 
 // ─── State shared across steps ──────────────────────────────────────
 

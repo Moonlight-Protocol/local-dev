@@ -11,6 +11,8 @@
 import {
   type E2ETraceData,
   loadTraceData,
+  type NetworkName,
+  serviceNamesFor,
   type VerifyOtelResult,
 } from "./verify-otel.ts";
 import {
@@ -22,14 +24,12 @@ export interface VerifyOtelLocalConfig {
   jaegerUrl: string;
   traceIdsPath: string;
   pollTimeoutMs?: number;
-  providerServiceName: string;
-  sdkServiceName: string;
+  network: NetworkName;
   /**
-   * council-platform service.name. When set, asserts cp#28 spans are present
-   * and trace-linked to the SDK driver. Leave undefined for flows that don't
-   * run cp (e.g. local-CI e2e/docker-compose.yml).
+   * When false, skips council-platform span assertions. Used by flows that
+   * don't run cp (e.g. local-CI e2e/docker-compose.yml). Defaults to true.
    */
-  councilServiceName?: string;
+  assertCouncilSpans?: boolean;
 }
 
 interface JaegerTracesResponse {
@@ -155,12 +155,13 @@ export async function verifyOtelTracesLocal(
     jaegerUrl,
     traceIdsPath,
     pollTimeoutMs = 30000,
-    providerServiceName,
-    sdkServiceName,
-    councilServiceName,
+    network,
+    assertCouncilSpans = true,
   } = config;
-  const PROVIDER_SERVICE = providerServiceName;
-  const SDK_SERVICE = sdkServiceName;
+  const names = serviceNamesFor(network);
+  const PROVIDER_SERVICE = names.provider;
+  const SDK_SERVICE = names.sdk;
+  const councilService = assertCouncilSpans ? names.council : undefined;
 
   console.log("\n[OTEL] Verifying OpenTelemetry traces in local Jaeger\n");
 
@@ -220,7 +221,7 @@ export async function verifyOtelTracesLocal(
     allSpans,
     providerService: PROVIDER_SERVICE,
     sdkService: SDK_SERVICE,
-    councilService: councilServiceName,
+    councilService,
     traceData,
     searchBackgroundTraces: async (prefixes, startUs, endUs, minExpected) => {
       return await searchTraceCountByPrefixes(

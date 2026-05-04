@@ -44,11 +44,10 @@ export OTEL_SERVICE_NAME="${OTEL_SERVICE_NAME:-moonlight-e2e}"
 export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}"
 
-# OTEL verifier: read from local Jaeger instead of Tempo.
+# OTEL verifier: read from local Jaeger instead of Tempo. The verify-otel-local.ts
+# wrappers are hardcoded to network=local, so they emit unsuffixed service names
+# (provider-platform, council-platform) regardless of what's exported here.
 export JAEGER_URL="${JAEGER_URL:-http://localhost:16686}"
-export PROVIDER_SERVICE_NAME="${PROVIDER_SERVICE_NAME:-provider-platform}"
-export SDK_SERVICE_NAME="${SDK_SERVICE_NAME:-moonlight-e2e}"
-export COUNCIL_SERVICE_NAME="${COUNCIL_SERVICE_NAME:-council-platform}"
 
 run_payment() {
   info "Suite 1: testnet payment flow → localhost"
