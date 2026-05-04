@@ -23,8 +23,13 @@ required.
 Quick end-to-end payment test. Deploys contracts, registers a PP, then runs
 deposit → send → withdraw. Exports OTEL traces.
 
+Use `./testnet/run-tempo.sh` against deployed Tempo; it requires
+`OTEL_EXPORTER_OTLP_ENDPOINT` and `OTEL_EXPORTER_OTLP_HEADERS` to be set and
+will fail fast if either is missing. See
+[Run against deployed Tempo](#run-against-deployed-tempo) below.
+
 ```bash
-cd testnet && deno task e2e
+./testnet/run-tempo.sh
 ```
 
 **What it tests:** Contract deployment, council + PP registration through both
@@ -100,13 +105,13 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 
 ```bash
 # Suite 1: Payment flow (~5 min)
-cd testnet && deno task e2e
+./testnet/run-tempo.sh
 
 # Suite 2: OTEL verification for suite 1 (wait 60s for ingestion)
-sleep 60 && deno run --allow-all verify-otel.ts
+sleep 60 && deno run --allow-all testnet/verify-otel.ts
 
 # Suite 3: Lifecycle flow (~5 min)
-cd .. && deno run --allow-all lifecycle/testnet-verify.ts
+deno run --allow-all lifecycle/testnet-verify.ts
 
 # Suite 4: OTEL verification for suite 3 (wait 60s for ingestion)
 sleep 60 && deno run --allow-all lifecycle/verify-otel.ts
@@ -115,6 +120,34 @@ sleep 60 && deno run --allow-all lifecycle/verify-otel.ts
 Flow scripts (1, 3) export traces and write trace IDs. Verify scripts (2, 4)
 read those trace IDs and check Tempo (or Jaeger, locally). Suites 1 and 3 can
 run independently — they each deploy fresh contracts.
+
+## Run against deployed Tempo
+
+The flow scripts produce OTLP spans and need `OTEL_EXPORTER_OTLP_ENDPOINT` and
+`OTEL_EXPORTER_OTLP_HEADERS` to ship them. Deno's OTEL exporter silent-fails
+when those are unset — the run reports success, but Tempo receives 0 SDK spans.
+
+`./testnet/run-tempo.sh` is the supported entry point: it asserts both vars are
+set, errors out naming the missing one(s) if not, and otherwise execs
+`deno task e2e`.
+
+```bash
+export OTEL_EXPORTER_OTLP_ENDPOINT='https://otlp-gateway-prod-...grafana.net/otlp/v1/traces'
+export OTEL_EXPORTER_OTLP_HEADERS='authorization=Basic <token>'
+./testnet/run-tempo.sh
+```
+
+For suite 3 (lifecycle), the same env vars must be set in the shell — the
+`lifecycle/testnet-verify.ts` flow reads them directly. There is no
+lifecycle-specific wrapper today; if you forget either var, you'll see no SDK
+spans in suite 4 verification.
+
+### What `run-tempo.sh` checks for
+
+The wrapper only enforces the two OTLP exporter envs. The other variables in the
+[Environment Variables](#environment-variables) table still apply (testnet
+defaults are baked in; override only when pointing at non-default URLs or
+seeding deterministic keys).
 
 ## Run against the local stack
 
