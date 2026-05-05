@@ -24,6 +24,7 @@ import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, requireValue } from "../helpers/run-env";
 import { holdAfterSuccess } from "../fixtures/pacing";
+import { addClickHighlight } from "../fixtures/click-highlight";
 
 const PROVIDER_NAME = "Acme Privacy Provider";
 const PROVIDER_EMAIL = "ops@acme.test";
@@ -45,6 +46,8 @@ test("02 — provider create + join + approve", async () => {
     publicKey: env.ADMIN_PK,
     secretKey: env.ADMIN_SK,
   });
+  await addClickHighlight(ppCtx.context);
+  await addClickHighlight(adminCtx.context);
 
   const providerPage = await ppCtx.context.newPage();
   const councilPage = await adminCtx.context.newPage();

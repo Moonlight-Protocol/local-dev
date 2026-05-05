@@ -177,6 +177,7 @@ export async function openWalletPopup(
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
   await page.waitForLoadState("domcontentloaded");
+  await page.bringToFront();
   return page;
 }
 
@@ -195,6 +196,7 @@ export async function onboardWithMnemonic(
   page: Page,
   opts: OnboardOptions,
 ): Promise<void> {
+  await page.bringToFront();
   // Step 1 — set password (two password fields).
   await page.locator(SEL.passwordInput).first().waitFor({ timeout: 30_000 });
   const pwInputs = page.locator(SEL.passwordInput);
@@ -223,6 +225,7 @@ export async function onboardWithMnemonic(
 }
 
 export async function unlock(page: Page, password: string): Promise<void> {
+  await page.bringToFront();
   await page.locator(SEL.passwordInput).first().waitFor({ timeout: 30_000 });
   await typeSlowly(page.locator(SEL.passwordInput).first(), password);
   await clickWithPause(page.locator(SEL.unlockButton).first());
@@ -241,6 +244,7 @@ export async function unlock(page: Page, password: string): Promise<void> {
  * channels by mainnet and our locally-created channels never surface.
  */
 export async function selectCustomNetwork(page: Page): Promise<void> {
+  await page.bringToFront();
   await page.evaluate(async () => {
     // The popup runs as a chrome-extension page, so chrome.runtime is bound
     // to the wallet's own background — no extension id required.
@@ -267,6 +271,7 @@ export async function selectCustomNetwork(page: Page): Promise<void> {
 
 /** Toggle home from public to private view. */
 export async function toggleToPrivateView(page: Page): Promise<void> {
+  await page.bringToFront();
   const toggle = page.locator(SEL.viewModeToggleByGlobe).first();
   if (await toggle.isVisible({ timeout: 5_000 }).catch(() => false)) {
     await clickWithPause(toggle);
@@ -293,6 +298,7 @@ export async function createPrivacyChannel(
   page: Page,
   opts: AddChannelOptions,
 ): Promise<void> {
+  await page.bringToFront();
   await clickWithPause(page.locator(SEL.createChannelEmptyButton).first());
 
   // Form: PrivateAddChannelTemplate
@@ -341,6 +347,7 @@ export async function addAndConnectProvider(
   page: Page,
   opts: { providerUrl: string; providerName: string; password: string },
 ): Promise<void> {
+  await page.bringToFront();
   // Open the channel picker sheet (shows PrivateChannelManager).
   const trigger = page.locator(SEL.channelPickerTrigger).first();
   await clickWithPause(trigger);
@@ -401,6 +408,8 @@ export interface AmountOptions {
 
 /** Deposit via Ramp form (public → private). */
 export async function deposit(page: Page, opts: AmountOptions): Promise<void> {
+  await page.bringToFront();
+  const preBalance = await readConfidentialBalance(page);
   await clickWithPause(page.locator(SEL.rampButton).first());
 
   // Defaults to deposit mode + Direct method.
@@ -413,9 +422,9 @@ export async function deposit(page: Page, opts: AmountOptions): Promise<void> {
     await clickWithPause(exec);
   }
 
-  // Success: the wallet navigates back to home with the action buttons
-  // present. Receive being visible again is the readiness signal.
   await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
+  const target = preBalance + parseFloat(opts.amount) - 0.01;
+  await waitForConfidentialBalance(page, target);
   await holdAfterSuccess(page);
 }
 
@@ -426,6 +435,7 @@ export interface SendOptions extends AmountOptions {
 
 /** Send to a counterparty whose Receive flow produced an MLXDR. */
 export async function send(page: Page, opts: SendOptions): Promise<void> {
+  await page.bringToFront();
   await clickWithPause(page.locator(SEL.sendButton).first());
 
   await typeSlowly(
@@ -459,6 +469,7 @@ export async function showReceive(
   page: Page,
   opts: ReceiveOptions,
 ): Promise<string | undefined> {
+  await page.bringToFront();
   await clickWithPause(page.locator(SEL.receiveButton).first());
   await typeSlowly(page.locator(SEL.receiveAmountInput).first(), opts.amount);
   await clickWithPause(page.locator(SEL.receiveGenerate).first());
@@ -482,6 +493,18 @@ export async function showReceive(
   return undefined;
 }
 
+/**
+ * Close the receive-confirmation page and return the wallet to the private
+ * home view. Use after `showReceive` once the counterparty has finished
+ * sending — leaving Bob on the confirmation page hides the home balance,
+ * so `waitForConfidentialBalance` can't observe the incoming funds.
+ */
+export async function closeReceiveConfirmation(page: Page): Promise<void> {
+  await page.bringToFront();
+  await clickWithPause(page.locator('button:has-text("Close")').first());
+  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 30_000 });
+}
+
 export interface WithdrawOptions extends AmountOptions {
   destinationAddress: string;
 }
@@ -498,6 +521,7 @@ export async function waitForConfidentialBalance(
   minimumXlm: number,
   timeoutMs = 120_000,
 ): Promise<void> {
+  await page.bringToFront();
   await page.locator(SEL.confidentialBalanceLabel).first().waitFor({
     timeout: 30_000,
   });
@@ -508,7 +532,6 @@ export async function waitForConfidentialBalance(
         p.textContent?.trim() === "Confidential Balance"
       );
       if (!label) return false;
-      // Sibling structure: <p>Confidential Balance</p> then a div with the value span.
       const container = label.parentElement?.parentElement;
       const valueSpan = container?.querySelector(
         "span.text-4xl, span.text-5xl",
@@ -522,11 +545,62 @@ export async function waitForConfidentialBalance(
   );
 }
 
+export async function waitForConfidentialBalanceAtMost(
+  page: Page,
+  maximumXlm: number,
+  timeoutMs = 120_000,
+): Promise<void> {
+  await page.bringToFront();
+  await page.locator(SEL.confidentialBalanceLabel).first().waitFor({
+    timeout: 30_000,
+  });
+  await page.waitForFunction(
+    (max: number) => {
+      const labels = Array.from(document.querySelectorAll("p"));
+      const label = labels.find((p) =>
+        p.textContent?.trim() === "Confidential Balance"
+      );
+      if (!label) return false;
+      const container = label.parentElement?.parentElement;
+      const valueSpan = container?.querySelector(
+        "span.text-4xl, span.text-5xl",
+      );
+      const text = valueSpan?.textContent?.trim() ?? "";
+      const num = parseFloat(text);
+      return Number.isFinite(num) && num <= max;
+    },
+    maximumXlm,
+    { timeout: timeoutMs, polling: 1_000 },
+  );
+}
+
+async function readConfidentialBalance(page: Page): Promise<number> {
+  await page.locator(SEL.confidentialBalanceLabel).first().waitFor({
+    timeout: 30_000,
+  });
+  const num = await page.evaluate(() => {
+    const labels = Array.from(document.querySelectorAll("p"));
+    const label = labels.find((p) =>
+      p.textContent?.trim() === "Confidential Balance"
+    );
+    if (!label) return NaN;
+    const container = label.parentElement?.parentElement;
+    const valueSpan = container?.querySelector(
+      "span.text-4xl, span.text-5xl",
+    );
+    const text = valueSpan?.textContent?.trim() ?? "";
+    return parseFloat(text);
+  });
+  return Number.isFinite(num) ? num : 0;
+}
+
 /** Withdraw via Ramp form (private → public). */
 export async function withdraw(
   page: Page,
   opts: WithdrawOptions,
 ): Promise<void> {
+  await page.bringToFront();
+  const preBalance = await readConfidentialBalance(page);
   await clickWithPause(page.locator(SEL.rampButton).first());
 
   // Switch to withdraw tab.
@@ -543,7 +617,8 @@ export async function withdraw(
   await exec.waitFor({ state: "visible", timeout: 15_000 });
   await clickWithPause(exec);
 
-  // Success: navigates back to home with action buttons available.
   await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
+  const target = preBalance - parseFloat(opts.amount) + 0.01;
+  await waitForConfidentialBalanceAtMost(page, target);
   await holdAfterSuccess(page);
 }

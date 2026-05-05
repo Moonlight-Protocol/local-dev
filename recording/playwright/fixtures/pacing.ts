@@ -27,29 +27,55 @@ export const holdAfterSuccess = (page: Page) => page.waitForTimeout(2000);
 /**
  * Type into a field one character at a time so the viewer can read it.
  * Falls back to fill() if RECORDING_FAST_TYPE is set.
+ *
+ * Always ends with a `beat` pause so the typed value is visible long enough
+ * for the eye to register it before the next click fires.
  */
 export async function typeSlowly(
   locator: Locator,
   text: string,
   delayMs = 35,
 ): Promise<void> {
+  const page = await locator.page();
   if (process.env.RECORDING_FAST_TYPE === "1") {
     await locator.fill(text);
+    await beat(page);
     return;
   }
   await locator.click();
   await locator.fill("");
   await locator.type(text, { delay: delayMs });
+  await beat(page);
 }
 
 /**
- * Scroll into view + brief pause + click. Use this instead of bare .click()
- * for any visually important button so the viewer's eye reaches it first.
+ * Scroll into view + telegraph the target with a focus ring + click.
+ * The pre-click ring lands the viewer's eye on the target before the click
+ * actually fires, so the action reads cleanly on the recording.
  */
 export async function clickWithPause(locator: Locator): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
   const page = await locator.page();
   await beat(page);
+  try {
+    const box = await locator.boundingBox();
+    if (box) {
+      await page.evaluate(
+        ({ x, y }: { x: number; y: number }) => {
+          const w = globalThis as unknown as {
+            __moonlightSpawnRing?: (x: number, y: number) => void;
+          };
+          if (typeof w.__moonlightSpawnRing === "function") {
+            w.__moonlightSpawnRing(x, y);
+          }
+        },
+        { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+      );
+      await page.waitForTimeout(1000);
+    }
+  } catch {
+    // Detached / cross-origin frame — fall through to the click.
+  }
   await locator.click();
   await beat(page);
 }
