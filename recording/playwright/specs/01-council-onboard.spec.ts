@@ -28,7 +28,7 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, updateRunEnv } from "../helpers/run-env";
-import { holdAfterSuccess } from "../fixtures/pacing";
+import { clickWithPause, holdAfterSuccess, typeSlowly } from "../fixtures/pacing";
 import { addClickHighlight } from "../fixtures/click-highlight";
 
 const COUNCIL_NAME = "Moonlight Demo";
@@ -59,26 +59,35 @@ test("01 — council onboarding", async () => {
     await verifyAuthenticated(councilPage, "nav", 30_000);
 
     // Beat 2 — create council
-    await councilPage.locator("#create-btn, #new-council-btn").first().click();
+    await clickWithPause(
+      councilPage.locator("#create-btn, #new-council-btn").first(),
+    );
     await councilPage.waitForSelector("#council-name", { timeout: 10_000 });
-    await councilPage.fill("#council-name", COUNCIL_NAME);
-    await councilPage.fill("#council-description", COUNCIL_DESCRIPTION);
-    await councilPage.fill("#council-email", COUNCIL_EMAIL);
+    await typeSlowly(councilPage.locator("#council-name"), COUNCIL_NAME);
+    await typeSlowly(
+      councilPage.locator("#council-description"),
+      COUNCIL_DESCRIPTION,
+    );
+    await typeSlowly(councilPage.locator("#council-email"), COUNCIL_EMAIL);
 
     const jurisdictionPicker = councilPage.locator("#jurisdiction-picker");
     if (
       await jurisdictionPicker.isVisible({ timeout: 3_000 }).catch(() => false)
     ) {
-      await councilPage.fill("#jurisdiction-filter", "United States");
+      await typeSlowly(
+        councilPage.locator("#jurisdiction-filter"),
+        "United States",
+      );
       await councilPage.waitForTimeout(500);
       const opt = councilPage.locator(
         "#jurisdiction-list .jurisdiction-option, .jurisdiction-option",
       ).first();
       if (await opt.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await opt.click();
+        await clickWithPause(opt);
       }
     }
-    await councilPage.click("#next-btn");
+    await clickWithPause(councilPage.locator("#next-btn"));
+    await councilPage.waitForTimeout(2000);
 
     // Beat 3 — deploy contracts (multiple signing popups)
     await councilPage.waitForSelector("#create-btn", { timeout: 10_000 });
@@ -106,27 +115,33 @@ test("01 — council onboarding", async () => {
     };
 
     adminCtx.context.on("page", approvePopup);
-    await councilPage.click("#create-btn");
+    await clickWithPause(councilPage.locator("#create-btn"));
     await councilPage.waitForSelector("#fund-amount", { timeout: 180_000 });
     adminCtx.context.off("page", approvePopup);
     console.log(`Council deploy: ${popupsApproved} signing popups approved`);
     if (popupError) throw popupError;
 
     // Beat 4 — fund treasury
-    await councilPage.fill("#fund-amount", "10");
+    await typeSlowly(councilPage.locator("#fund-amount"), "10");
     await withWalletApproval(adminCtx.context, councilPage, async () => {
-      await councilPage.click("#fund-btn");
+      await clickWithPause(councilPage.locator("#fund-btn"));
     });
     await councilPage.waitForSelector("#next-btn:not([disabled])", {
       timeout: 60_000,
     });
-    await councilPage.click("#next-btn");
+    await clickWithPause(councilPage.locator("#next-btn"));
+    await councilPage.waitForTimeout(2000);
 
-    // Beat 5 — assets (XLM auto-enabled)
+    // Beat 5 — assets (XLM auto-enabled). Hold so the viewer can read the
+    // assets list before we move on.
     await councilPage.waitForSelector("#continue-btn, #next-btn", {
       timeout: 10_000,
     });
-    await councilPage.locator("#continue-btn, #next-btn").first().click();
+    await councilPage.waitForTimeout(3000);
+    await clickWithPause(
+      councilPage.locator("#continue-btn, #next-btn").first(),
+    );
+    await councilPage.waitForTimeout(2000);
 
     // Beat 6 — invite step → capture council/channel IDs
     await councilPage.waitForSelector("#done-btn", { timeout: 10_000 });
@@ -170,7 +185,7 @@ test("01 — council onboarding", async () => {
     console.log(`CHANNEL_AUTH_ID=${channelAuthId}`);
     if (privacyChannelId) console.log(`PRIVACY_CHANNEL_ID=${privacyChannelId}`);
 
-    await councilPage.click("#done-btn");
+    await clickWithPause(councilPage.locator("#done-btn"));
     await councilPage.waitForLoadState("networkidle");
     await expect(councilPage.locator(`text=${COUNCIL_NAME}`).first())
       .toBeVisible({ timeout: 15_000 });

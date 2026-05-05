@@ -49,9 +49,12 @@ export async function typeSlowly(
 }
 
 /**
- * Scroll into view + telegraph the target with a focus ring + click.
- * The pre-click ring lands the viewer's eye on the target before the click
- * actually fires, so the action reads cleanly on the recording.
+ * Scroll into view + spawn one sustained ring + 2s wait + click.
+ *
+ * The ring CSS animation in click-highlight.ts holds visible for ~2s
+ * before fading, so a single spawn telegraphs the target continuously.
+ * The suppress flag stops the global pointerdown listener in
+ * click-highlight.ts from spawning a second ring at click time.
  */
 export async function clickWithPause(locator: Locator): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
@@ -65,17 +68,19 @@ export async function clickWithPause(locator: Locator): Promise<void> {
           const w = globalThis as unknown as {
             __moonlightSpawnRing?: (x: number, y: number) => void;
           };
-          if (typeof w.__moonlightSpawnRing === "function") {
-            w.__moonlightSpawnRing(x, y);
-          }
+          w.__moonlightSpawnRing?.(x, y);
         },
         { x: box.x + box.width / 2, y: box.y + box.height / 2 },
       );
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(2000);
     }
   } catch {
-    // Detached / cross-origin frame — fall through to the click.
+    // Detached / cross-origin — fall through to the click.
   }
+  await page.evaluate(() => {
+    (globalThis as unknown as { __moonlightSuppressNextAutoRing?: boolean })
+      .__moonlightSuppressNextAutoRing = true;
+  });
   await locator.click();
   await beat(page);
 }
