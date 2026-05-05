@@ -15,6 +15,18 @@ on:
         description: "moonlight-pay branch or ref (e.g. feat/my-branch)"
         type: string
         default: "main"
+      provider_platform_ref:
+        description: "provider-platform branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
+      council_platform_ref:
+        description: "council-platform branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
+      pay_platform_ref:
+        description: "pay-platform branch or ref (e.g. feat/my-branch)"
+        type: string
+        default: "main"
     secrets:
       E2E_TRIGGER_TOKEN:
         required: true
@@ -60,7 +72,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/provider-platform
-          ref: main
+          ref: ${{ inputs.provider_platform_ref }}
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
           path: provider-platform
 
@@ -68,7 +80,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/council-platform
-          ref: main
+          ref: ${{ inputs.council_platform_ref }}
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
           path: council-platform
 
@@ -76,7 +88,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: ${{ env.ORG }}/pay-platform
-          ref: main
+          ref: ${{ inputs.pay_platform_ref }}
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
           path: pay-platform
 
@@ -90,6 +102,12 @@ jobs:
           PAY_PLATFORM_PATH: ./pay-platform
         run: |
           set +e
+          # Pre-create the BadgerDB trace dir with permissive mode so the
+          # jaeger container (non-root) can write to the bind mount. test.sh
+          # does this locally; CI invokes docker compose directly so we
+          # replicate the prep here.
+          mkdir -p .traces/invite-gate
+          chmod 777 .traces/invite-gate
           docker compose -f docker-compose.invite-gate.yml up -d
           UP_EXIT=$?
           if [ "$UP_EXIT" -ne 0 ]; then
