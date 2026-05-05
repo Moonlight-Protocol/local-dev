@@ -10,7 +10,7 @@
  *   - Isolated cookies, localStorage, sessionStorage
  *   - Its own set of pages
  */
-import { type BrowserContext, chromium } from "@playwright/test";
+import { type BrowserContext, chromium, type Page } from "@playwright/test";
 import path from "path";
 import os from "os";
 import fs from "fs";
@@ -81,6 +81,13 @@ export async function createUserContext(
     `--load-extension=${EXTENSION_PATH}`,
     "--no-first-run",
     "--disable-default-apps",
+    // Windowed (not macOS fullscreen): `--start-fullscreen` triggers macOS
+    // native fullscreen which spawns a new Space, pulling Chromium off the
+    // current recording desktop. `--start-maximized` + explicit window-size
+    // gives a near-full-screen window that stays on the current Space.
+    "--start-maximized",
+    "--window-position=0,0",
+    "--window-size=1728,1080",
   ];
   if (insecureOrigins.length > 0) {
     args.push(
@@ -105,15 +112,38 @@ export async function createUserContext(
     }
     : undefined;
 
-  // Launch a persistent context with the extension
+  // Launch a persistent context with the extension. viewport: null lets the
+  // window size drive the page size, so --start-fullscreen produces a real
+  // fullscreen page.
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    viewport: { width: 1280, height: 800 },
+    viewport: null,
     args,
     recordVideo,
     ...(process.env.VIDEO_SLOWMO
       ? { slowMo: parseInt(process.env.VIDEO_SLOWMO, 10) }
       : {}),
+  });
+
+  // Zoom contents to 80% so the UI fits comfortably inside the fullscreen
+  // viewport during screen-recording.
+  const applyZoom = async (page: Page) => {
+    try {
+      await page.addInitScript(() => {
+        // deno-lint-ignore no-explicit-any
+        (document.documentElement.style as any).zoom = "0.8";
+      });
+      await page.evaluate(() => {
+        // deno-lint-ignore no-explicit-any
+        (document.documentElement.style as any).zoom = "0.8";
+      }).catch(() => {});
+    } catch {
+      // best effort
+    }
+  };
+  for (const page of context.pages()) await applyZoom(page);
+  context.on("page", (page) => {
+    void applyZoom(page);
   });
 
   // Give the extension time to initialize
