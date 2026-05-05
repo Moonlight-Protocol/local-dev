@@ -3,7 +3,7 @@
  *
  * Demo beats:
  *   1. Admin lands on council-console, signs in via Freighter (SEP-53)
- *   2. Creates "Moonlight Demo Council" with metadata + jurisdiction
+ *   2. Creates "Moonlight Demo" with metadata + jurisdiction
  *   3. Deploys Channel Auth + Privacy Channel contracts (4 wallet popups)
  *   4. Funds council treasury (1 wallet popup)
  *   5. Confirms XLM asset
@@ -29,8 +29,9 @@ import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, updateRunEnv } from "../helpers/run-env";
 import { holdAfterSuccess } from "../fixtures/pacing";
+import { addClickHighlight } from "../fixtures/click-highlight";
 
-const COUNCIL_NAME = "Moonlight Demo Council";
+const COUNCIL_NAME = "Moonlight Demo";
 const COUNCIL_DESCRIPTION =
   "Privacy-preserving payments council for the Tranche 2 demo recording.";
 const COUNCIL_EMAIL = "demo@moonlight.test";
@@ -46,6 +47,7 @@ test("01 — council onboarding", async () => {
     publicKey: env.ADMIN_PK,
     secretKey: env.ADMIN_SK,
   });
+  await addClickHighlight(adminCtx.context);
 
   const councilPage = await adminCtx.context.newPage();
 

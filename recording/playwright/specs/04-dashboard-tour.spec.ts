@@ -3,7 +3,7 @@
  *
  * Demo beats:
  *   1. Land on /map, pause on the council marker
- *   2. Click "Councils" → tour the list, point at "Moonlight Demo Council"
+ *   2. Click "Councils" → tour the list, point at "Moonlight Demo"
  *   3. Drill into the council → show stats + Channels + Registered Providers
  *   4. Scroll to Recent Activity (events from sections 02/03)
  *   5. Click "Transactions" → show the cross-network feed
@@ -31,7 +31,7 @@ import {
   launchWalletContext,
 } from "../fixtures/wallet-context";
 
-const COUNCIL_NAME = "Moonlight Demo Council";
+const COUNCIL_NAME = "Moonlight Demo";
 
 test.describe.configure({ mode: "serial" });
 
@@ -61,6 +61,7 @@ test("04 — dashboard tour", async () => {
     // Beat 1 — land on root (redirects to /map).
     await page.goto(env.DASHBOARD_URL);
     await page.waitForLoadState("networkidle");
+    await page.bringToFront();
     await hold(page);
 
     // Beat 2 — switch to Councils tab and let the table render.
