@@ -28,7 +28,9 @@ async function paceForRecording(page: Page, selector: string): Promise<void> {
   ).catch(() => false);
   if (!isRecording) return;
   try {
-    const box = await page.locator(selector).first().boundingBox();
+    const locator = page.locator(selector).first();
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
     if (!box) return;
     await page.evaluate(
       ({ x, y }: { x: number; y: number }) => {
