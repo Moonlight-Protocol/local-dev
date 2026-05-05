@@ -310,7 +310,7 @@ services:
         };
         JSEOF
         echo "Installing dependencies..."
-        deno install --allow-scripts
+        deno install
         echo "Building..."
         deno task build
         echo "Serving on port 3050..."
