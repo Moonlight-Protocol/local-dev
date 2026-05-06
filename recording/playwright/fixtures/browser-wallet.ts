@@ -92,6 +92,9 @@ export const SEL = {
   // Confirmation page renders the MLXDR inside a labeled card.
   receiveMlxdrLabel: "text=Receiving Address (MLXDR)",
   receiveMlxdrValue: "span.font-mono",
+  // Copy MLXDR — clicking it telegraphs "this is what the sender needs".
+  receiveCopyButton:
+    'button:has(svg.tabler-icon-copy), button:has-text("Copy")',
 
   // Private-view home: "Confidential Balance" label sits above the actual
   // figure. Polling its sibling for a non-zero number is how we tell the
@@ -175,8 +178,16 @@ export async function openWalletPopup(
   extensionId: string,
 ): Promise<Page> {
   const page = await context.newPage();
+  await page.setViewportSize({ width: 1280, height: 1080 });
   await page.goto(`chrome-extension://${extensionId}/popup.html`);
   await page.waitForLoadState("domcontentloaded");
+  // Override the wallet's hardcoded h-[600px] background so tall content
+  // doesn't show a scrollbar in recordings.
+  await page.addStyleTag({
+    content: `
+      #root > div { height: 100vh !important; min-height: 100vh !important; }
+    `,
+  });
   await page.bringToFront();
   return page;
 }
@@ -278,6 +289,19 @@ export async function toggleToPrivateView(page: Page): Promise<void> {
   }
   // After toggle, empty state shows "No Private Channels".
   await page.locator(SEL.privateEmptyState).first().waitFor({
+    timeout: 10_000,
+  });
+  await hold(page);
+}
+
+/** Toggle home from private to public view. */
+export async function toggleToPublicView(page: Page): Promise<void> {
+  await page.bringToFront();
+  const toggle = page.locator(SEL.viewModeToggleByShield).first();
+  if (await toggle.isVisible({ timeout: 5_000 }).catch(() => false)) {
+    await clickWithPause(toggle);
+  }
+  await page.locator(SEL.homePublicBalanceLabel).first().waitFor({
     timeout: 10_000,
   });
   await hold(page);
@@ -414,7 +438,13 @@ export async function deposit(page: Page, opts: AmountOptions): Promise<void> {
 
   // Defaults to deposit mode + Direct method.
   await typeSlowly(page.locator(SEL.rampAmountInput).first(), opts.amount);
-  await clickWithPause(page.locator(SEL.rampReviewDeposit).first());
+  // Wait for the form to enable the Review button (validation can lag the
+  // last keystroke). Targets the enabled instance directly.
+  const reviewDeposit = page
+    .locator(`${SEL.rampReviewDeposit}:not([disabled])`)
+    .first();
+  await reviewDeposit.waitFor({ state: "visible", timeout: 15_000 });
+  await clickWithPause(reviewDeposit);
 
   // Review screen → Execute Transaction.
   const exec = page.locator(SEL.rampExecute).first();
@@ -481,6 +511,13 @@ export async function showReceive(
     .first()
     .waitFor({ timeout: 30_000 });
   await holdAfterSuccess(page);
+
+  // Click the Copy button so the viewer sees "this is what the sender needs"
+  // before we move on. Best-effort — skip if the button isn't surfaced.
+  const copyBtn = page.locator(SEL.receiveCopyButton).first();
+  if (await copyBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    await clickWithPause(copyBtn);
+  }
 
   try {
     const out = page.locator(SEL.receiveMlxdrValue).first();
