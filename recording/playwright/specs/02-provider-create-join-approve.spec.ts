@@ -23,8 +23,13 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, requireValue } from "../helpers/run-env";
-import { clickWithPause, holdAfterSuccess, typeSlowly } from "../fixtures/pacing";
+import {
+  clickWithPause,
+  holdAfterSuccess,
+  typeSlowly,
+} from "../fixtures/pacing";
 import { addClickHighlight } from "../fixtures/click-highlight";
+import { RECORDING_CONTEXT_OPTIONS } from "../fixtures/recording-context";
 
 const PROVIDER_NAME = "Acme Privacy Provider";
 const PROVIDER_EMAIL = "ops@acme.test";
@@ -40,12 +45,12 @@ test("02 — provider create + join + approve", async () => {
     name: "PP",
     publicKey: env.PP_PK,
     secretKey: env.PP_SK,
-  });
+  }, RECORDING_CONTEXT_OPTIONS);
   const adminCtx = await createUserContext(null, {
     name: "Admin",
     publicKey: env.ADMIN_PK,
     secretKey: env.ADMIN_SK,
-  });
+  }, RECORDING_CONTEXT_OPTIONS);
   await addClickHighlight(ppCtx.context);
   await addClickHighlight(adminCtx.context);
 
