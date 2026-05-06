@@ -1,0 +1,19 @@
+name: Invite Gate
+
+# Catches changes in this repo (playwright fixtures, docker-compose, test-runner
+# image, etc.) that break the cross-repo invite-gate spec. Without this, a
+# local-dev PR can ship a regression that only surfaces on the next
+# council-console / moonlight-pay / provider-console PR. The reusable workflow
+# is pointed at this PR's local-dev ref while the consumer repos stay at main.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  invite-gate:
+    uses: ./.github/workflows/invite-gate-reusable.yml
+    with:
+      local_dev_ref: ${{ github.head_ref }}
+    secrets:
+      E2E_TRIGGER_TOKEN: ${{ secrets.E2E_TRIGGER_TOKEN }}

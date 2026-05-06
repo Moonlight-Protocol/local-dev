@@ -3,6 +3,10 @@ name: Invite Gate (Reusable)
 on:
   workflow_call:
     inputs:
+      local_dev_ref:
+        description: "local-dev branch or ref (e.g. fix/my-branch). Set to ${{ github.head_ref }} when called from a local-dev PR; defaults to main."
+        type: string
+        default: "main"
       provider_console_ref:
         description: "provider-console branch or ref (e.g. feat/my-branch)"
         type: string
@@ -41,7 +45,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: moonlight-protocol/local-dev
-          ref: main
+          ref: ${{ inputs.local_dev_ref }}
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
 
       - name: Checkout provider-console

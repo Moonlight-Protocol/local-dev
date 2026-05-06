@@ -28,8 +28,13 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, updateRunEnv } from "../helpers/run-env";
-import { clickWithPause, holdAfterSuccess, typeSlowly } from "../fixtures/pacing";
+import {
+  clickWithPause,
+  holdAfterSuccess,
+  typeSlowly,
+} from "../fixtures/pacing";
 import { addClickHighlight } from "../fixtures/click-highlight";
+import { RECORDING_CONTEXT_OPTIONS } from "../fixtures/recording-context";
 
 const COUNCIL_NAME = "Moonlight Demo";
 const COUNCIL_DESCRIPTION =
@@ -46,7 +51,7 @@ test("01 — council onboarding", async () => {
     name: "Admin",
     publicKey: env.ADMIN_PK,
     secretKey: env.ADMIN_SK,
-  });
+  }, RECORDING_CONTEXT_OPTIONS);
   await addClickHighlight(adminCtx.context);
 
   const councilPage = await adminCtx.context.newPage();

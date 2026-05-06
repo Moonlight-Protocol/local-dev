@@ -38,6 +38,26 @@ export interface UserContext {
   userDataDir: string;
 }
 
+/**
+ * Per-call overrides for browser launch.
+ *
+ * Defaults are tuned for CI (xvfb at 1280x960) and local Docker stacks. Recording
+ * specs that run on a host with a real display pass overrides for windowed mode +
+ * page zoom. Keeping these out of the shared defaults prevents recording
+ * presentation tweaks from breaking the invite-gate / full-flow test runners.
+ */
+export interface CreateUserContextOptions {
+  /** Extra Chromium launch args appended after the safe defaults. */
+  extraArgs?: string[];
+  /**
+   * Override the default viewport. Pass `null` to let the OS window size drive
+   * the page size (recording mode). Omit to keep the CI-safe 1280x800 default.
+   */
+  viewport?: { width: number; height: number } | null;
+  /** Apply 80% page zoom on every page (recording readability). */
+  applyZoom?: boolean;
+}
+
 const FREIGHTER_PASSWORD = process.env.FREIGHTER_PASSWORD ??
   "What-a-useless-req";
 const EXTENSION_PATH = process.env.FREIGHTER_EXTENSION_PATH ||
@@ -58,6 +78,7 @@ const EXTENSION_PATH = process.env.FREIGHTER_EXTENSION_PATH ||
 export async function createUserContext(
   _browser: unknown, // kept for API compat — ignored, each context is its own browser
   profile: UserProfile,
+  options: CreateUserContextOptions = {},
 ): Promise<UserContext> {
   // Each user gets a unique temp directory for Chrome profile data
   const userDataDir = fs.mkdtempSync(
@@ -81,18 +102,14 @@ export async function createUserContext(
     `--load-extension=${EXTENSION_PATH}`,
     "--no-first-run",
     "--disable-default-apps",
-    // Windowed (not macOS fullscreen): `--start-fullscreen` triggers macOS
-    // native fullscreen which spawns a new Space, pulling Chromium off the
-    // current recording desktop. `--start-maximized` + explicit window-size
-    // gives a near-full-screen window that stays on the current Space.
-    "--start-maximized",
-    "--window-position=0,0",
-    "--window-size=1728,1080",
   ];
   if (insecureOrigins.length > 0) {
     args.push(
       `--unsafely-treat-insecure-origin-as-secure=${insecureOrigins.join(",")}`,
     );
+  }
+  if (options.extraArgs && options.extraArgs.length > 0) {
+    args.push(...options.extraArgs);
   }
 
   // Video recording options (set via VIDEO_RECORD=1 env var)
@@ -112,12 +129,15 @@ export async function createUserContext(
     }
     : undefined;
 
-  // Launch a persistent context with the extension. viewport: null lets the
-  // window size drive the page size, so --start-fullscreen produces a real
-  // fullscreen page.
+  // viewport defaults to 1280x800 (CI-safe). Recording specs pass `null` to let
+  // the OS window size drive the page size for full-screen recordings.
+  const viewport = options.viewport === undefined
+    ? { width: 1280, height: 800 }
+    : options.viewport;
+
   const context = await chromium.launchPersistentContext(userDataDir, {
     headless: false,
-    viewport: null,
+    viewport,
     args,
     recordVideo,
     ...(process.env.VIDEO_SLOWMO
@@ -125,26 +145,26 @@ export async function createUserContext(
       : {}),
   });
 
-  // Zoom contents to 80% so the UI fits comfortably inside the fullscreen
-  // viewport during screen-recording.
-  const applyZoom = async (page: Page) => {
-    try {
-      await page.addInitScript(() => {
-        // deno-lint-ignore no-explicit-any
-        (document.documentElement.style as any).zoom = "0.8";
-      });
-      await page.evaluate(() => {
-        // deno-lint-ignore no-explicit-any
-        (document.documentElement.style as any).zoom = "0.8";
-      }).catch(() => {});
-    } catch {
-      // best effort
-    }
-  };
-  for (const page of context.pages()) await applyZoom(page);
-  context.on("page", (page) => {
-    void applyZoom(page);
-  });
+  if (options.applyZoom) {
+    const applyZoom = async (page: Page) => {
+      try {
+        await page.addInitScript(() => {
+          // deno-lint-ignore no-explicit-any
+          (document.documentElement.style as any).zoom = "0.8";
+        });
+        await page.evaluate(() => {
+          // deno-lint-ignore no-explicit-any
+          (document.documentElement.style as any).zoom = "0.8";
+        }).catch(() => {});
+      } catch {
+        // best effort
+      }
+    };
+    for (const page of context.pages()) await applyZoom(page);
+    context.on("page", (page) => {
+      void applyZoom(page);
+    });
+  }
 
   // Give the extension time to initialize
   const pages = context.pages();
