@@ -17,6 +17,40 @@ import {
 } from "./freighter";
 
 /**
+ * If the recording click-highlight init script is loaded on this page,
+ * spawn a ring at the locator's center and wait 2s before returning so
+ * the demo viewer can register the action. No-op in verification tests.
+ */
+async function paceForRecording(page: Page, selector: string): Promise<void> {
+  const isRecording = await page.evaluate(() =>
+    !!(globalThis as unknown as { __moonlightClickHighlight?: boolean })
+      .__moonlightClickHighlight
+  ).catch(() => false);
+  if (!isRecording) return;
+  try {
+    const locator = page.locator(selector).first();
+    await locator.scrollIntoViewIfNeeded();
+    const box = await locator.boundingBox();
+    if (!box) return;
+    await page.evaluate(
+      ({ x, y }: { x: number; y: number }) => {
+        (globalThis as unknown as {
+          __moonlightSpawnRing?: (x: number, y: number) => void;
+        }).__moonlightSpawnRing?.(x, y);
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height / 2 },
+    );
+    await page.waitForTimeout(2000);
+    await page.evaluate(() => {
+      (globalThis as unknown as { __moonlightSuppressNextAutoRing?: boolean })
+        .__moonlightSuppressNextAutoRing = true;
+    });
+  } catch {
+    // Best effort — fall through to the click.
+  }
+}
+
+/**
  * Connect Freighter wallet on a login page.
  *
  * The frontends use Stellar Wallets Kit which shows a wallet picker modal
@@ -35,6 +69,7 @@ export async function connectWallet(
   await page.waitForSelector(connectBtnSelector, { timeout: 15_000 });
 
   // Step 1: Click the connect button to open the wallet picker modal
+  await paceForRecording(page, connectBtnSelector);
   await page.click(connectBtnSelector);
   await page.waitForTimeout(1000);
 
@@ -47,6 +82,7 @@ export async function connectWallet(
     if (
       await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
     ) {
+      await paceForRecording(page, "text=Freighter");
       await freighterOption.click();
     } else {
       // Fallback: look inside the web component's shadow DOM
@@ -82,6 +118,7 @@ export async function signIn(
 
   // Listen for popup 1 before clicking
   const popup1Promise = context.waitForEvent("page", { timeout: 30_000 });
+  await paceForRecording(page, signInBtnSelector);
   await page.click(signInBtnSelector);
 
   const popup1 = await popup1Promise;

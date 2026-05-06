@@ -28,6 +28,7 @@ import {
   send,
   showReceive,
   toggleToPrivateView,
+  toggleToPublicView,
   waitForConfidentialBalance,
   withdraw,
 } from "../fixtures/browser-wallet";
@@ -120,10 +121,18 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     await closeReceiveConfirmation(bobWallet);
     await waitForConfidentialBalance(bobWallet, 24.99);
 
-    await withdraw(aliceWallet, {
-      amount: "70",
-      destinationAddress: env.ALICE_PK,
+    // Bob withdraws ~all of what he received (25 minus the receive fee) so
+    // his public XLM balance visibly grows — that's the on-chain proof the
+    // private transfer landed.
+    await withdraw(bobWallet, {
+      amount: "20",
+      destinationAddress: env.BOB_PK,
     });
+
+    // Closing beat: flip both wallets back to public view so the recording
+    // shows the on-chain XLM balances confirming deposit/withdraw worked.
+    await toggleToPublicView(aliceWallet);
+    await toggleToPublicView(bobWallet);
   } finally {
     if (aliceHandle) await closeWalletContext(aliceHandle);
     await closeWalletContext(bobHandle);

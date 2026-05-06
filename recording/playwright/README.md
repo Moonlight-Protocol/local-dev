@@ -20,23 +20,21 @@ A single recording run goes through these phases, in order:
    without seed injection so the full UI onboarding flow records.
 3. **Specs run in order** — each spec is a separate Playwright invocation that
    loads `run.env` for shared state. Sections 01 and 02 backfill the contract
-   IDs that 03a/b/c and 04 consume.
+   IDs that 03 and 04 consume.
 4. **Outputs** — videos land under
    `runs/<RUN_ID>/videos/<spec-name>/<test-id>.webm`. Each section is its own
    file; cut + dub in post.
 
 ## Sections
 
-Run order matters: 01 → 02 → 03a → 03b → 03c → 04.
+Run order matters: 01 → 02 → 03 → 04.
 
-| #   | Spec                                      | What records                                                          | Wallet                                                               | Reads from run.env                                   | Writes to run.env                   |
-| --- | ----------------------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------------------- | ---------------------------------------------------- | ----------------------------------- |
-| 01  | `01-council-onboard.spec.ts`              | council-console: create council, deploy contracts, fund               | Freighter                                                            | ADMIN_*, COUNCIL_CONSOLE_URL                         | CHANNEL_AUTH_ID, PRIVACY_CHANNEL_ID |
-| 02  | `02-provider-create-join-approve.spec.ts` | provider-console + council-console approval                           | Freighter                                                            | `PP_*`, `ADMIN_*`, CHANNEL_AUTH_ID                   | —                                   |
-| 03a | `03a-alice-deposit-send.spec.ts`          | browser-wallet: onboard, add channel, connect provider, deposit, send | browser-wallet                                                       | ALICE_*, PRIVACY_CHANNEL_ID, PROVIDER_PLATFORM_URL   | bob-mlxdr.txt artifact              |
-| 03b | `03b-bob-receive.spec.ts`                 | browser-wallet: onboard, receive view (captures MLXDR)                | browser-wallet                                                       | BOB_*, PRIVACY_CHANNEL_ID, PROVIDER_PLATFORM_URL     | bob-mlxdr.txt artifact              |
-| 03c | `03c-alice-withdraw.spec.ts`              | browser-wallet: withdraw                                              | browser-wallet                                                       | ALICE_*, PRIVACY_CHANNEL_ID                          | —                                   |
-| 04  | `04-dashboard-tour.spec.ts`               | dashboard: council list, channel detail, provider, activity           | none (uses launchPersistentContext to keep recording rig consistent) | DASHBOARD_URL, COUNCIL_PLATFORM_URL, CHANNEL_AUTH_ID | —                                   |
+| #   | Spec                                      | What records                                                                                                                                                                                          | Wallet                                                               | Reads from run.env                                                          | Writes to run.env                   |
+| --- | ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- | --------------------------------------------------------------------------- | ----------------------------------- |
+| 01  | `01-council-onboard.spec.ts`              | council-console: create council, deploy contracts, fund                                                                                                                                               | Freighter                                                            | ADMIN_*, COUNCIL_CONSOLE_URL                                                | CHANNEL_AUTH_ID, PRIVACY_CHANNEL_ID |
+| 02  | `02-provider-create-join-approve.spec.ts` | provider-console + council-console approval                                                                                                                                                           | Freighter                                                            | `PP_*`, `ADMIN_*`, CHANNEL_AUTH_ID                                          | —                                   |
+| 03  | `03-private-transfer.spec.ts`             | browser-wallet (Bob + Alice in one continuous flow): Bob receive → Alice onboard + deposit + send → Bob withdraw → both wallets flip back to public view to surface on-chain XLM as the closing beat | browser-wallet                                                       | ALICE_*, BOB_*, PRIVACY_CHANNEL_ID, PROVIDER_PLATFORM_URL                   | —                                   |
+| 04  | `04-dashboard-tour.spec.ts`               | dashboard: council list, council detail, channels + providers, recent activity, transactions, totals                                                                                                  | none (uses launchPersistentContext to keep recording rig consistent) | DASHBOARD_URL, COUNCIL_PLATFORM_URL, CHANNEL_AUTH_ID                        | —                                   |
 
 `run.env` (under `recording/runs/<RUN_ID>/`) is the single shared-state
 mechanism between specs:
@@ -45,9 +43,9 @@ mechanism between specs:
 - Section 01 backfills `CHANNEL_AUTH_ID` and `PRIVACY_CHANNEL_ID`.
 - Sections 02-04 read those values.
 
-Multi-line blobs (e.g. Bob's receive MLXDR) are persisted as
-`runs/<RUN_ID>/<name>.txt` artifacts via `writeRunArtifact`/`readRunArtifact` so
-they don't pollute `run.env`.
+Section 03 keeps Bob's receive MLXDR in memory across the Bob-receive →
+Alice-send sub-beats (the two wallets share one test), so no on-disk artifact
+is needed.
 
 ## Setup
 
@@ -74,7 +72,7 @@ npm run install:browsers
 RUN_ID=<id> npm run record
 
 # One section
-RUN_ID=<id> npx playwright test specs/03a-alice-deposit-send.spec.ts
+RUN_ID=<id> npx playwright test specs/03-private-transfer.spec.ts
 ```
 
 Videos land under:
@@ -84,13 +82,11 @@ local-dev/recording/runs/<RUN_ID>/
 ├── run.env
 ├── keys.txt
 ├── .env.seed.user{1,2}
-├── bob-mlxdr.txt           (only after 03b)
 └── videos/
     ├── 01-council-onboard.spec.ts/<test-id>.webm
     ├── 02-provider-create-join-approve.spec.ts/<test-id>.webm
-    ├── 03a-alice-deposit-send.spec.ts/<test-id>.webm
-    ├── 03b-bob-receive.spec.ts/<test-id>.webm
-    ├── 03c-alice-withdraw.spec.ts/<test-id>.webm
+    ├── 03-bob/<test-id>.webm           (Bob's wallet during section 03)
+    ├── 03-alice/<test-id>.webm         (Alice's wallet during section 03)
     └── 04-dashboard-tour.spec.ts/<test-id>.webm
 ```
 
@@ -103,12 +99,13 @@ helper manages its own browser context outside this rig's
 `playwright.config.ts`, so Playwright's `video: "on"` setting does **not** apply
 — these specs run successfully but emit no `.webm` for the Freighter beats.
 
-Sections 03a / 03b / 03c / 04 use the recording rig's own fixtures and do
-produce `.webm` files.
+Sections 03 / 04 use the recording rig's own fixtures and do produce `.webm`
+files (one per wallet window for section 03 — Bob and Alice each get their
+own video).
 
-To capture the full six-section run end-to-end, screen-record the display while
-`npm run record` executes. The rig already runs non-headless (`headless: false`
-in `playwright.config.ts`), so every window is visible.
+To capture the full four-section run end-to-end, screen-record the display
+while `npm run record` executes. The rig already runs non-headless
+(`headless: false` in `playwright.config.ts`), so every window is visible.
 
 ```bash
 # In one terminal — start your screen recorder (QuickTime "New Screen
@@ -123,9 +120,10 @@ Tips:
   Chromium contexts (admin, pp, alice, bob) as separate windows; window-only
   capture will miss handoffs.
 - Each context renders at the configured viewport (default 1280x720).
-- Total runtime is ~7 minutes for all six specs.
+- Total runtime is ~11 minutes for all four specs (01: ~2.4m, 02: ~3.2m, 03:
+  ~5m, 04: ~40s).
 - Cursor + window chrome appear in the screen recording. The Playwright `.webm`
-  outputs (03a–04) intentionally do not, so use whichever source is right for
+  outputs (03–04) intentionally do not, so use whichever source is right for
   the section.
 
 ## Tunables
@@ -163,6 +161,9 @@ the demo doesn't snap to the next step.
 
 ## Status
 
-End-to-end validation runs against the local stack with all six specs passing
-(`01`, `02`, `03a`, `03b`, `03c`, `04`). Section 04's tour beats
-(scroll-to-council, drill-in, provider list, bundle activity) are still TODO.
+End-to-end validation runs against the local stack with all four specs passing
+(`01`, `02`, `03`, `04`). Section 03 was consolidated from the original
+03a/03b/03c split into a single continuous Bob+Alice flow that ends with both
+wallets toggled back to public view so the on-chain XLM balances confirm
+deposit + withdraw landed. Section 04's tour beats (council list, drill-in,
+channels, providers, recent activity, transactions, totals) are wired up.

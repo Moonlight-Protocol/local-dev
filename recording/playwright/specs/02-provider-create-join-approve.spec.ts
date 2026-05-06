@@ -23,7 +23,7 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, requireValue } from "../helpers/run-env";
-import { holdAfterSuccess } from "../fixtures/pacing";
+import { clickWithPause, holdAfterSuccess, typeSlowly } from "../fixtures/pacing";
 import { addClickHighlight } from "../fixtures/click-highlight";
 
 const PROVIDER_NAME = "Acme Privacy Provider";
@@ -60,26 +60,27 @@ test("02 — provider create + join + approve", async () => {
     await verifyAuthenticated(providerPage, "nav", 30_000);
 
     // Beat 2 — create provider
-    await providerPage
-      .locator("#create-pp-btn, button:has-text('Create')")
-      .first()
-      .click();
+    await clickWithPause(
+      providerPage
+        .locator("#create-pp-btn, button:has-text('Create')")
+        .first(),
+    );
 
     await providerPage.waitForSelector("#pp-name", { timeout: 10_000 });
-    await providerPage.fill("#pp-name", PROVIDER_NAME);
-    await providerPage.fill("#pp-email", PROVIDER_EMAIL);
-    await providerPage.click("#next-btn");
+    await typeSlowly(providerPage.locator("#pp-name"), PROVIDER_NAME);
+    await typeSlowly(providerPage.locator("#pp-email"), PROVIDER_EMAIL);
+    await clickWithPause(providerPage.locator("#next-btn"));
 
     // Beat 3 — fund PP operator
     await providerPage.waitForSelector("#fund-amount", { timeout: 15_000 });
-    await providerPage.fill("#fund-amount", "10");
+    await typeSlowly(providerPage.locator("#fund-amount"), "10");
     await withWalletApproval(ppCtx.context, providerPage, async () => {
-      await providerPage.click("#fund-btn");
+      await clickWithPause(providerPage.locator("#fund-btn"));
     });
     await providerPage.waitForSelector("#next-btn:not([disabled])", {
       timeout: 60_000,
     });
-    await providerPage.click("#next-btn");
+    await clickWithPause(providerPage.locator("#next-btn"));
     await providerPage.waitForLoadState("networkidle");
 
     // Beat 4 — request join
@@ -94,22 +95,25 @@ test("02 — provider create + join + approve", async () => {
       await providerPage.waitForLoadState("networkidle");
       const joinModalBtn = providerPage.locator(".join-council-btn").first();
       if (await joinModalBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
-        await joinModalBtn.click();
+        await clickWithPause(joinModalBtn);
         await providerPage.waitForTimeout(1000);
       }
     }
 
     const urlInput = providerPage.locator("#council-url, #jc-url").first();
     await urlInput.waitFor({ state: "visible", timeout: 10_000 });
-    await urlInput.fill(`${urls.councilApi}?council=${councilId}`);
+    await typeSlowly(urlInput, `${urls.councilApi}?council=${councilId}`);
 
-    await providerPage.locator("#discover-btn, #jc-discover-btn").first()
-      .click();
+    await clickWithPause(
+      providerPage.locator("#discover-btn, #jc-discover-btn").first(),
+    );
     await providerPage.waitForSelector("#council-info, #jc-info, #jc-confirm", {
       state: "visible",
       timeout: 15_000,
     });
-    await providerPage.locator("#join-btn, #jc-join-btn").first().click();
+    await clickWithPause(
+      providerPage.locator("#join-btn, #jc-join-btn").first(),
+    );
 
     await providerPage.waitForLoadState("networkidle");
     await providerPage.waitForTimeout(2000);
@@ -127,7 +131,9 @@ test("02 — provider create + join + approve", async () => {
     await councilPage.waitForLoadState("networkidle");
     await loginWithFreighter(adminCtx.context, councilPage);
     await verifyAuthenticated(councilPage, "nav", 30_000);
-    await councilPage.locator(`a[href*="${councilId}"]`).first().click();
+    await clickWithPause(
+      councilPage.locator(`a[href*="${councilId}"]`).first(),
+    );
     await councilPage.waitForLoadState("networkidle");
 
     const requestedRow = councilPage.locator(
@@ -140,7 +146,7 @@ test("02 — provider create + join + approve", async () => {
     await approveBtn.waitFor({ state: "visible", timeout: 5_000 });
 
     await withWalletApproval(adminCtx.context, councilPage, async () => {
-      await approveBtn.click();
+      await clickWithPause(approveBtn);
     });
 
     // Beat 6 — verify active

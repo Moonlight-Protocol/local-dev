@@ -52,6 +52,19 @@ const INIT_SCRIPT = `
   }
 
   window.__moonlightSpawnRing = spawnRing;
+
+  // Auto-spawn a ring on every click, in capture phase so we never miss one
+  // (handlers that stopPropagation can't suppress us). Covers bare .click()
+  // calls that don't go through clickWithPause.
+  // clickWithPause sets __moonlightSuppressNextAutoRing right before its
+  // own click so we don't double-ring (manual ring + auto ring on click).
+  document.addEventListener("pointerdown", (e) => {
+    if (window.__moonlightSuppressNextAutoRing) {
+      window.__moonlightSuppressNextAutoRing = false;
+      return;
+    }
+    spawnRing(e.clientX, e.clientY);
+  }, true);
 })();
 `;
 
