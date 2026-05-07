@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       local_dev_ref:
-        description: "local-dev branch or ref (e.g. fix/my-branch). Set to ${{ github.head_ref }} when called from a local-dev PR; defaults to main."
+        description: "local-dev branch or ref (e.g. fix/my-branch). Set to the PR head ref when called from a local-dev PR; defaults to main."
         type: string
         default: "main"
       provider_console_ref:
