@@ -96,6 +96,36 @@ jobs:
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
           path: pay-platform
 
+      # The Freighter extension is loaded into Chromium via --load-extension at
+      # ./playwright/freighter-extension. The directory is gitignored — devs copy
+      # it from their local Chrome install. CI has no such copy, so we build it
+      # from stellar/freighter at a pinned tag. Pin (rather than "latest") so a
+      # Freighter release can't break invite-gate without an explicit bump here.
+      - name: Cache Freighter extension build
+        id: freighter-cache
+        uses: actions/cache@v4
+        with:
+          path: playwright/freighter-extension
+          key: freighter-extension-5.39.0-v1
+
+      - name: Setup Node (for Freighter build)
+        if: steps.freighter-cache.outputs.cache-hit != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build Freighter extension (pinned 5.39.0)
+        if: steps.freighter-cache.outputs.cache-hit != 'true'
+        run: |
+          set -e
+          git clone --depth 1 --branch 5.39.0 https://github.com/stellar/freighter.git /tmp/freighter
+          cd /tmp/freighter
+          yarn install --frozen-lockfile
+          yarn build:freighter-api
+          yarn build:extension:production
+          mkdir -p "$GITHUB_WORKSPACE/playwright/freighter-extension"
+          cp -r extension/build/. "$GITHUB_WORKSPACE/playwright/freighter-extension/"
+
       - name: Run invite-gate tests
         env:
           PROVIDER_CONSOLE_PATH: ./provider-console
