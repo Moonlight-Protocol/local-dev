@@ -141,6 +141,7 @@ clean_all() {
 case "$SUITE" in
   playwright|invite-gate)
     # No WASMs needed — council-console downloads them during its Docker build
+    "$SCRIPT_DIR/setup-freighter.sh"
     run_suite "$SUITE"
     ;;
 
