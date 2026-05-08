@@ -354,7 +354,7 @@ services:
         npm install
         echo "Running Playwright tests..."
         xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" \
-          npx playwright test --project=chromium
+          npx playwright test full-flow --project=chromium
     environment:
       TARGET: local
       PROVIDER_CONSOLE_URL: http://provider-console:3020
