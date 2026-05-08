@@ -350,11 +350,32 @@ services:
       - -c
       - |
         cp -r /playwright-src/. /app/
+        # The stellar healthcheck only verifies Soroban RPC is up. Horizon's
+        # friendbot endpoint becomes ready noticeably later. createUserContext
+        # funds accounts via friendbot with no retry — if friendbot isn't ready
+        # by the time the first context is created, the account never lands on
+        # chain and the SEP-53 challenge step fails. Mirrors waitForFriendbot
+        # in test/setup-e2e.ts.
+        echo "Waiting for Friendbot..."
+        ready=0
+        for i in $$(seq 1 180); do
+          status=$$(curl -s -o /dev/null -w "%{http_code}" "$${FRIENDBOT_URL}?addr=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF" 2>/dev/null || echo "000")
+          if [ "$$status" = "200" ] || [ "$$status" = "400" ]; then
+            echo "  Friendbot ready ($${i}s)."
+            ready=1
+            break
+          fi
+          sleep 1
+        done
+        if [ "$$ready" != "1" ]; then
+          echo "Friendbot did not become ready after 180s"
+          exit 1
+        fi
         echo "Installing npm dependencies..."
         npm install
         echo "Running Playwright tests..."
         xvfb-run --auto-servernum --server-args="-screen 0 1280x960x24" \
-          npx playwright test --project=chromium
+          npx playwright test full-flow --project=chromium
     environment:
       TARGET: local
       PROVIDER_CONSOLE_URL: http://provider-console:3020

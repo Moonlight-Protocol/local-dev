@@ -54,14 +54,16 @@ npx playwright install chromium
 
 ### 2. Get the Freighter extension
 
-Download from [GitHub releases](https://github.com/nickhealx/freighter/releases) or extract from an installed Chrome extension:
+Run the setup script from the local-dev root — it builds the extension from `stellar/freighter` at the pinned tag (matches CI byte-for-byte) and installs it at `playwright/freighter-extension/`:
 
 ```bash
-# From Chrome's extension directory (macOS)
-cp -r ~/Library/Application\ Support/Google/Chrome/Default/Extensions/<freighter-id>/<version>/ ./freighter-extension
+cd /path/to/local-dev
+./setup-freighter.sh
 ```
 
-Place the unpacked extension at `./freighter-extension/` (or set `FREIGHTER_EXTENSION_PATH`).
+Idempotent. Delete `playwright/freighter-extension/` to refresh after a pin bump. Build runs inside a `node:20` container, so the only host requirement is Docker.
+
+To use a different extension build, set `FREIGHTER_EXTENSION_PATH` to its absolute path before running playwright.
 
 ### 3. Start the local stack
 
