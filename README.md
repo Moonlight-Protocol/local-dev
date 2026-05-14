@@ -272,6 +272,32 @@ Replace `lifecycle` with any suite name (`e2e`, `otel`, `governance`).
 
 Each directory contains Jaeger's badger storage (`keys/` and `values/`). Delete a directory to clear its traces. The `.traces/` directory is gitignored.
 
+## Verifying deployed versions
+
+`scripts/verify-deploy.sh` is a one-shot check that confirms every deployed Moonlight app is running its latest tagged release. It probes 14 endpoints (6 backend `/api/v1/health` + 8 frontend `/health.json`, testnet + mainnet × {council-platform, pay-platform, provider-platform, council-console, provider-console, network-dashboard, moonlight-pay}), compares each app's reported version against its repo's latest GitHub tag, and prints a status table.
+
+```bash
+bash scripts/verify-deploy.sh
+```
+
+Exit codes:
+- `0` — every app on its latest tag.
+- `1` — at least one app drifts (older deployed version than latest tag).
+- `2` — at least one endpoint is unreachable / returned no valid JSON.
+
+Sample happy-path output:
+
+```
+APP                  ENV       DEPLOYED     LATEST_TAG    STATUS
+council-platform     mainnet   0.4.20       v0.4.20       OK
+council-platform     testnet   0.4.20       v0.4.20       OK
+pay-platform         mainnet   0.5.16       v0.5.16       OK
+...
+moonlight-pay        testnet   0.5.17       v0.5.17       OK
+```
+
+Requires `gh` authenticated (for tag lookup), `curl`, `jq`. No Docker / no stack startup needed — the script only hits public deployed endpoints.
+
 ## Releases and Versioning
 
 See [RELEASES.md](RELEASES.md) for the versioning strategy and release workflows across all modules.
