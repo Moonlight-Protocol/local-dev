@@ -71,7 +71,7 @@ function loadState(): ParsedState {
   return { councilId: map.COUNCIL_ID, councilUrl: map.COUNCIL_URL };
 }
 
-async function fetchCouncilJurisdictions(
+async function fetchAcceptedJurisdictions(
   state: ParsedState,
 ): Promise<string[]> {
   const url = `${state.councilUrl}/api/v1/public/council?councilId=${
@@ -84,15 +84,21 @@ async function fetchCouncilJurisdictions(
     );
   }
   const { data } = await res.json();
-  const codes: string[] = (data?.jurisdictions ?? []).map((j: {
-    countryCode: string;
-  }) => j.countryCode);
-  if (codes.length === 0) {
+  const councilCodes: string[] = (data?.jurisdictions ?? []).map(
+    (j: { countryCode: string }) => j.countryCode,
+  );
+  const providerCodes: string[] = (data?.providers ?? []).flatMap((
+    p: { jurisdictions: string[] | null },
+  ) => p.jurisdictions ?? []);
+  const merged = Array.from(
+    new Set([...councilCodes, ...providerCodes].map((c) => c.toUpperCase())),
+  );
+  if (merged.length === 0) {
     throw new Error(
-      "Council has no jurisdictions; setup-c.sh seeds US — re-run it.",
+      "No jurisdictions known; setup-c.sh seeds US and setup-pp.sh claims UY — re-run them.",
     );
   }
-  return codes;
+  return merged;
 }
 
 function pickRandom<T>(arr: T[]): T {
@@ -121,7 +127,7 @@ async function fund(friendbotUrl: string, publicKey: string): Promise<void> {
 async function main(): Promise<void> {
   const state = loadState();
   const config = loadConfig();
-  const accepted = await fetchCouncilJurisdictions(state);
+  const accepted = await fetchAcceptedJurisdictions(state);
 
   console.log("\n=== local-dev — Alice→Bob send loop ===\n");
   console.log(`  Count:           ${COUNT}`);
