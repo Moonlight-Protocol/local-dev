@@ -16,7 +16,7 @@
  * propagates a W3C traceparent header, giving us SDK-driver↔council-platform
  * trace continuity to assert against.
  */
-import { withE2ESpan } from "../e2e/tracer.ts";
+import { withE2ESpan } from "./client/tracer.ts";
 
 export interface ExerciseCouncilSpansConfig {
   councilUrl: string;

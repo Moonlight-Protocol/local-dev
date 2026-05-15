@@ -147,12 +147,14 @@ services:
     volumes:
       - shared-config:/config:ro
       - ./e2e:/e2e-src:ro
+      - ./lib:/lib-src:ro
     working_dir: /app
     entrypoint:
       - sh
       - -c
       - |
         cp /e2e-src/*.ts /e2e-src/deno.json . && cp /e2e-src/deno.lock . 2>/dev/null || true
+        mkdir -p ../lib && cp -r /lib-src/client ../lib/
         deno install
         echo "Waiting for provider..."
         for i in $$(seq 1 60); do

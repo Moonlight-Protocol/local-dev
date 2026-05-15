@@ -5,8 +5,8 @@ const otelTracer = trace.getTracer("moonlight-e2e");
 const collectedTraceIds = new Set<string>();
 const e2eStartTimeUs = Date.now() * 1000; // microseconds for Jaeger API
 
-const TRACE_IDS_PATH =
-  new URL("./e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH = Deno.env.get("E2E_TRACE_IDS_PATH") ??
+  "e2e-trace-ids.json";
 
 function wrapOtelSpan(
   otelSpan: ReturnType<typeof otelTracer.startSpan>,

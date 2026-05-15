@@ -1,11 +1,11 @@
 import { Keypair } from "stellar-sdk";
-import { loadConfig } from "./config.ts";
-import { authenticate } from "./auth.ts";
-import { deposit } from "./deposit.ts";
-import { prepareReceive } from "./receive.ts";
-import { send } from "./send.ts";
-import { withdraw } from "./withdraw.ts";
-import { sdkTracer, withE2ESpan, writeTraceIds } from "./tracer.ts";
+import { loadConfig } from "../lib/client/config.ts";
+import { authenticate } from "../lib/client/auth.ts";
+import { deposit } from "../lib/client/deposit.ts";
+import { prepareReceive } from "../lib/client/receive.ts";
+import { send } from "../lib/client/send.ts";
+import { withdraw } from "../lib/client/withdraw.ts";
+import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
 const SEND_AMOUNT = 5; // XLM

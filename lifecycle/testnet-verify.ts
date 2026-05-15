@@ -34,7 +34,7 @@ import { Keypair } from "stellar-sdk";
 import { Buffer } from "node:buffer";
 import { type ContractId, NetworkConfig } from "@colibri/core";
 import type { StellarNetworkId } from "@moonlight/moonlight-sdk";
-import type { Config } from "../e2e/config.ts";
+import type { Config } from "../lib/client/config.ts";
 import {
   deriveKeypair,
   masterSeedFromSecret,
@@ -49,12 +49,12 @@ import {
 } from "../lib/deploy.ts";
 import { addProvider } from "../lib/admin.ts";
 import { extractEvents, verifyEvent } from "../lib/events.ts";
-import { authenticate } from "../e2e/auth.ts";
-import { deposit } from "../e2e/deposit.ts";
-import { prepareReceive } from "../e2e/receive.ts";
-import { send } from "../e2e/send.ts";
-import { withdraw } from "../e2e/withdraw.ts";
-import { sdkTracer, withE2ESpan, writeTraceIds } from "../e2e/tracer.ts";
+import { authenticate } from "../lib/client/auth.ts";
+import { deposit } from "../lib/client/deposit.ts";
+import { prepareReceive } from "../lib/client/receive.ts";
+import { send } from "../lib/client/send.ts";
+import { withdraw } from "../lib/client/withdraw.ts";
+import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
 // ─── Testnet endpoints ────────────────────────────────────────────────

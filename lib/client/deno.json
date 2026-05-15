@@ -1,0 +1,9 @@
+{
+  "nodeModulesDir": "auto",
+  "imports": {
+    "@colibri/core": "jsr:@colibri/core@^0.20.2",
+    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.8.0",
+    "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
+    "stellar-sdk": "npm:@stellar/stellar-sdk@^15.0.1"
+  }
+}

@@ -1,7 +1,7 @@
 import { Buffer } from "buffer";
 import { Keypair } from "stellar-sdk";
-import type { Config } from "./config.ts";
-import { withE2ESpan } from "./tracer.ts";
+import type { Config } from "../lib/client/config.ts";
+import { withE2ESpan } from "../lib/client/tracer.ts";
 
 /**
  * Dashboard E2E test — verifies the provider console API endpoints.
