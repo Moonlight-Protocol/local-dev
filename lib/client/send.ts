@@ -9,6 +9,11 @@ import { submitBundle, waitForBundle } from "./bundle.ts";
 
 const SEND_FEE = 0.1; // LOW entropy fee
 
+export interface SendOptions {
+  jurisdictionFrom?: string;
+  jurisdictionTo?: string;
+}
+
 export async function send(
   secretKey: string,
   receiverOperationsMLXDR: string[],
@@ -16,6 +21,7 @@ export async function send(
   jwt: string,
   config: Config,
   tracer?: MoonlightTracer,
+  options: SendOptions = {},
 ): Promise<void> {
   const feeBigInt = fromDecimals(SEND_FEE, 7);
   const amountBigInt = fromDecimals(amount, 7);
@@ -86,7 +92,7 @@ export async function send(
     ...createOps.map((op) => op.toMLXDR()),
     ...spendOps.map((op) => op.toMLXDR()),
   ];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
   console.log(`  Bundle submitted: ${bundleId}`);
 
   await waitForBundle(jwt, bundleId, config);

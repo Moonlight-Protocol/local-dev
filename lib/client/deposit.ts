@@ -10,12 +10,18 @@ import { submitBundle, waitForBundle } from "./bundle.ts";
 
 const DEPOSIT_FEE = 0.05; // LOW entropy fee
 
+export interface DepositOptions {
+  jurisdictionFrom?: string;
+  jurisdictionTo?: string;
+}
+
 export async function deposit(
   secretKey: string,
   amount: number,
   jwt: string,
   config: Config,
   tracer?: MoonlightTracer,
+  options: DepositOptions = {},
 ): Promise<void> {
   const keypair = Keypair.fromSecret(secretKey);
   const totalAmount = fromDecimals(amount + DEPOSIT_FEE, 7);
@@ -54,7 +60,7 @@ export async function deposit(
 
   // 5. Submit bundle
   const operationsMLXDR = [depositOp.toMLXDR(), createOp.toMLXDR()];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
   console.log(`  Bundle submitted: ${bundleId}`);
 
   await waitForBundle(jwt, bundleId, config);
