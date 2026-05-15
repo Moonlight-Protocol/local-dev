@@ -1,10 +1,16 @@
 import type { Config } from "./config.ts";
 import { withE2ESpan } from "./tracer.ts";
 
+export interface SubmitBundleOptions {
+  jurisdictionFrom?: string;
+  jurisdictionTo?: string;
+}
+
 export function submitBundle(
   jwt: string,
   operationsMLXDR: string[],
   config: Config,
+  options: SubmitBundleOptions = {},
 ): Promise<string> {
   return withE2ESpan("bundle.submit", async () => {
     const maxRetries = 10;
@@ -20,6 +26,12 @@ export function submitBundle(
         body: JSON.stringify({
           operationsMLXDR,
           channelContractId: config.channelContractId,
+          ...(options.jurisdictionFrom !== undefined
+            ? { jurisdictionFrom: options.jurisdictionFrom }
+            : {}),
+          ...(options.jurisdictionTo !== undefined
+            ? { jurisdictionTo: options.jurisdictionTo }
+            : {}),
         }),
       });
 

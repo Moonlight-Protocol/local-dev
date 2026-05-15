@@ -9,6 +9,11 @@ import { submitBundle, waitForBundle } from "./bundle.ts";
 
 const WITHDRAW_FEE = 0.1; // LOW entropy fee
 
+export interface WithdrawOptions {
+  jurisdictionFrom?: string;
+  jurisdictionTo?: string;
+}
+
 export async function withdraw(
   secretKey: string,
   destinationAddress: string,
@@ -16,6 +21,7 @@ export async function withdraw(
   jwt: string,
   config: Config,
   tracer?: MoonlightTracer,
+  options: WithdrawOptions = {},
 ): Promise<void> {
   const feeBigInt = fromDecimals(WITHDRAW_FEE, 7);
   const amountBigInt = fromDecimals(amount, 7);
@@ -83,7 +89,7 @@ export async function withdraw(
     ...changeCreateOps.map((op) => op.toMLXDR()),
     ...spendOps.map((op) => op.toMLXDR()),
   ];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
   console.log(`  Bundle submitted: ${bundleId}`);
 
   await waitForBundle(jwt, bundleId, config);
