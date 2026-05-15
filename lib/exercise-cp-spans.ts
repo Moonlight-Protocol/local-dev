@@ -63,7 +63,9 @@ function logResult(res: Response, label: string, body: string): void {
     // 4xx/5xx — e.g. Escrow.releaseForRecipient legitimately 500s on a
     // freshly-created council with no on-chain UTXOs to release. Log
     // the failure and move on; the verifier asserts on span counts.
-    console.log(`    ⚠️  ${label} returned ${res.status}: ${body.slice(0, 200)}`);
+    console.log(
+      `    ⚠️  ${label} returned ${res.status}: ${body.slice(0, 200)}`,
+    );
   }
 }
 

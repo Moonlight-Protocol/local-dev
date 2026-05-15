@@ -102,9 +102,7 @@ async function main(): Promise<void> {
     const receiverOps = await prepareReceive(bob.secret(), SEND_AMOUNT, config);
     await send(alice.secret(), receiverOps, SEND_AMOUNT, aliceJwt, config);
     console.log(
-      `  ${i}/${COUNT}  sent ${SEND_AMOUNT} XLM (${
-        Date.now() - startedAt
-      }ms)`,
+      `  ${i}/${COUNT}  sent ${SEND_AMOUNT} XLM (${Date.now() - startedAt}ms)`,
     );
     if (i < COUNT) {
       await new Promise((r) => setTimeout(r, INTERVAL_MS));
