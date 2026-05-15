@@ -91,6 +91,7 @@ services:
     volumes:
       - shared-config:/config:ro
       - .:/src:ro
+      - ../lib:/lib-src:ro
     working_dir: /app
     environment:
       PROVIDER_URL: http://provider:3000
@@ -108,6 +109,7 @@ services:
       - -c
       - |
           cp /src/*.ts /src/deno.json . && cp /src/deno.lock . 2>/dev/null || true
+          mkdir -p ../lib && cp -r /lib-src/client ../lib/
           deno install
           echo "Waiting for provider..."
           for i in $(seq 1 60); do

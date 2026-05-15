@@ -12,13 +12,13 @@ import {
 import { addProvider, removeProvider } from "../lib/admin.ts";
 import { extractEvents, verifyEvent } from "../lib/events.ts";
 
-import { authenticate } from "../e2e/auth.ts";
-import { deposit } from "../e2e/deposit.ts";
-import { prepareReceive } from "../e2e/receive.ts";
-import { send } from "../e2e/send.ts";
-import { withdraw } from "../e2e/withdraw.ts";
+import { authenticate } from "../lib/client/auth.ts";
+import { deposit } from "../lib/client/deposit.ts";
+import { prepareReceive } from "../lib/client/receive.ts";
+import { send } from "../lib/client/send.ts";
+import { withdraw } from "../lib/client/withdraw.ts";
 
-import type { Config } from "../e2e/config.ts";
+import type { Config } from "../lib/client/config.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
 const SEND_AMOUNT = 5; // XLM

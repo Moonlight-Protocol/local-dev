@@ -297,6 +297,27 @@ async function main() {
   }
   console.log(`  Channel added: ${channelContractId} (XLM)`);
 
+  const addJurisdictionRes = await fetch(
+    `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
+      encodeURIComponent(channelAuthId)
+    }`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${adminJwt}`,
+      },
+      body: JSON.stringify({ countryCode: "US" }),
+    },
+  );
+  if (!addJurisdictionRes.ok) {
+    throw new Error(
+      `Add jurisdiction failed: ${addJurisdictionRes.status} ${await addJurisdictionRes
+        .text()}`,
+    );
+  }
+  console.log("  Jurisdiction added: US");
+
   console.log("\n[8/8] Write state file");
   await writeStateFile({
     ADMIN_PK: admin.publicKey(),

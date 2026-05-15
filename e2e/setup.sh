@@ -128,7 +128,7 @@ BUNDLE_MAX_OPERATIONS=20
 EOF
 
 # --- Write shared config for test runner ---
-# E2E_ prefix matches what e2e/config.ts expects
+# E2E_ prefix matches what lib/client/config.ts expects
 cat > "$CONFIG_DIR/contracts.env" <<EOF
 E2E_CHANNEL_CONTRACT_ID=$CHANNEL_ID
 E2E_CHANNEL_AUTH_ID=$AUTH_ID

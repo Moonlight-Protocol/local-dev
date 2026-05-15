@@ -31,8 +31,8 @@ const TRACE_POLL_TIMEOUT_MS = Number(
 const PROVIDER_SERVICE = "provider-platform";
 const SDK_SERVICE = "moonlight-e2e";
 
-const TRACE_IDS_PATH =
-  new URL("./e2e-trace-ids.json", import.meta.url).pathname;
+const TRACE_IDS_PATH = Deno.env.get("E2E_TRACE_IDS_PATH") ??
+  "e2e-trace-ids.json";
 
 interface E2ETraceData {
   traceIds: string[];

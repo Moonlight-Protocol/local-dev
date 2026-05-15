@@ -156,6 +156,7 @@ services:
         mkdir -p lifecycle lib e2e
         cp /lifecycle-src/*.ts lifecycle/ && cp /lifecycle-src/deno.json lifecycle/ && cp /lifecycle-src/deno.lock lifecycle/ 2>/dev/null || true
         cp /lib-src/*.ts lib/
+        cp -r /lib-src/client lib/
         cp /e2e-src/*.ts e2e/
         cd lifecycle && deno install && cd ..
         echo "Waiting for provider and Stellar..."
