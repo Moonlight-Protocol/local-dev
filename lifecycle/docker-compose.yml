@@ -63,6 +63,7 @@ services:
           mkdir -p lifecycle lib e2e
           cp /lifecycle-src/*.ts lifecycle/ && cp /lifecycle-src/deno.json lifecycle/ && cp /lifecycle-src/deno.lock lifecycle/ 2>/dev/null || true
           cp /lib-src/*.ts lib/
+          cp -r /lib-src/client lib/
           cp /e2e-src/*.ts e2e/ && cp /e2e-src/deno.json e2e/ && cp /e2e-src/deno.lock e2e/ 2>/dev/null || true
           cd lifecycle && deno install && cd ..
           deno run --allow-all lifecycle/ci-setup.ts
@@ -139,6 +140,7 @@ services:
           mkdir -p lifecycle lib e2e
           cp /lifecycle-src/*.ts lifecycle/ && cp /lifecycle-src/deno.json lifecycle/ && cp /lifecycle-src/deno.lock lifecycle/ 2>/dev/null || true
           cp /lib-src/*.ts lib/
+          cp -r /lib-src/client lib/
           cp /e2e-src/*.ts e2e/ && cp /e2e-src/deno.json e2e/ && cp /e2e-src/deno.lock e2e/ 2>/dev/null || true
           cd lifecycle && deno install && cd ..
           echo "Waiting for provider..."
