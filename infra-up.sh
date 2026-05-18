@@ -535,6 +535,7 @@ window.__DASHBOARD_CONFIG__ = {
   stellarNetwork: "standalone",
   rpcUrl: "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc",
   horizonUrl: "http://localhost:${STELLAR_RPC_PORT}",
+  councilPlatformUrl: "http://localhost:${COUNCIL_PLATFORM_PORT}",
 };
 EOF
 
