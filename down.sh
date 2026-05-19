@@ -17,6 +17,7 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
+NETWORK_DASHBOARD_PLATFORM_PATH="${NETWORK_DASHBOARD_PLATFORM_PATH:-$BASE_DIR/network-dashboard-platform}"
 
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
@@ -28,6 +29,7 @@ PAY_PLATFORM_PORT="${PAY_PLATFORM_PORT:-3025}"
 COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 MOONLIGHT_PAY_PORT="${MOONLIGHT_PAY_PORT:-3050}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
+NETWORK_DASHBOARD_PLATFORM_PORT="${NETWORK_DASHBOARD_PLATFORM_PORT:-3035}"
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
 
 # Colors
@@ -74,6 +76,7 @@ stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_C
 stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONSOLE_PORT"
 stop_process "moonlight-pay" "$SCRIPT_DIR/.moonlight-pay.pid" "$MOONLIGHT_PAY_PORT"
 stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
+stop_process "network-dashboard-platform" "$SCRIPT_DIR/.network-dashboard-platform.pid" "$NETWORK_DASHBOARD_PLATFORM_PORT"
 
 # --- Stop PostgreSQL container ---
 if docker ps -a --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -97,10 +100,12 @@ for f in \
   "$PROVIDER_PLATFORM_PATH/.env" \
   "$COUNCIL_PLATFORM_PATH/.env" \
   "$PAY_PLATFORM_PATH/.env" \
+  "$NETWORK_DASHBOARD_PLATFORM_PATH/.env" \
   "$SCRIPT_DIR/.local-dev-state" \
   "$SCRIPT_DIR/provider.log" \
   "$SCRIPT_DIR/council-platform.log" \
   "$SCRIPT_DIR/pay-platform.log" \
+  "$SCRIPT_DIR/network-dashboard-platform.log" \
   "$SCRIPT_DIR/provider-console.log" \
   "$SCRIPT_DIR/council-console.log" \
   "$SCRIPT_DIR/moonlight-pay.log" \

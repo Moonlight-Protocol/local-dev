@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # verify-deploy.sh — single-shot deploy-tag-drift checker.
 #
-# Probes 14 deployed endpoints (6 backend /api/v1/health, 8 frontend /health.json,
+# Probes 16 deployed endpoints (8 backend /api/v1/health, 8 frontend /health.json,
 # testnet + mainnet for each app), reads each originating repo's latest git tag,
 # and prints one row per endpoint. Exits 0 if every deployed version matches the
 # latest tag, 1 if any drift is detected, 2 if any endpoint is unreachable or
@@ -19,6 +19,8 @@ ENDPOINTS=(
   "pay-platform|testnet|https://pay-api-testnet.moonlightprotocol.io/api/v1/health|pay-platform"
   "provider-platform|mainnet|https://provider-api.moonlightprotocol.io/api/v1/health|provider-platform"
   "provider-platform|testnet|https://provider-api-testnet.moonlightprotocol.io/api/v1/health|provider-platform"
+  "network-dashboard-platform|mainnet|https://dashboard-api.moonlightprotocol.io/api/v1/health|network-dashboard-platform"
+  "network-dashboard-platform|testnet|https://dashboard-api-testnet.moonlightprotocol.io/api/v1/health|network-dashboard-platform"
   "council-console|mainnet|https://council.moonlightprotocol.io/health.json|council-console"
   "council-console|testnet|https://council-testnet.moonlightprotocol.io/health.json|council-console"
   "provider-console|mainnet|https://provider.moonlightprotocol.io/health.json|provider-console"
