@@ -297,6 +297,9 @@ async function main() {
   }
   console.log(`  Channel added: ${channelContractId} (XLM)`);
 
+  const jurisdiction = (Deno.env.get("JURISDICTION") ?? "US")
+    .toUpperCase()
+    .trim();
   const addJurisdictionRes = await fetch(
     `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
       encodeURIComponent(channelAuthId)
@@ -307,7 +310,7 @@ async function main() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${adminJwt}`,
       },
-      body: JSON.stringify({ countryCode: "US" }),
+      body: JSON.stringify({ countryCode: jurisdiction }),
     },
   );
   if (!addJurisdictionRes.ok) {
@@ -316,7 +319,7 @@ async function main() {
         .text()}`,
     );
   }
-  console.log("  Jurisdiction added: US");
+  console.log(`  Jurisdiction added: ${jurisdiction}`);
 
   console.log("\n[8/8] Write state file");
   await writeStateFile({
