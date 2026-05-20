@@ -297,29 +297,36 @@ async function main() {
   }
   console.log(`  Channel added: ${channelContractId} (XLM)`);
 
-  const jurisdiction = (Deno.env.get("JURISDICTION") ?? "US")
-    .toUpperCase()
-    .trim();
-  const addJurisdictionRes = await fetch(
-    `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
-      encodeURIComponent(channelAuthId)
-    }`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${adminJwt}`,
+  // JURISDICTION accepts a comma-separated list of ISO 3166-1 alpha-2 codes,
+  // e.g. "US,UY,GB". Each is POSTed individually because the council-platform
+  // jurisdictions endpoint takes one country per call. Defaults to "US" so
+  // existing single-code callers keep working.
+  const jurisdictions = (Deno.env.get("JURISDICTION") ?? "US")
+    .split(",")
+    .map((c) => c.trim().toUpperCase())
+    .filter((c) => c.length > 0);
+  for (const jurisdiction of jurisdictions) {
+    const addJurisdictionRes = await fetch(
+      `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
+        encodeURIComponent(channelAuthId)
+      }`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${adminJwt}`,
+        },
+        body: JSON.stringify({ countryCode: jurisdiction }),
       },
-      body: JSON.stringify({ countryCode: jurisdiction }),
-    },
-  );
-  if (!addJurisdictionRes.ok) {
-    throw new Error(
-      `Add jurisdiction failed: ${addJurisdictionRes.status} ${await addJurisdictionRes
-        .text()}`,
     );
+    if (!addJurisdictionRes.ok) {
+      throw new Error(
+        `Add jurisdiction ${jurisdiction} failed: ${addJurisdictionRes.status} ${await addJurisdictionRes
+          .text()}`,
+      );
+    }
+    console.log(`  Jurisdiction added: ${jurisdiction}`);
   }
-  console.log(`  Jurisdiction added: ${jurisdiction}`);
 
   console.log("\n[8/8] Write state file");
   await writeStateFile({
