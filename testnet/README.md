@@ -84,22 +84,22 @@ trace ingestion.
 
 All scripts use sensible testnet defaults. Override via env vars when needed:
 
-| Variable                      | Default                                             | Used by                                                  |
-| ----------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                              |
-| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                              |
-| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                              |
-| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                              |
-| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                              |
-| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                              |
-| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                              |
-| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                              |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                              |
-| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                      |
-| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                      |
-| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                      |
-| `MOONLIGHT_NETWORK`           | `testnet`                                           | Suites 2, 4 (Tempo only — derives `<service>-<network>`) |
-| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                              |
+| Variable                      | Default                                             | Used by                                                                               |
+| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                                                           |
+| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                                                           |
+| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                                                           |
+| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                                                           |
+| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                                                           |
+| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                                                           |
+| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                                                           |
+| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                                                           |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                                                           |
+| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
+| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
+| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                                                   |
+| `MOONLIGHT_NETWORK`           | `testnet`                                           | Suites 2, 4 (Tempo only — derives `<service>-<network>`)                              |
+| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                                                           |
 | `E2E_TRACE_IDS_PATH`          | `e2e-trace-ids.json` (CWD-relative)                 | Suites 1, 3 (writer); set to `e2e/e2e-trace-ids.json` for suite 3 so suite 4 finds it |
 
 ## Run Order
