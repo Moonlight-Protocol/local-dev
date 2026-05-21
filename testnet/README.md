@@ -84,22 +84,23 @@ trace ingestion.
 
 All scripts use sensible testnet defaults. Override via env vars when needed:
 
-| Variable                      | Default                                             | Used by                                                  |
-| ----------------------------- | --------------------------------------------------- | -------------------------------------------------------- |
-| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                              |
-| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                              |
-| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                              |
-| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                              |
-| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                              |
-| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                              |
-| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                              |
-| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                              |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                              |
-| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                      |
-| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                      |
-| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                      |
-| `MOONLIGHT_NETWORK`           | `testnet`                                           | Suites 2, 4 (Tempo only — derives `<service>-<network>`) |
-| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                              |
+| Variable                      | Default                                             | Used by                                                                               |
+| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| `STELLAR_RPC_URL`             | `https://soroban-testnet.stellar.org`               | Suites 1, 3                                                                           |
+| `FRIENDBOT_URL`               | `https://friendbot.stellar.org`                     | Suites 1, 3                                                                           |
+| `STELLAR_NETWORK_PASSPHRASE`  | `Test SDF Network ; September 2015`                 | Suites 1, 3                                                                           |
+| `COUNCIL_URL`                 | `https://council-api-testnet.moonlightprotocol.io`  | Suites 1, 3                                                                           |
+| `PROVIDER_URL`                | `https://provider-api-testnet.moonlightprotocol.io` | Suites 1, 3                                                                           |
+| `CHANNEL_AUTH_WASM`           | `../e2e/wasms/channel_auth_contract.wasm`           | Suites 1, 3                                                                           |
+| `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                                                           |
+| `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                                                           |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                                                           |
+| `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
+| `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
+| `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                                                   |
+| `MOONLIGHT_NETWORK`           | `testnet`                                           | Suites 2, 4 (Tempo only — derives `<service>-<network>`)                              |
+| `TRACE_POLL_TIMEOUT_MS`       | `30000`                                             | Suites 2, 4                                                                           |
+| `E2E_TRACE_IDS_PATH`          | `e2e-trace-ids.json` (CWD-relative)                 | Suites 1, 3 (writer); set to `e2e/e2e-trace-ids.json` for suite 3 so suite 4 finds it |
 
 ## Run Order
 
@@ -111,11 +112,22 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 sleep 60 && deno run --allow-all testnet/verify-otel.ts
 
 # Suite 3: Lifecycle flow (~5 min)
-deno run --allow-all lifecycle/testnet-verify.ts
+E2E_TRACE_IDS_PATH=e2e/e2e-trace-ids.json \
+  deno run --allow-all lifecycle/testnet-verify.ts
 
 # Suite 4: OTEL verification for suite 3 (wait 60s for ingestion)
 sleep 60 && deno run --allow-all lifecycle/verify-otel.ts
 ```
+
+`lib/client/tracer.ts` writes the trace IDs to a CWD-relative
+`e2e-trace-ids.json` by default, while `lifecycle/verify-otel.ts` reads from
+`e2e/e2e-trace-ids.json` (relative to its own file). When suite 3 is invoked
+from the local-dev root, the two paths don't line up — suite 4 then reads a
+stale file (or fails with "trace not found in Tempo"). Pinning
+`E2E_TRACE_IDS_PATH` to `e2e/e2e-trace-ids.json` routes both to the same place.
+Suite 1's `run-tempo.sh` wrapper sidesteps this by `cd`-ing into `testnet/`
+before `deno task e2e` runs, so the file lands next to `testnet/verify-otel.ts`
+where it expects it.
 
 Flow scripts (1, 3) export traces and write trace IDs. Verify scripts (2, 4)
 read those trace IDs and check Tempo (or Jaeger, locally). Suites 1 and 3 can
@@ -132,10 +144,18 @@ set, errors out naming the missing one(s) if not, and otherwise execs
 `deno task e2e`.
 
 ```bash
-export OTEL_EXPORTER_OTLP_ENDPOINT='https://otlp-gateway-prod-...grafana.net/otlp/v1/traces'
+export OTEL_EXPORTER_OTLP_ENDPOINT='https://otlp-gateway-prod-...grafana.net/otlp'
 export OTEL_EXPORTER_OTLP_HEADERS='authorization=Basic <token>'
 ./testnet/run-tempo.sh
 ```
+
+The endpoint is the **base** path (`/otlp`), not `/otlp/v1/traces`. Deno's
+HTTP/protobuf OTLP exporter appends `/v1/traces` itself; if you include it in
+the env value the SDK ships to `.../otlp/v1/traces/v1/traces`, which Grafana
+silently returns as a 404 — the run reports success and Tempo receives 0 SDK
+spans. Suite 2/4 will then fail with `E2E step spans (e2e.*): 0 (expected >= 6)`
+even though provider-platform spans (which export from Fly, not this script)
+land correctly.
 
 For suite 3 (lifecycle), the same env vars must be set in the shell — the
 `lifecycle/testnet-verify.ts` flow reads them directly. There is no
