@@ -49,7 +49,7 @@ export async function launchWalletContext(
   );
 
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    headless: process.env.PLAYWRIGHT_HEADLESS === "1",
     // viewport: null lets the actual window size drive the page size, so
     // --start-fullscreen produces a fullscreen page.
     viewport: null,

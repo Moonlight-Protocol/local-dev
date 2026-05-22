@@ -12,6 +12,7 @@
  */
 import { test } from "@playwright/test";
 import { loadRunEnv, requireValue } from "../helpers/run-env";
+import { getProviderName } from "../helpers/run-variants";
 import {
   closeWalletContext,
   launchWalletContext,
@@ -22,9 +23,10 @@ import {
   createPrivacyChannel,
   deposit,
   findBrowserWalletExtensionId,
+  getRecordingChannelLabel,
   onboardWithMnemonic,
   openWalletPopup,
-  selectCustomNetwork,
+  selectRecordingNetwork,
   send,
   showReceive,
   toggleToPrivateView,
@@ -50,24 +52,26 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
   let aliceHandle: Awaited<ReturnType<typeof launchWalletContext>> | undefined;
 
   try {
-    const bobExtensionId = await findBrowserWalletExtensionId(bobHandle.context);
+    const bobExtensionId = await findBrowserWalletExtensionId(
+      bobHandle.context,
+    );
     const bobWallet = await openWalletPopup(bobHandle.context, bobExtensionId);
 
     await onboardWithMnemonic(bobWallet, {
       password: RECORDING_PASSWORD,
       mnemonic: env.BOB_MNEMONIC,
     });
-    await selectCustomNetwork(bobWallet);
+    await selectRecordingNetwork(bobWallet);
     await toggleToPrivateView(bobWallet);
     await createPrivacyChannel(bobWallet, {
       contractId: channelId,
       channelName: "Moonlight Demo",
-      network: "Custom",
+      network: getRecordingChannelLabel(),
       assetCode: "XLM",
     });
     await addAndConnectProvider(bobWallet, {
       providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: "Acme Privacy Provider",
+      providerName: getProviderName(),
       password: RECORDING_PASSWORD,
     });
 
@@ -94,17 +98,17 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
       password: RECORDING_PASSWORD,
       mnemonic: env.ALICE_MNEMONIC,
     });
-    await selectCustomNetwork(aliceWallet);
+    await selectRecordingNetwork(aliceWallet);
     await toggleToPrivateView(aliceWallet);
     await createPrivacyChannel(aliceWallet, {
       contractId: channelId,
       channelName: "Moonlight Demo",
-      network: "Custom",
+      network: getRecordingChannelLabel(),
       assetCode: "XLM",
     });
     await addAndConnectProvider(aliceWallet, {
       providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: "Acme Privacy Provider",
+      providerName: getProviderName(),
       password: RECORDING_PASSWORD,
     });
 

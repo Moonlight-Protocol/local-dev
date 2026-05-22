@@ -1,53 +1,43 @@
 /**
- * Section 04 — Network dashboard tour.
+ * Section 04 — Network dashboard tour (single-page drilldown, v0.2.14+).
  *
  * Demo beats:
- *   1. Land on /map, pause on the council marker
- *   2. Click "Councils" → tour the list, point at "Moonlight Demo"
- *   3. Drill into the council → show stats + Channels + Registered Providers
- *   4. Scroll to Recent Activity (events from sections 02/03)
- *   5. Click "Transactions" → show the cross-network feed
- *   6. Wrap-up beat
+ *   1. Land on the dashboard, pause on the world map
+ *   2. Click the council's jurisdiction country on the map → CountryDetails
+ *      panel lists councils operating there
+ *   3. Click our council (unique name) → CouncilDetails populates
+ *   4. Click our PP (unique name) in "Member PPs" → ProviderDetails populates
+ *   5. Wrap-up — hold on the populated detail trio
  *
- * Pre-step: `writeDashboardConfig` injects the just-created council into
- * the dashboard's `public/config.js`. The dashboard server serves
- * `public/` directly, so no rebuild is needed — a page reload is enough.
- *
- * Uses launchPersistentContext so it shares the recording rig's video
- * pipeline with the wallet sections.
+ * Council + PP names are made unique per RUN_ID so the rig's entries can be
+ * distinguished from the 28+ other councils + 27+ PPs already live on the
+ * deployed testnet dashboard.
  */
 import { expect, test } from "@playwright/test";
-import { loadRunEnv, requireValue } from "../helpers/run-env";
-import { writeDashboardConfig } from "../helpers/dashboard-config";
+import { loadRunEnv } from "../helpers/run-env";
+import {
+  getCouncilName,
+  getJurisdiction,
+  getProviderName,
+} from "../helpers/run-variants";
 import {
   beat,
   clickWithPause,
   hold,
   holdAfterSuccess,
-  hover,
 } from "../fixtures/pacing";
 import {
   closeWalletContext,
   launchWalletContext,
 } from "../fixtures/wallet-context";
 
-const COUNCIL_NAME = "Moonlight Demo";
-
 test.describe.configure({ mode: "serial" });
 
 test("04 — dashboard tour", async () => {
   const env = loadRunEnv();
-  const channelAuthId = requireValue(env, "CHANNEL_AUTH_ID");
-
-  // Point the dashboard's runtime config at the council-platform API. The
-  // dashboard fetches /api/v1/public/councils from there at page load — see
-  // network-dashboard/src/lib/config.ts. Without councilPlatformUrl set,
-  // the council list view shows "No councils registered yet".
-  const configPath = writeDashboardConfig({
-    councilPlatformUrl: requireValue(env, "COUNCIL_PLATFORM_URL"),
-    probeUrl: env.DASHBOARD_URL,
-  });
-  console.log(`Dashboard config written: ${configPath}`);
+  const councilName = getCouncilName();
+  const providerName = getProviderName();
+  const jurisdiction = getJurisdiction();
 
   const handle = await launchWalletContext({
     section: "04",
@@ -58,93 +48,73 @@ test("04 — dashboard tour", async () => {
   try {
     const page = await handle.context.newPage();
 
-    // Beat 1 — land on root (redirects to /map).
+    // Beat 1 — land on the dashboard, pause on the world map.
     await page.goto(env.DASHBOARD_URL);
     await page.waitForLoadState("networkidle");
     await page.bringToFront();
-    await hold(page);
-
-    // Beat 2 — switch to Councils tab and let the table render.
-    await clickWithPause(page.locator('nav a[href="#/councils"]').first());
-    await page.waitForLoadState("networkidle");
-    const councilRow = page
-      .locator(
-        `tr.clickable-row[data-href*="${encodeURIComponent(channelAuthId)}"]`,
-      )
-      .first();
-    await expect(councilRow).toBeVisible({ timeout: 30_000 });
-    await holdAfterSuccess(page);
-    await hover(councilRow);
-    await beat(page, 2);
-
-    // Beat 3 — drill into the council.
-    await clickWithPause(councilRow);
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator(`h2:has-text("${COUNCIL_NAME}")`)).toBeVisible({
-      timeout: 15_000,
-    });
-    await page.locator("#council-detail-content .stats-row").waitFor({
+    // World map renders the country jurisdictions asynchronously from the
+    // platform websocket. Wait for the SVG host to be visible (a regular
+    // div), then for our country path to be attached. We don't `waitFor`
+    // SVG paths in `state: "visible"` because Playwright's visibility
+    // heuristic doesn't handle SVG path geometry reliably.
+    await page.locator(".world-map-section-host svg").first().waitFor({
+      state: "visible",
       timeout: 30_000,
     });
-    await holdAfterSuccess(page);
-
-    // Channels section
-    const channelsHeading = page.locator('h3:has-text("Channels")').first();
-    if (
-      await channelsHeading.isVisible({ timeout: 5_000 }).catch(() => false)
-    ) {
-      await channelsHeading.scrollIntoViewIfNeeded();
-      await hold(page);
-    }
-
-    // Registered Providers section — proves section 02 happened.
-    const providersHeading = page.locator('h3:has-text("Registered Providers")')
-      .first();
-    if (
-      await providersHeading.isVisible({ timeout: 5_000 }).catch(() => false)
-    ) {
-      await providersHeading.scrollIntoViewIfNeeded();
-      await hold(page);
-    }
-
-    // Beat 4 — Recent Activity (bundles + provider events from 02/03).
-    const activityHeading = page.locator('h3:has-text("Recent Activity")')
-      .first();
-    if (
-      await activityHeading.isVisible({ timeout: 5_000 }).catch(() => false)
-    ) {
-      await activityHeading.scrollIntoViewIfNeeded();
-      await hold(page);
-      // First feed item, if any, lands the eye on a real event card.
-      const firstFeedItem = page.locator(".feed-list .feed-item").first();
-      if (
-        await firstFeedItem.isVisible({ timeout: 5_000 }).catch(() => false)
-      ) {
-        await hover(firstFeedItem);
-        await holdAfterSuccess(page);
-      }
-    }
-
-    // Beat 5 — cross-network transaction feed.
-    await clickWithPause(page.locator('nav a[href="#/transactions"]').first());
-    await page.waitForLoadState("networkidle");
-    await expect(page.locator('h2:has-text("Transaction Feed")')).toBeVisible({
-      timeout: 15_000,
+    // Country shapes are injected into the SVG asynchronously by
+    // renderWorldMap. The tag varies: simple countries are a `<path>`, but
+    // multi-piece countries (e.g. Canada — many islands) are wrapped in a
+    // `<g>` group with the id+class on the group and `<path>` children
+    // inside. Use a tag-agnostic selector so both render shapes match.
+    await page.locator(
+      `svg .world-map-country#${jurisdiction.code}`,
+    ).first().waitFor({
+      state: "attached",
+      timeout: 60_000,
     });
-    await page.locator("#tx-content .stats-row, #tx-content .empty-state")
-      .first().waitFor({
-        timeout: 30_000,
-      });
-    await holdAfterSuccess(page);
-
-    // Beat 6 — wrap-up: scroll to the totals stat-row at top of councils page.
-    await clickWithPause(page.locator('nav a[href="#/councils"]').first());
-    await page.waitForLoadState("networkidle");
-    const statsRow = page.locator("#councils-content .stats-row").first();
-    await statsRow.waitFor({ timeout: 15_000 });
-    await statsRow.scrollIntoViewIfNeeded();
     await hold(page);
+
+    // Beat 2 — click the council's jurisdiction country on the map.
+    // `dispatchEvent('click')` bypasses Playwright's scrollIntoView +
+    // actionability checks (which struggle with SVG path bounding boxes)
+    // and goes straight to firing a synthetic MouseEvent. The dashboard's
+    // click handler is delegated on the host element, so this still
+    // surfaces the selected country to CountryDetails.
+    await page.locator(
+      `svg .world-map-country#${jurisdiction.code}`,
+    ).first().dispatchEvent("click");
+    await beat(page, 2);
+
+    // Beat 3 — wait for our council to appear in CountryDetails and click it.
+    // The country-details panel renders the matching councils. New councils
+    // arrive via the platform websocket — give the platform some time to
+    // pick up the on-chain event from section 01.
+    const councilButton = page
+      .locator(".country-details-council")
+      .filter({ hasText: councilName })
+      .first();
+    await councilButton.waitFor({ state: "visible", timeout: 60_000 });
     await holdAfterSuccess(page);
+    await clickWithPause(councilButton);
+    await beat(page, 2);
+
+    // Beat 4 — wait for our PP to appear in CouncilDetails and click it.
+    const ppButton = page
+      .locator(".council-details-pp-button")
+      .filter({ hasText: providerName })
+      .first();
+    await ppButton.waitFor({ state: "visible", timeout: 60_000 });
+    await holdAfterSuccess(page);
+    await clickWithPause(ppButton);
+    await beat(page, 2);
+
+    // Beat 5 — provider details visible, wrap-up hold.
+    const providerTitle = page
+      .locator(".provider-details-title, h2:has-text('Public key')")
+      .first();
+    await expect(providerTitle).toBeVisible({ timeout: 15_000 });
+    await holdAfterSuccess(page);
+    await hold(page);
   } finally {
     await closeWalletContext(handle);
   }

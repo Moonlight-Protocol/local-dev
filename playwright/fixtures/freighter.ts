@@ -152,30 +152,53 @@ export async function unlockFreighter(
 // ─── Network switching ────────────────────────────────────────────
 
 /**
- * Switch Freighter to testnet via the network selector dropdown.
+ * Switch Freighter to testnet by clicking the selected network row in the
+ * `.AccountHeader__network-selector` list and confirming the active row's
+ * check icon lands on Test Net. The UI shows all four network rows; the
+ * one with `.AccountHeader__network-selector__check` is the selected one.
+ *
+ * Throws on failure so callers can't proceed onto a signing flow with the
+ * wrong network selected.
  */
 export async function switchToTestnet(
   freighterPage: Page,
 ): Promise<void> {
   const extUrl = freighterPage.url().replace(/#.*/, "");
   await freighterPage.goto(extUrl);
-  await freighterPage.waitForTimeout(1500);
+  await freighterPage.waitForLoadState("domcontentloaded");
 
-  const networkSelector = freighterPage.locator(
+  const dropdown = freighterPage.locator(
     '[data-testid="network-selector-open"]',
   );
-  if (await networkSelector.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    const text = await networkSelector.textContent() ?? "";
-    if (text.includes("Test Net")) {
-      return; // already on testnet
-    }
-    await networkSelector.click();
-    await freighterPage.waitForTimeout(500);
-    await freighterPage.locator(
-      '.AccountHeader__network-selector__row:has-text("Test Net")',
-    ).click();
-    await freighterPage.waitForTimeout(1000);
+  try {
+    await dropdown.waitFor({ state: "visible", timeout: 15_000 });
+  } catch {
+    throw new Error(
+      "switchToTestnet: network-selector-open not visible after popup load. " +
+        "Either the Freighter UI changed or the popup is on an unexpected route.",
+    );
   }
+
+  // Open the dropdown so the rows become interactive.
+  await dropdown.click();
+
+  const testNetRow = freighterPage.locator(
+    '.AccountHeader__network-selector__row:has-text("Test Net")',
+  ).first();
+  await testNetRow.waitFor({ state: "visible", timeout: 10_000 });
+  await testNetRow.click();
+
+  // Verify by checking which row carries the selected-check icon.
+  await freighterPage.waitForFunction(
+    () => {
+      const selected = document.querySelector(
+        ".AccountHeader__network-selector__row:has(.AccountHeader__network-selector__check)",
+      );
+      return !!selected && /Test Net/.test(selected.textContent ?? "");
+    },
+    undefined,
+    { timeout: 15_000 },
+  );
 }
 
 /**

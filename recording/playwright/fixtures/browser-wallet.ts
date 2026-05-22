@@ -19,7 +19,43 @@
  * `context.on("page", ...)` handler needed.
  */
 import { type BrowserContext, type Page } from "@playwright/test";
+import process from "node:process";
 import { clickWithPause, hold, holdAfterSuccess, typeSlowly } from "./pacing";
+
+// ─── Network selection (env-driven) ───────────────────────────────────
+//
+// RECORDING_WALLET_NETWORK selects which Stellar network the wallet uses.
+// Defaults to "custom" (local stellar-local) for backward compat with the
+// local-dev recording flow. Set to "testnet" / "mainnet" / "futurenet" to
+// record against deployed networks.
+
+type WalletNetwork = "mainnet" | "testnet" | "futurenet" | "custom";
+type ChannelNetworkLabel = "Test" | "Main" | "Future" | "Custom";
+
+const CHANNEL_LABEL_BY_NETWORK: Record<WalletNetwork, ChannelNetworkLabel> = {
+  mainnet: "Main",
+  testnet: "Test",
+  futurenet: "Future",
+  custom: "Custom",
+};
+
+function getRecordingWalletNetwork(): WalletNetwork {
+  const raw = (process.env.RECORDING_WALLET_NETWORK ?? "custom").toLowerCase();
+  if (
+    raw === "mainnet" || raw === "testnet" || raw === "futurenet" ||
+    raw === "custom"
+  ) {
+    return raw;
+  }
+  throw new Error(
+    `RECORDING_WALLET_NETWORK must be one of mainnet|testnet|futurenet|custom, got: ${raw}`,
+  );
+}
+
+/** Channel-form button label matching the wallet network. */
+export function getRecordingChannelLabel(): ChannelNetworkLabel {
+  return CHANNEL_LABEL_BY_NETWORK[getRecordingWalletNetwork()];
+}
 
 // ─── Selectors ─────────────────────────────────────────────────────────
 
@@ -249,14 +285,15 @@ export async function unlock(page: Page, password: string): Promise<void> {
 // ─── Network selection ─────────────────────────────────────────────────
 
 /**
- * Switch the wallet's `lastSelectedNetwork` to "custom" via the background
- * SET_NETWORK message. The Settings UI explicitly disables clicking "Custom",
- * but the background handler accepts it. Without this, the home filters
- * channels by mainnet and our locally-created channels never surface.
+ * Switch the wallet's `lastSelectedNetwork` via the background SET_NETWORK
+ * message. Network is selected by RECORDING_WALLET_NETWORK (defaults custom).
+ * Without this, the home filters channels by the default network and the
+ * channels we create for the recording never surface.
  */
-export async function selectCustomNetwork(page: Page): Promise<void> {
+export async function selectRecordingNetwork(page: Page): Promise<void> {
+  const network = getRecordingWalletNetwork();
   await page.bringToFront();
-  await page.evaluate(async () => {
+  await page.evaluate(async (net) => {
     // The popup runs as a chrome-extension page, so chrome.runtime is bound
     // to the wallet's own background — no extension id required.
     const c = (globalThis as unknown as {
@@ -265,8 +302,8 @@ export async function selectCustomNetwork(page: Page): Promise<void> {
     if (!c?.runtime?.sendMessage) {
       throw new Error("chrome.runtime.sendMessage not available in popup");
     }
-    await c.runtime.sendMessage({ type: "SET_NETWORK", network: "custom" });
-  });
+    await c.runtime.sendMessage({ type: "SET_NETWORK", network: net });
+  }, network);
 
   // Reload so the React state picks up `lastSelectedNetwork === "custom"`.
   await page.reload();
@@ -438,6 +475,24 @@ export async function deposit(page: Page, opts: AmountOptions): Promise<void> {
 
   // Defaults to deposit mode + Direct method.
   await typeSlowly(page.locator(SEL.rampAmountInput).first(), opts.amount);
+
+  // Drop entropy from MEDIUM (5 CREATE ops) to LOW (1 CREATE op). The wallet's
+  // default produces a Soroban call that costs ~100 XLM in resource fees on
+  // testnet, exceeding the PP's source-account balance. LOW matches the
+  // testnet/main.ts suite's bundle shape (1 DEPOSIT + 1 CREATE).
+  const entropyTrigger = page
+    .locator(
+      'button:has-text("Medium"), button:has-text("Low"), button:has-text("High")',
+    )
+    .first();
+  if (await entropyTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await clickWithPause(entropyTrigger);
+    const lowOption = page.locator('[role="menuitemradio"]:has-text("Low")')
+      .first();
+    await lowOption.waitFor({ state: "visible", timeout: 5_000 });
+    await clickWithPause(lowOption);
+  }
+
   // Wait for the form to enable the Review button (validation can lag the
   // last keystroke). Targets the enabled instance directly.
   const reviewDeposit = page
@@ -447,12 +502,13 @@ export async function deposit(page: Page, opts: AmountOptions): Promise<void> {
   await clickWithPause(reviewDeposit);
 
   // Review screen → Execute Transaction.
-  const exec = page.locator(SEL.rampExecute).first();
-  if (await exec.isVisible({ timeout: 15_000 }).catch(() => false)) {
-    await clickWithPause(exec);
-  }
+  const exec = page.locator("#deposit-execute-btn");
+  await exec.waitFor({ state: "visible", timeout: 30_000 });
+  await clickWithPause(exec);
 
-  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
+  // The wallet's submitBundle polls until the bundle is COMPLETED on chain,
+  // which on testnet can take ~60-180s. Popup only navigates home after that.
+  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 240_000 });
   const target = preBalance + parseFloat(opts.amount) - 0.01;
   await waitForConfidentialBalance(page, target);
   await holdAfterSuccess(page);
@@ -474,16 +530,23 @@ export async function send(page: Page, opts: SendOptions): Promise<void> {
     5,
   );
   await typeSlowly(page.locator(SEL.sendAmountInput).first(), opts.amount);
+
+  // Send page uses pill buttons (Low/Medium/High/V.High) for privacy level
+  // and already defaults to LOW. No override needed — keeping the Soroban
+  // resource fee in the operator's budget on testnet.
+
   await clickWithPause(page.locator(SEL.sendReview).first());
 
-  // Review may render an Execute Transaction button — click if present.
-  const exec = page.locator(SEL.rampExecute).first();
-  if (await exec.isVisible({ timeout: 15_000 }).catch(() => false)) {
-    await clickWithPause(exec);
-  }
+  // Confirm Transfer page → Execute Transaction. Page has a dedicated id
+  // (#send-execute-btn) on the Button, distinct from deposit/withdraw, so
+  // we never match a stale (lazy-mounted) deposit-review Execute button.
+  const exec = page.locator("#send-execute-btn");
+  await exec.waitFor({ state: "visible", timeout: 30_000 });
+  await clickWithPause(exec);
 
   // Success: navigates back to home with action buttons available.
-  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
+  // Wallet polls bundle to COMPLETED before goHome — testnet may need 60-180s.
+  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 240_000 });
   await holdAfterSuccess(page);
 }
 
@@ -648,13 +711,30 @@ export async function withdraw(
     opts.destinationAddress,
   );
   await typeSlowly(page.locator(SEL.rampAmountInput).first(), opts.amount);
+
+  // Drop entropy from MEDIUM to LOW so the Soroban resource fee fits in
+  // the operator account's budget on testnet.
+  const entropyTrigger = page
+    .locator(
+      'button:has-text("Medium"), button:has-text("Low"), button:has-text("High")',
+    )
+    .first();
+  if (await entropyTrigger.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await clickWithPause(entropyTrigger);
+    const lowOption = page.locator('[role="menuitemradio"]:has-text("Low")')
+      .first();
+    await lowOption.waitFor({ state: "visible", timeout: 5_000 });
+    await clickWithPause(lowOption);
+  }
+
   await clickWithPause(page.locator(SEL.rampReviewWithdraw).first());
 
-  const exec = page.locator('button:has-text("Execute Withdraw")').first();
+  const exec = page.locator("#withdraw-execute-btn");
   await exec.waitFor({ state: "visible", timeout: 15_000 });
   await clickWithPause(exec);
 
-  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
+  // Wallet polls bundle to COMPLETED before goHome — testnet may need 60-180s.
+  await page.locator(SEL.receiveButton).first().waitFor({ timeout: 240_000 });
   const target = preBalance - parseFloat(opts.amount) + 0.01;
   await waitForConfidentialBalanceAtMost(page, target);
   await holdAfterSuccess(page);

@@ -38,7 +38,7 @@ export default defineConfig({
   reporter: [["list"]],
 
   use: {
-    headless: false,
+    headless: process.env.PLAYWRIGHT_HEADLESS === "1",
     viewport: {
       width: parseInt(process.env.VIDEO_WIDTH ?? "1280", 10),
       height: parseInt(process.env.VIDEO_HEIGHT ?? "720", 10),
