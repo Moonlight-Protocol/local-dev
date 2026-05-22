@@ -136,7 +136,7 @@ export async function createUserContext(
     : options.viewport;
 
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: false,
+    headless: process.env.PLAYWRIGHT_HEADLESS === "1",
     viewport,
     args,
     recordVideo,

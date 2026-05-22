@@ -28,6 +28,7 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, updateRunEnv } from "../helpers/run-env";
+import { getCouncilName, getJurisdiction } from "../helpers/run-variants";
 import {
   clickWithPause,
   holdAfterSuccess,
@@ -36,10 +37,11 @@ import {
 import { addClickHighlight } from "../fixtures/click-highlight";
 import { RECORDING_CONTEXT_OPTIONS } from "../fixtures/recording-context";
 
-const COUNCIL_NAME = "Moonlight Demo";
+const COUNCIL_NAME = getCouncilName();
 const COUNCIL_DESCRIPTION =
   "Privacy-preserving payments council for the Tranche 2 demo recording.";
 const COUNCIL_EMAIL = "demo@moonlight.test";
+const JURISDICTION = getJurisdiction();
 
 test.describe.configure({ mode: "serial" });
 
@@ -81,7 +83,7 @@ test("01 — council onboarding", async () => {
     ) {
       await typeSlowly(
         councilPage.locator("#jurisdiction-filter"),
-        "United States",
+        JURISDICTION.name,
       );
       await councilPage.waitForTimeout(500);
       const opt = councilPage.locator(

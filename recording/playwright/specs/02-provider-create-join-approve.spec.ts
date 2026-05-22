@@ -23,6 +23,7 @@ import {
 import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 import { getUrls } from "../../../playwright/helpers/urls";
 import { loadRunEnv, requireValue } from "../helpers/run-env";
+import { getProviderName } from "../helpers/run-variants";
 import {
   clickWithPause,
   holdAfterSuccess,
@@ -31,7 +32,7 @@ import {
 import { addClickHighlight } from "../fixtures/click-highlight";
 import { RECORDING_CONTEXT_OPTIONS } from "../fixtures/recording-context";
 
-const PROVIDER_NAME = "Acme Privacy Provider";
+const PROVIDER_NAME = getProviderName();
 const PROVIDER_EMAIL = "ops@acme.test";
 
 test.describe.configure({ mode: "serial" });
@@ -76,9 +77,11 @@ test("02 — provider create + join + approve", async () => {
     await typeSlowly(providerPage.locator("#pp-email"), PROVIDER_EMAIL);
     await clickWithPause(providerPage.locator("#next-btn"));
 
-    // Beat 3 — fund PP operator
+    // Beat 3 — fund PP operator. 10 XLM (the prior default) is insufficient
+    // for testnet Soroban resource fees on `transact`, which simulate to
+    // ~100 XLM per bundle. Fund 500 so the operator can pay several bundles.
     await providerPage.waitForSelector("#fund-amount", { timeout: 15_000 });
-    await typeSlowly(providerPage.locator("#fund-amount"), "10");
+    await typeSlowly(providerPage.locator("#fund-amount"), "500");
     await withWalletApproval(ppCtx.context, providerPage, async () => {
       await clickWithPause(providerPage.locator("#fund-btn"));
     });
