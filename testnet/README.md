@@ -95,6 +95,10 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 | `PRIVACY_CHANNEL_WASM`        | `../e2e/wasms/privacy_channel.wasm`                 | Suites 1, 3                                                                           |
 | `MASTER_SECRET`               | (none — random keys)                                | Suites 1, 3                                                                           |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | (Grafana Cloud OTLP)                                | Suites 1, 3                                                                           |
+| `OTEL_EXPORTER_OTLP_HEADERS`  | (Grafana Cloud auth, e.g. `Authorization=Basic …`)  | Suites 1, 3 (Tempo writer)                                                            |
+| `OTEL_DENO`                   | (none — must be `true` for traces to emit)          | Suites 1, 3 — Deno's OTEL exporter is no-op'd unless set at process start             |
+| `OTEL_SERVICE_NAME`           | (none — set to `moonlight-e2e` by wrappers / tasks) | Suites 1, 3                                                                           |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` | (none — set to `http/protobuf` by wrappers / tasks) | Suites 1, 3                                                                           |
 | `TEMPO_URL`                   | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
 | `TEMPO_AUTH`                  | (none)                                              | Suites 2, 4 (Tempo)                                                                   |
 | `JAEGER_URL`                  | `http://localhost:16686`                            | Suites 2, 4 (local)                                                                   |
@@ -104,6 +108,26 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 
 ## Run Order
 
+Single-command path (recommended):
+
+```bash
+OTEL_EXPORTER_OTLP_ENDPOINT=... \
+OTEL_EXPORTER_OTLP_HEADERS=... \
+TEMPO_URL=... \
+TEMPO_AUTH=... \
+  ./testnet/run-all.sh
+```
+
+`run-all.sh` asserts those four caller-supplied secrets are set, fills in every
+deterministic env var the suites need (`OTEL_DENO=true`,
+`OTEL_SERVICE_NAME=moonlight-e2e`, `OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf`,
+`MOONLIGHT_NETWORK=testnet`,
+`E2E_TRACE_IDS_PATH=<repo>/e2e/e2e-trace-ids.json`), and runs the 4 suites in
+order with the 60s Tempo-ingestion waits between flow and verify phases. Exits
+non-zero on the first failure.
+
+Manual invocation (for debugging an individual suite):
+
 ```bash
 # Suite 1: Payment flow (~5 min)
 ./testnet/run-tempo.sh
@@ -112,7 +136,9 @@ All scripts use sensible testnet defaults. Override via env vars when needed:
 sleep 60 && deno run --allow-all testnet/verify-otel.ts
 
 # Suite 3: Lifecycle flow (~5 min)
-E2E_TRACE_IDS_PATH=e2e/e2e-trace-ids.json \
+OTEL_DENO=true OTEL_SERVICE_NAME=moonlight-e2e \
+  OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+  E2E_TRACE_IDS_PATH=e2e/e2e-trace-ids.json \
   deno run --allow-all lifecycle/testnet-verify.ts
 
 # Suite 4: OTEL verification for suite 3 (wait 60s for ingestion)
@@ -128,6 +154,11 @@ stale file (or fails with "trace not found in Tempo"). Pinning
 Suite 1's `run-tempo.sh` wrapper sidesteps this by `cd`-ing into `testnet/`
 before `deno task e2e` runs, so the file lands next to `testnet/verify-otel.ts`
 where it expects it.
+
+Bare `deno run` for suite 3 silently emits zero trace IDs unless
+`OTEL_DENO=true` is exported — Deno's OTEL exporter is initialized at process
+startup based on the env. The manual command above sets it inline; `run-all.sh`
+and `lifecycle/deno.json`'s `testnet-verify` task both set it for you.
 
 Flow scripts (1, 3) export traces and write trace IDs. Verify scripts (2, 4)
 read those trace IDs and check Tempo (or Jaeger, locally). Suites 1 and 3 can
