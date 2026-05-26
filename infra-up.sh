@@ -38,6 +38,7 @@ PAY_PLATFORM_PATH="${PAY_PLATFORM_PATH:-$BASE_DIR/pay-platform}"
 MOONLIGHT_PAY_PATH="${MOONLIGHT_PAY_PATH:-$BASE_DIR/moonlight-pay}"
 NETWORK_DASHBOARD_PATH="${NETWORK_DASHBOARD_PATH:-$BASE_DIR/network-dashboard}"
 NETWORK_DASHBOARD_PLATFORM_PATH="${NETWORK_DASHBOARD_PLATFORM_PATH:-$BASE_DIR/network-dashboard-platform}"
+MOONLIGHT_UI_PATH="${MOONLIGHT_UI_PATH:-$BASE_DIR/ui}"
 
 # Ports — override via env to run multiple stacks in parallel
 STELLAR_RPC_PORT="${STELLAR_RPC_PORT:-8000}"       # shared
@@ -51,6 +52,7 @@ PAY_PLATFORM_PORT="${PAY_PLATFORM_PORT:-3025}"
 MOONLIGHT_PAY_PORT="${MOONLIGHT_PAY_PORT:-3050}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 NETWORK_DASHBOARD_PLATFORM_PORT="${NETWORK_DASHBOARD_PLATFORM_PORT:-3035}"
+MOONLIGHT_UI_PORT="${MOONLIGHT_UI_PORT:-3060}"
 
 # Container name — override to avoid collisions
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
@@ -68,7 +70,7 @@ error()   { echo -e "${RED}[ERROR]${NC} $*"; exit 1; }
 section() { echo -e "\n${BLUE}=== $* ===${NC}"; }
 
 # ============================================================
-section "1/12  Prerequisites"
+section "1/13  Prerequisites"
 # ============================================================
 
 command -v docker >/dev/null 2>&1 || error "Docker not found."
@@ -103,9 +105,10 @@ info "Deno: $($DENO_BIN --version | head -1)"
 [ -d "$PAY_PLATFORM_PATH" ] || error "pay-platform not found at $PAY_PLATFORM_PATH"
 [ -d "$NETWORK_DASHBOARD_PATH" ] || error "network-dashboard not found at $NETWORK_DASHBOARD_PATH"
 [ -d "$NETWORK_DASHBOARD_PLATFORM_PATH" ] || error "network-dashboard-platform not found at $NETWORK_DASHBOARD_PLATFORM_PATH"
+[ -d "$MOONLIGHT_UI_PATH" ] || error "@moonlight/ui not found at $MOONLIGHT_UI_PATH"
 
 # ============================================================
-section "2/12  Jaeger (ports 4317/4318/16686)"
+section "2/13  Jaeger (ports 4317/4318/16686)"
 # ============================================================
 
 JAEGER_CONTAINER="${JAEGER_CONTAINER:-jaeger}"
@@ -133,7 +136,7 @@ else
 fi
 
 # ============================================================
-section "3/12  Stellar Network"
+section "3/13  Stellar Network"
 # ============================================================
 
 # Start the shared Stellar network if not already running
@@ -181,7 +184,7 @@ done
 sleep 2
 
 # ============================================================
-section "4/12  PostgreSQL (port $PG_PORT)"
+section "4/13  PostgreSQL (port $PG_PORT)"
 # ============================================================
 
 if docker ps --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -224,7 +227,7 @@ docker exec "$PG_CONTAINER" psql -U admin -d postgres -tc \
   "CREATE DATABASE pay_platform_db" >/dev/null
 
 # ============================================================
-section "5/12  Provider Platform (port $PROVIDER_PORT)"
+section "5/13  Provider Platform (port $PROVIDER_PORT)"
 # ============================================================
 
 cd "$PROVIDER_PLATFORM_PATH"
@@ -286,7 +289,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "6/12  Council Platform (port $COUNCIL_PLATFORM_PORT)"
+section "6/13  Council Platform (port $COUNCIL_PLATFORM_PORT)"
 # ============================================================
 
 cd "$COUNCIL_PLATFORM_PATH"
@@ -338,7 +341,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "7/12  Pay Platform (port $PAY_PLATFORM_PORT)"
+section "7/13  Pay Platform (port $PAY_PLATFORM_PORT)"
 # ============================================================
 
 cd "$PAY_PLATFORM_PATH"
@@ -404,7 +407,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "8/12  Network Dashboard Platform (port $NETWORK_DASHBOARD_PLATFORM_PORT)"
+section "8/13  Network Dashboard Platform (port $NETWORK_DASHBOARD_PLATFORM_PORT)"
 # ============================================================
 
 cd "$NETWORK_DASHBOARD_PLATFORM_PATH"
@@ -454,7 +457,7 @@ for i in $(seq 1 15); do
 done
 
 # ============================================================
-section "9/12  Provider Console (port $PROVIDER_CONSOLE_PORT)"
+section "9/13  Provider Console (port $PROVIDER_CONSOLE_PORT)"
 # ============================================================
 
 cd "$PROVIDER_CONSOLE_PATH"
@@ -493,7 +496,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "10/12 Council Console (port $COUNCIL_CONSOLE_PORT)"
+section "10/13 Council Console (port $COUNCIL_CONSOLE_PORT)"
 # ============================================================
 
 cd "$COUNCIL_CONSOLE_PATH"
@@ -535,7 +538,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "11/12 Moonlight Pay (port $MOONLIGHT_PAY_PORT)"
+section "11/13 Moonlight Pay (port $MOONLIGHT_PAY_PORT)"
 # ============================================================
 
 cd "$MOONLIGHT_PAY_PATH"
@@ -576,7 +579,7 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
-section "12/12 Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
+section "12/13 Network Dashboard (port $NETWORK_DASHBOARD_PORT)"
 # ============================================================
 
 cd "$NETWORK_DASHBOARD_PATH"
@@ -613,6 +616,31 @@ for i in $(seq 1 10); do
 done
 
 # ============================================================
+section "13/13 @moonlight/ui Gallery (port $MOONLIGHT_UI_PORT)"
+# ============================================================
+
+cd "$MOONLIGHT_UI_PATH"
+
+info "Starting @moonlight/ui gallery (background)..."
+MOONLIGHT_UI_LOG="$SCRIPT_DIR/moonlight-ui.log"
+PORT=$MOONLIGHT_UI_PORT \
+nohup "$DENO_BIN" task gallery > "$MOONLIGHT_UI_LOG" 2>&1 &
+MOONLIGHT_UI_PID=$!
+echo "$MOONLIGHT_UI_PID" > "$SCRIPT_DIR/.moonlight-ui.pid"
+info "@moonlight/ui Gallery running (PID $MOONLIGHT_UI_PID, log: $MOONLIGHT_UI_LOG)"
+
+for i in $(seq 1 10); do
+  if curl -sf "http://localhost:${MOONLIGHT_UI_PORT}/" >/dev/null 2>&1; then
+    info "@moonlight/ui Gallery is ready."
+    break
+  fi
+  if [ "$i" -eq 10 ]; then
+    warn "@moonlight/ui Gallery may not be ready yet. Check $MOONLIGHT_UI_LOG"
+  fi
+  sleep 1
+done
+
+# ============================================================
 echo ""
 echo "========================================"
 echo "  local-dev infra is ready!"
@@ -627,6 +655,7 @@ echo "  Provider Console:           http://localhost:$PROVIDER_CONSOLE_PORT (PID
 echo "  Council Console:            http://localhost:$COUNCIL_CONSOLE_PORT (PID $COUNCIL_CONSOLE_PID)"
 echo "  Moonlight Pay:              http://localhost:$MOONLIGHT_PAY_PORT (PID $MOONLIGHT_PAY_PID)"
 echo "  Network Dashboard:          http://localhost:$NETWORK_DASHBOARD_PORT (PID $NETWORK_DASHBOARD_PID)"
+echo "  @moonlight/ui Gallery:      http://localhost:$MOONLIGHT_UI_PORT (PID $MOONLIGHT_UI_PID)"
 echo "  PostgreSQL:         localhost:$PG_PORT (container: $PG_CONTAINER)"
 echo "  Stellar RPC:        http://localhost:$STELLAR_RPC_PORT (shared)"
 echo "  Jaeger UI:          http://localhost:16686"
