@@ -30,6 +30,7 @@ COUNCIL_CONSOLE_PORT="${COUNCIL_CONSOLE_PORT:-3030}"
 MOONLIGHT_PAY_PORT="${MOONLIGHT_PAY_PORT:-3050}"
 NETWORK_DASHBOARD_PORT="${NETWORK_DASHBOARD_PORT:-3040}"
 NETWORK_DASHBOARD_PLATFORM_PORT="${NETWORK_DASHBOARD_PLATFORM_PORT:-3035}"
+MOONLIGHT_UI_PORT="${MOONLIGHT_UI_PORT:-3060}"
 PG_CONTAINER="${PG_CONTAINER:-provider-platform-db}"
 
 # Colors
@@ -77,6 +78,7 @@ stop_process "council-console" "$SCRIPT_DIR/.council-console.pid" "$COUNCIL_CONS
 stop_process "moonlight-pay" "$SCRIPT_DIR/.moonlight-pay.pid" "$MOONLIGHT_PAY_PORT"
 stop_process "network-dashboard" "$SCRIPT_DIR/.network-dashboard.pid" "$NETWORK_DASHBOARD_PORT"
 stop_process "network-dashboard-platform" "$SCRIPT_DIR/.network-dashboard-platform.pid" "$NETWORK_DASHBOARD_PLATFORM_PORT"
+stop_process "moonlight-ui-gallery" "$SCRIPT_DIR/.moonlight-ui.pid" "$MOONLIGHT_UI_PORT"
 
 # --- Stop PostgreSQL container ---
 if docker ps -a --format '{{.Names}}' | grep -q "^${PG_CONTAINER}$"; then
@@ -110,6 +112,7 @@ for f in \
   "$SCRIPT_DIR/council-console.log" \
   "$SCRIPT_DIR/moonlight-pay.log" \
   "$SCRIPT_DIR/network-dashboard.log" \
+  "$SCRIPT_DIR/moonlight-ui.log" \
 ; do
   if [ -f "$f" ]; then
     rm "$f"

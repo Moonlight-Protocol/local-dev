@@ -23,7 +23,8 @@ Clone all repos to `~/repos/`:
 ├── council-console/        # Council dashboard
 ├── pay-platform/           # Moonlight Pay backend (accounts, transactions, POS)
 ├── moonlight-pay/          # Moonlight Pay frontend (wallet sign-in, POS checkout)
-└── network-dashboard/      # Network monitoring dashboard
+├── network-dashboard/      # Network monitoring dashboard
+└── ui/                     # Shared component library (gallery dev server on :3060)
 ```
 
 If your repos live somewhere other than `~/repos/`, set `BASE_DIR`:
@@ -109,7 +110,7 @@ This split exists for three reasons:
 ./up.sh
 ```
 
-This is the single entry point. It calls `setup-keys.sh` (generates deterministic keypairs) then `infra-up.sh` (starts all services). The infra script runs through 11 sections:
+This is the single entry point. It calls `setup-keys.sh` (generates deterministic keypairs) then `infra-up.sh` (starts all services). The infra script runs through 12 sections:
 
 1. Checks prerequisites (Docker, Stellar CLI, Deno) and auto-installs missing ones
 2. Starts Jaeger (OTLP on `:4318`, UI on `:16686`)
@@ -122,6 +123,7 @@ This is the single entry point. It calls `setup-keys.sh` (generates deterministi
 9. Builds and serves council-console on `:3030`
 10. Builds and serves Moonlight Pay on `:3050`
 11. Builds and serves network-dashboard on `:3040`
+12. Builds and serves @moonlight/ui gallery on `:3060`
 
 After `up.sh` finishes the services are healthy and reachable, but the protocol state is empty: no contracts deployed, no councils, no PPs. Run the setup scripts to populate it.
 
