@@ -23,6 +23,7 @@ Clone all repos to `~/repos/`:
 ├── council-console/        # Council dashboard
 ├── pay-platform/           # Moonlight Pay backend (accounts, transactions, POS)
 ├── moonlight-pay/          # Moonlight Pay frontend (wallet sign-in, POS checkout)
+├── network-dashboard-platform/  # Network dashboard backend (live tx feed, council/PP discovery)
 ├── network-dashboard/      # Network monitoring dashboard
 └── ui/                     # Shared component library (gallery dev server on :3060)
 ```
@@ -58,6 +59,7 @@ export PROVIDER_CONSOLE_PORT=3120
 export COUNCIL_CONSOLE_PORT=3130
 export MOONLIGHT_PAY_PORT=3150
 export NETWORK_DASHBOARD_PORT=3140
+export NETWORK_DASHBOARD_PLATFORM_PORT=3135
 
 # Setup-script URLs (used by setup-c.sh / setup-pp.sh / setup-pay.sh)
 # These do NOT derive from *_PORT — they must be set explicitly.
@@ -110,7 +112,7 @@ This split exists for three reasons:
 ./up.sh
 ```
 
-This is the single entry point. It calls `setup-keys.sh` (generates deterministic keypairs) then `infra-up.sh` (starts all services). The infra script runs through 12 sections:
+This is the single entry point. It calls `setup-keys.sh` (generates deterministic keypairs) then `infra-up.sh` (starts all services). The infra script runs through 13 sections:
 
 1. Checks prerequisites (Docker, Stellar CLI, Deno) and auto-installs missing ones
 2. Starts Jaeger (OTLP on `:4318`, UI on `:16686`)
@@ -119,11 +121,12 @@ This is the single entry point. It calls `setup-keys.sh` (generates deterministi
 5. Generates provider-platform `.env` (infra-only), runs migrations, starts on `:3010`
 6. Generates council-platform `.env` (infra-only), runs migrations, starts on `:3015`
 7. Generates pay-platform `.env` (with `ADMIN_WALLETS` and `PAY_SERVICE_SK` from keypairs), runs migrations, starts on `:3025`
-8. Builds and serves provider-console on `:3020`
-9. Builds and serves council-console on `:3030`
-10. Builds and serves Moonlight Pay on `:3050`
-11. Builds and serves network-dashboard on `:3040`
-12. Builds and serves @moonlight/ui gallery on `:3060`
+8. Generates network-dashboard-platform `.env` (infra-only), starts on `:3035`
+9. Builds and serves provider-console on `:3020`
+10. Builds and serves council-console on `:3030`
+11. Builds and serves Moonlight Pay on `:3050`
+12. Builds and serves network-dashboard on `:3040`
+13. Builds and serves @moonlight/ui gallery on `:3060`
 
 After `up.sh` finishes the services are healthy and reachable, but the protocol state is empty: no contracts deployed, no councils, no PPs. Run the setup scripts to populate it.
 
@@ -276,7 +279,7 @@ Each directory contains Jaeger's badger storage (`keys/` and `values/`). Delete 
 
 ## Verifying deployed versions
 
-`scripts/verify-deploy.sh` is a one-shot check that confirms every deployed Moonlight app is running its latest tagged release. It probes 14 endpoints (6 backend `/api/v1/health` + 8 frontend `/health.json`, testnet + mainnet × {council-platform, pay-platform, provider-platform, council-console, provider-console, network-dashboard, moonlight-pay}), compares each app's reported version against its repo's latest GitHub tag, and prints a status table.
+`scripts/verify-deploy.sh` is a one-shot check that confirms every deployed Moonlight app is running its latest tagged release. It probes 16 endpoints (8 backend `/api/v1/health` + 8 frontend `/health.json`, testnet + mainnet × {council-platform, pay-platform, provider-platform, network-dashboard-platform, council-console, provider-console, network-dashboard, moonlight-pay}), compares each app's reported version against its repo's latest GitHub tag, and prints a status table.
 
 ```bash
 bash scripts/verify-deploy.sh
