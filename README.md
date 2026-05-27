@@ -232,6 +232,8 @@ cd e2e && docker compose up --abort-on-container-exit
 
 ## Debugging test failures with traces
 
+Backend logs follow the convention in [logging.md](logging.md): five-method Logger (`info` / `event` / `debug` / `error` / `scope`), service-injection, and `handle<X>(deps)` route factories. Logger and OTEL run side-by-side, not merged.
+
 Every test suite exports OTEL traces to Jaeger, and Jaeger persists them to disk at `.traces/<suite>/`. After a test run (pass or fail), you can inspect the traces by starting a Jaeger instance against the persisted data:
 
 ```bash
