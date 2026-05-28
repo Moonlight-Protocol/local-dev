@@ -377,9 +377,12 @@ check("3 PPs", list.data.data?.length, 3);
 const la = list.data.data?.find((p: any) => p.label === "PP-Approve");
 const lr = list.data.data?.find((p: any) => p.label === "PP-Reject");
 const ln = list.data.data?.find((p: any) => p.label === "PP-None");
-check("PP-Approve: ACTIVE", la?.councilMembership?.status, "ACTIVE");
-check("PP-Reject: REJECTED", lr?.councilMembership?.status, "REJECTED");
-check("PP-None: no council", ln?.councilMembership, null);
+// provider-platform PR #103 renamed councilMembership (singular) →
+// councilMemberships (plural array). A PP can be a member of multiple
+// councils; this test creates exactly one membership per PP.
+check("PP-Approve: ACTIVE", la?.councilMemberships?.[0]?.status, "ACTIVE");
+check("PP-Reject: REJECTED", lr?.councilMemberships?.[0]?.status, "REJECTED");
+check("PP-None: no council", ln?.councilMemberships?.length, 0);
 
 // --- Test 5: Council shows both ---
 console.log("\n\x1b[34m=== Test 5: Council requests list ===\x1b[0m");
