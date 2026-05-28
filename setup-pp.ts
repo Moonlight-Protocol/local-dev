@@ -1,48 +1,36 @@
 /**
- * Local Dev — Privacy Provider Setup
+ * Local Dev — Privacy Provider Setup (multi-PP)
  *
- * Registers a Privacy Provider in the council created by setup-c.sh. This
- * exercises the production join flow end-to-end against the local stack:
+ * Registers 12 PPs, one per country across the 3 councils created by
+ * setup-c.sh. Each PP goes through the full production join flow against the
+ * local stack: register → join request → admin approve → add_provider on
+ * chain → wait ACTIVE.
  *
- *   1. Load admin SK + council ID from .local-dev-state (written by setup-c.sh)
- *   2. Generate a fresh PP operator keypair, fund via Friendbot
- *   3. PP operator authenticates to provider-platform dashboard → JWT
- *   4. PP operator registers a PP via POST /dashboard/pp/register
- *   5. PP operator submits a signed join envelope via POST /dashboard/council/join
- *      (provider-platform forwards it to council-platform's join-request endpoint)
- *   6. Admin (loaded from state) authenticates to council-platform → JWT
- *   7. Admin lists pending join requests, finds ours, calls
- *      POST /council/provider-requests/:id/approve
- *   8. Admin calls add_provider on-chain (channel-auth contract)
- *   9. Wait for provider-platform's event watcher to flip the membership ACTIVE
- *  10. Append PP info to .local-dev-state
+ *   Mercosur (council 1):
+ *     Mercado Libre Argentina Provider  (AR)
+ *     Mercado Libre Brazil    Provider  (BR)
+ *     Mercado Libre Uruguay   Provider  (UY)
+ *     Mercado Libre Paraguay  Provider  (PY)
+ *   Europe (council 2):
+ *     Amazon UK      Provider  (GB)
+ *     Amazon France  Provider  (FR)
+ *     Amazon Germany Provider  (DE)
+ *     Amazon Spain   Provider  (ES)
+ *     Amazon Italy   Provider  (IT)
+ *   North America (council 3):
+ *     Amazon US     Provider  (US)
+ *     Amazon Mexico Provider  (MX)
+ *     Amazon Canada Provider  (CA)
  *
- * Why production-like: every step here is the same one council-console and
- * provider-console make. If a platform release breaks the public surface, this
- * script breaks too — that's the point.
+ * Each PP gets a fresh keypair derived deterministically from PP_SECRET +
+ * index so re-runs (against a fresh ledger) yield the same pubkeys.
  *
  * Prereqs:
- *   - up.sh has run (Stellar quickstart, postgres, jaeger, both platforms)
- *   - setup-c.sh has run (.local-dev-state exists with admin + council IDs)
+ *   - up.sh has run
+ *   - setup-c.sh has run (.local-dev-state has COUNCIL_COUNT + COUNCIL_<i>_*)
  *
- * Idempotency: each run generates a fresh PP keypair. Re-running will register
- * a second PP in the same council (multi-PP). To "reset", run down → up →
- * setup-c → setup-pp.
- *
- * Usage (preferred — via wrapper):
+ * Usage:
  *   ./setup-pp.sh
- *
- * Usage (direct):
- *   deno run --allow-all setup-pp.ts
- *
- * Env overrides:
- *   STELLAR_RPC_URL          default http://localhost:8000/soroban/rpc
- *   FRIENDBOT_URL            default http://localhost:8000/friendbot
- *   STELLAR_NETWORK_PASSPHRASE default "Standalone Network ; February 2017"
- *   COUNCIL_URL              default (loaded from state file)
- *   PROVIDER_URL             default http://localhost:3010
- *   STATE_FILE               default ./.local-dev-state
- *   PP_LABEL                 default "Local PP"
  */
 import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
@@ -59,28 +47,68 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
 const PROVIDER_URL = Deno.env.get("PROVIDER_URL") ?? "http://localhost:3010";
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;
-const PP_LABEL = Deno.env.get("PP_LABEL") ?? "Local PP";
 
-// ─── DETERMINISTIC LOCAL-DEV PP IDENTITY ───────────────────────────────
-//
-// Same fixed-secret approach as setup-c.ts. Re-running setup-pp against
-// a fresh `up.sh` ledger registers the SAME PP G-address — so any client
-// that has the PP's pubkey baked in (the wallet's seed file, manual test
-// configs, etc.) keeps working without updates.
-//
-// SAFETY: local-dev only. See setup-c.ts for the same warning.
-//
-// PP G-address: GBW7TE4PGNEKFAH7DRZBA3CDQIFLNT22ZQO2G5DJSNRGKCS5PYKTIMWV
-const PP_SECRET = Deno.env.get("PP_SECRET") ??
+// One operator keypair owns all 12 PPs (matches the provider-console flow:
+// the user signs once, the SPA derives a masterSeed from their signature,
+// and PP keys are SHA-256(masterSeed || "pp" || index) — see
+// provider-console/src/lib/wallet.ts).
+const OPERATOR_SECRET = Deno.env.get("OPERATOR_SECRET") ??
+  Deno.env.get("PP_SECRET") ??
   "SDRTOKYHEEVBDTC3QPFKKGS5EGTFSXM4B6HTGO2JLY6ZRH4XHICZQTLI";
+
+interface ProviderSpec {
+  name: string;
+  councilIndex: number; // 0-based into COUNCILS
+  jurisdiction: string;
+}
+
+const PROVIDERS: ProviderSpec[] = [
+  // Mercosur
+  {
+    name: "Mercado Libre Argentina Provider",
+    councilIndex: 0,
+    jurisdiction: "AR",
+  },
+  {
+    name: "Mercado Libre Brazil Provider",
+    councilIndex: 0,
+    jurisdiction: "BR",
+  },
+  {
+    name: "Mercado Libre Uruguay Provider",
+    councilIndex: 0,
+    jurisdiction: "UY",
+  },
+  {
+    name: "Mercado Libre Paraguay Provider",
+    councilIndex: 0,
+    jurisdiction: "PY",
+  },
+  // Europe
+  { name: "Amazon UK Provider", councilIndex: 1, jurisdiction: "GB" },
+  { name: "Amazon France Provider", councilIndex: 1, jurisdiction: "FR" },
+  { name: "Amazon Germany Provider", councilIndex: 1, jurisdiction: "DE" },
+  { name: "Amazon Spain Provider", councilIndex: 1, jurisdiction: "ES" },
+  { name: "Amazon Italy Provider", councilIndex: 1, jurisdiction: "IT" },
+  // North America
+  { name: "Amazon US Provider", councilIndex: 2, jurisdiction: "US" },
+  { name: "Amazon Mexico Provider", councilIndex: 2, jurisdiction: "MX" },
+  { name: "Amazon Canada Provider", councilIndex: 2, jurisdiction: "CA" },
+];
+
+interface CouncilState {
+  id: string;
+  name: string;
+  channel: string;
+  jurisdictions: string[];
+}
 
 interface State {
   ADMIN_SK: string;
   ADMIN_PK: string;
-  COUNCIL_ID: string;
-  CHANNEL_ID: string;
   ASSET_ID: string;
   COUNCIL_URL: string;
+  councils: CouncilState[];
 }
 
 async function loadState(): Promise<State> {
@@ -103,19 +131,35 @@ async function loadState(): Promise<State> {
   const required = [
     "ADMIN_SK",
     "ADMIN_PK",
-    "COUNCIL_ID",
-    "CHANNEL_ID",
     "ASSET_ID",
     "COUNCIL_URL",
+    "COUNCIL_COUNT",
   ];
   for (const key of required) {
     if (!env[key]) {
-      throw new Error(
-        `State file missing ${key}. Re-run setup-c.sh.`,
-      );
+      throw new Error(`State file missing ${key}. Re-run setup-c.sh.`);
     }
   }
-  return env as unknown as State;
+  const count = Number(env.COUNCIL_COUNT);
+  const councils: CouncilState[] = [];
+  for (let i = 1; i <= count; i++) {
+    const id = env[`COUNCIL_${i}_ID`];
+    const name = env[`COUNCIL_${i}_NAME`];
+    const channel = env[`COUNCIL_${i}_CHANNEL`];
+    const jurisdictions = (env[`COUNCIL_${i}_JURISDICTIONS`] ?? "").split(",")
+      .filter((j) => j);
+    if (!id || !name || !channel) {
+      throw new Error(`State file missing COUNCIL_${i}_* fields.`);
+    }
+    councils.push({ id, name, channel, jurisdictions });
+  }
+  return {
+    ADMIN_SK: env.ADMIN_SK,
+    ADMIN_PK: env.ADMIN_PK,
+    ASSET_ID: env.ASSET_ID,
+    COUNCIL_URL: env.COUNCIL_URL,
+    councils,
+  };
 }
 
 async function appendStateLines(lines: Record<string, string>): Promise<void> {
@@ -149,7 +193,6 @@ async function warmupService(name: string, url: string): Promise<void> {
   throw new Error(`${name} not reachable at ${url}`);
 }
 
-/** Wallet auth: challenge → sign nonce → verify → JWT. */
 async function walletAuth(
   baseUrl: string,
   authRoute: string,
@@ -187,7 +230,6 @@ async function walletAuth(
   return token;
 }
 
-/** Sign a join request envelope (matches council-platform's signed-payload.ts). */
 async function signJoinEnvelope<T>(
   payload: T,
   keypair: Keypair,
@@ -210,7 +252,6 @@ async function signJoinEnvelope<T>(
   };
 }
 
-/** Poll provider-platform until the membership for ppPublicKey becomes ACTIVE. */
 async function pollMembershipActive(
   ppPublicKey: string,
   dashboardJwt: string,
@@ -233,54 +274,67 @@ async function pollMembershipActive(
   throw new Error(
     `Membership for ${ppPublicKey} did not become ACTIVE after ${
       maxAttempts * intervalMs
-    }ms. ` +
-      `Check provider-platform's event watcher logs.`,
+    }ms.`,
   );
 }
 
-async function main() {
-  const startTime = Date.now();
+/**
+ * Mirrors provider-console/src/lib/wallet.ts:
+ *   masterSeed = SHA-256(operator.sign("Moonlight: Derive server key"))
+ *   PP_i = SHA-256(masterSeed || "pp" || i)  → Ed25519 seed
+ *
+ * Returns the masterSeed so callers can derive any number of PPs from it.
+ */
+async function deriveMasterSeed(operator: Keypair): Promise<Uint8Array> {
+  const message = new TextEncoder().encode("Moonlight: Derive server key");
+  const signature = new Uint8Array(operator.sign(Buffer.from(message)));
+  return new Uint8Array(await crypto.subtle.digest("SHA-256", signature));
+}
 
-  console.log("\n=== local-dev — Privacy Provider Setup ===\n");
+async function deriveKeypair(
+  masterSeed: Uint8Array,
+  index: number,
+): Promise<Keypair> {
+  const tag = new TextEncoder().encode("pp");
+  const idxBytes = new TextEncoder().encode(String(index));
+  const buf = new Uint8Array(masterSeed.length + tag.length + idxBytes.length);
+  buf.set(masterSeed, 0);
+  buf.set(tag, masterSeed.length);
+  buf.set(idxBytes, masterSeed.length + tag.length);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", buf));
+  return Keypair.fromRawEd25519Seed(Buffer.from(digest));
+}
 
-  console.log("[1/10] Load council state from setup-c.sh");
-  const state = await loadState();
-  const admin = Keypair.fromSecret(state.ADMIN_SK);
-  console.log(`  Admin:      ${state.ADMIN_PK}`);
-  console.log(`  Council ID: ${state.COUNCIL_ID}`);
-  console.log(`  Council:    ${state.COUNCIL_URL}`);
-  console.log(`  Provider:   ${PROVIDER_URL}`);
+interface RegisteredPP {
+  spec: ProviderSpec;
+  index: number;
+  publicKey: string;
+  secret: string;
+  councilId: string;
+}
 
-  console.log("\n[2/10] Warmup provider-platform");
-  await warmupService("provider-platform", PROVIDER_URL);
-  console.log("  provider-platform reachable");
+async function setupOnePP(
+  spec: ProviderSpec,
+  index: number,
+  kp: Keypair,
+  dashboardJwt: string,
+  adminKp: Keypair,
+  admin: { jwtForCouncil: () => Promise<string> },
+  council: CouncilState,
+  // deno-lint-ignore no-explicit-any
+  server: any,
+): Promise<RegisteredPP> {
+  const tag = `[${
+    index + 1
+  }/${PROVIDERS.length}] ${spec.name} (${spec.jurisdiction})`;
+  console.log(`\n=== ${tag} ===`);
+  console.log(`  Keypair:    ${kp.publicKey()}`);
+  console.log(`  Council:    ${council.name} (${council.id.slice(0, 8)}…)`);
 
-  // Deterministic PP operator key. Same address every run, so anything that
-  // has the PP pubkey baked in (wallet seed, manual configs) keeps working
-  // across `down`/`up` cycles. See PP_SECRET comment at the top of the file.
-  const ppOperator = Keypair.fromSecret(PP_SECRET);
-  console.log(`\n  PP Operator: ${ppOperator.publicKey()}`);
+  console.log("  Funding via Friendbot…");
+  await fundAccount(kp.publicKey());
 
-  console.log("\n[3/10] Funding PP operator via Friendbot");
-  await fundAccount(ppOperator.publicKey());
-  console.log("  PP Operator funded");
-
-  console.log(
-    "\n[4/10] PP operator authenticates to provider-platform dashboard",
-  );
-  const dashboardJwt = await walletAuth(
-    PROVIDER_URL,
-    "/api/v1/dashboard/auth",
-    ppOperator,
-  );
-  console.log("  Dashboard JWT acquired");
-
-  // For local-dev simplicity, the PP key IS the operator key (derivationIndex 0).
-  // In production a PP operator would derive distinct keys per PP from a master
-  // seed; here we cheat to keep the script linear.
-  const ppKeypair = ppOperator;
-
-  console.log("\n[5/10] Register PP via /dashboard/pp/register");
+  console.log("  Registering PP under operator…");
   const regRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/pp/register`, {
     method: "POST",
     headers: {
@@ -288,9 +342,9 @@ async function main() {
       "Authorization": `Bearer ${dashboardJwt}`,
     },
     body: JSON.stringify({
-      secretKey: ppKeypair.secret(),
-      derivationIndex: 0,
-      label: PP_LABEL,
+      secretKey: kp.secret(),
+      derivationIndex: index,
+      label: spec.name,
     }),
   });
   if (!regRes.ok) {
@@ -298,18 +352,18 @@ async function main() {
       `PP register failed: ${regRes.status} ${await regRes.text()}`,
     );
   }
-  console.log(`  PP registered: ${ppKeypair.publicKey()}`);
 
-  console.log("\n[6/10] Submit signed join request");
+  console.log("  Submitting join request…");
   const joinPayload = {
-    publicKey: ppKeypair.publicKey(),
-    councilId: state.COUNCIL_ID,
-    label: PP_LABEL,
-    contactEmail: "pp@local-dev.moonlight.test",
-    jurisdictions: ["UY"],
+    publicKey: kp.publicKey(),
+    councilId: council.id,
+    label: spec.name,
+    contactEmail:
+      `${spec.jurisdiction.toLowerCase()}-pp@local-dev.moonlight.test`,
+    jurisdictions: [spec.jurisdiction],
     callbackEndpoint: PROVIDER_URL,
   };
-  const signedEnvelope = await signJoinEnvelope(joinPayload, ppKeypair);
+  const signedEnvelope = await signJoinEnvelope(joinPayload, kp);
 
   const joinRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/council/join`, {
     method: "POST",
@@ -318,12 +372,13 @@ async function main() {
       "Authorization": `Bearer ${dashboardJwt}`,
     },
     body: JSON.stringify({
-      councilUrl: state.COUNCIL_URL,
-      councilId: state.COUNCIL_ID,
-      councilName: "Local Council",
-      ppPublicKey: ppKeypair.publicKey(),
-      label: PP_LABEL,
-      contactEmail: "pp@local-dev.moonlight.test",
+      councilUrl: Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015",
+      councilId: council.id,
+      councilName: council.name,
+      ppPublicKey: kp.publicKey(),
+      label: spec.name,
+      contactEmail:
+        `${spec.jurisdiction.toLowerCase()}-pp@local-dev.moonlight.test`,
       signedEnvelope,
     }),
   });
@@ -332,23 +387,14 @@ async function main() {
       `Join request failed: ${joinRes.status} ${await joinRes.text()}`,
     );
   }
-  const joinBody = await joinRes.json();
-  console.log(
-    `  Join request submitted: ${joinBody.data?.joinRequestId} (PENDING)`,
-  );
 
-  console.log("\n[7/10] Admin authenticates to council-platform");
-  const adminJwt = await walletAuth(
-    state.COUNCIL_URL,
-    "/api/v1/admin/auth",
-    admin,
-  );
-  console.log("  Admin JWT acquired");
-
-  console.log("\n[8/10] Admin approves the join request");
+  console.log("  Admin approving join…");
+  const adminJwt = await admin.jwtForCouncil();
   const listRes = await fetch(
-    `${state.COUNCIL_URL}/api/v1/council/provider-requests?councilId=${
-      encodeURIComponent(state.COUNCIL_ID)
+    `${
+      Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015"
+    }/api/v1/council/provider-requests?councilId=${
+      encodeURIComponent(council.id)
     }`,
     { headers: { "Authorization": `Bearer ${adminJwt}` } },
   );
@@ -359,16 +405,17 @@ async function main() {
   }
   const { data: requests } = await listRes.json();
   const ourRequest = requests?.find?.(
-    (r: { publicKey: string }) => r.publicKey === ppKeypair.publicKey(),
+    (r: { publicKey: string }) => r.publicKey === kp.publicKey(),
   );
   if (!ourRequest) {
     throw new Error(
       `Could not find our join request among ${requests?.length ?? 0} requests`,
     );
   }
-
   const approveRes = await fetch(
-    `${state.COUNCIL_URL}/api/v1/council/provider-requests/${ourRequest.id}/approve`,
+    `${
+      Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015"
+    }/api/v1/council/provider-requests/${ourRequest.id}/approve`,
     {
       method: "POST",
       headers: { "Authorization": `Bearer ${adminJwt}` },
@@ -379,44 +426,136 @@ async function main() {
       `Approve failed: ${approveRes.status} ${await approveRes.text()}`,
     );
   }
-  console.log("  Join request approved (DB updated)");
 
-  console.log("\n[9/10] Admin calls add_provider on-chain");
-  const server = createServer(RPC_URL, true);
+  console.log("  Admin add_provider on-chain…");
   const addTx = await addProvider(
     server,
-    admin,
+    adminKp,
     NETWORK_PASSPHRASE,
-    state.COUNCIL_ID,
-    ppKeypair.publicKey(),
+    council.id,
+    kp.publicKey(),
   );
   if (!verifyEvent(extractEvents(addTx), "provider_added", true).found) {
     throw new Error("provider_added event not emitted");
   }
-  console.log("  provider_added event verified");
 
-  console.log("\n[10/10] Wait for membership to become ACTIVE");
-  await pollMembershipActive(ppKeypair.publicKey(), dashboardJwt);
-  console.log("  Membership ACTIVE");
+  console.log("  Waiting for membership ACTIVE…");
+  await pollMembershipActive(kp.publicKey(), dashboardJwt);
+  console.log("  ✓ ACTIVE");
 
-  await appendStateLines({
-    PP_PK: ppKeypair.publicKey(),
-    PP_SK: ppKeypair.secret(),
+  return {
+    spec,
+    index,
+    publicKey: kp.publicKey(),
+    secret: kp.secret(),
+    councilId: council.id,
+  };
+}
+
+async function main() {
+  const startTime = Date.now();
+  console.log("\n=== local-dev — Privacy Provider Setup (multi-PP) ===\n");
+
+  console.log("[1/5] Load state from setup-c.sh");
+  const state = await loadState();
+  const adminKp = Keypair.fromSecret(state.ADMIN_SK);
+  console.log(`  Admin:    ${state.ADMIN_PK}`);
+  console.log(`  Councils: ${state.councils.length}`);
+  console.log(`  PPs to register: ${PROVIDERS.length}`);
+
+  console.log("\n[2/5] Warmup provider-platform");
+  await warmupService("provider-platform", PROVIDER_URL);
+
+  // Admin JWT is per-call (council-platform may rotate sessions); cache lazily.
+  let cachedAdminJwt: string | null = null;
+  const adminCtx = {
+    jwtForCouncil: async () => {
+      if (cachedAdminJwt) return cachedAdminJwt;
+      cachedAdminJwt = await walletAuth(
+        state.COUNCIL_URL,
+        "/api/v1/admin/auth",
+        adminKp,
+      );
+      return cachedAdminJwt;
+    },
+  };
+
+  console.log("\n[3/5] Fund admin + operator via Friendbot");
+  await fundAccount(state.ADMIN_PK);
+
+  const operatorKp = Keypair.fromSecret(OPERATOR_SECRET);
+  console.log(`  Operator: ${operatorKp.publicKey()}`);
+  await fundAccount(operatorKp.publicKey());
+
+  const server = createServer(RPC_URL, true);
+
+  console.log(
+    "\n[4/5] Operator authenticates once + derives 12 PP keys from masterSeed",
+  );
+  const operatorJwt = await walletAuth(
     PROVIDER_URL,
-  });
+    "/api/v1/dashboard/auth",
+    operatorKp,
+  );
+  const masterSeed = await deriveMasterSeed(operatorKp);
+
+  // Derive every PP keypair up front so we can fund + register them as the
+  // same operator owns them all.
+  const ppKeypairs = await Promise.all(
+    PROVIDERS.map((_, i) => deriveKeypair(masterSeed, i)),
+  );
+
+  console.log(`\n[5/5] Registering ${PROVIDERS.length} PPs under operator`);
+  const registered: RegisteredPP[] = [];
+  for (let i = 0; i < PROVIDERS.length; i++) {
+    const spec = PROVIDERS[i];
+    const council = state.councils[spec.councilIndex];
+    if (!council) {
+      throw new Error(
+        `Provider spec at index ${i} references councilIndex ${spec.councilIndex}, but only ${state.councils.length} councils exist.`,
+      );
+    }
+    registered.push(
+      await setupOnePP(
+        spec,
+        i,
+        ppKeypairs[i],
+        operatorJwt,
+        adminKp,
+        adminCtx,
+        council,
+        server,
+      ),
+    );
+  }
+
+  console.log("\nWriting state…");
+  const lines: Record<string, string> = {
+    PROVIDER_URL,
+    OPERATOR_PK: operatorKp.publicKey(),
+    OPERATOR_SK: operatorKp.secret(),
+    PP_COUNT: String(registered.length),
+  };
+  for (const r of registered) {
+    const i = r.index + 1;
+    lines[`PP_${i}_PK`] = r.publicKey;
+    lines[`PP_${i}_SK`] = r.secret;
+    lines[`PP_${i}_NAME`] = r.spec.name;
+    lines[`PP_${i}_COUNCIL_INDEX`] = String(r.spec.councilIndex + 1);
+    lines[`PP_${i}_JURISDICTION`] = r.spec.jurisdiction;
+  }
+  await appendStateLines(lines);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== PP setup complete in ${elapsed}s ===\n`);
-  console.log(`  PP public key: ${ppKeypair.publicKey()}`);
-  console.log(`  Council ID:    ${state.COUNCIL_ID}`);
-  console.log(`  Channel ID:    ${state.CHANNEL_ID}`);
-  console.log(`  Provider URL:  ${PROVIDER_URL}`);
-  console.log("");
+  for (const r of registered) {
+    console.log(`  ${r.spec.name} (${r.spec.jurisdiction})`);
+    console.log(`    Pubkey:  ${r.publicKey}`);
+    console.log(`    Council: ${r.councilId}`);
+  }
   console.log(
-    "The browser-wallet (or any client) can now authenticate against the",
+    "\nNext: ./setup-pay.sh and ./send-loop.sh to drive bundles across the fleet.",
   );
-  console.log("provider and submit bundles targeting the privacy channel.");
-  console.log("");
 }
 
 main().catch((err) => {

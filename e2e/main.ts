@@ -24,6 +24,25 @@ async function fundAccount(
   }
 }
 
+async function registerEntity(
+  providerUrl: string,
+  pubkey: string,
+  name: string,
+): Promise<void> {
+  const res = await fetch(`${providerUrl}/api/v1/entities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
+  });
+  // Idempotent: 409 means already APPROVED, treat as success.
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `Entity registration failed for ${pubkey}: ${res.status} ${await res
+        .text()}`,
+    );
+  }
+}
+
 async function main() {
   const startTime = Date.now();
 
@@ -65,6 +84,15 @@ async function main() {
     () => authenticate(bob, config),
   );
   console.log(`  Bob authenticated`);
+
+  // Step 4b: Register Alice + Bob as APPROVED entities (KYC/KYB). Bundle
+  // submission now gates on the submitter's entity being APPROVED.
+  console.log("\n[4b/8] Registering Alice + Bob as APPROVED entities...");
+  await withE2ESpan("e2e.register_entities", async () => {
+    await registerEntity(config.providerUrl, alice.publicKey(), "Alice");
+    await registerEntity(config.providerUrl, bob.publicKey(), "Bob");
+  });
+  console.log("  Entities registered");
 
   // Step 5: Alice deposits into channel
   console.log(`\n[5/8] Alice depositing ${DEPOSIT_AMOUNT} XLM into channel...`);

@@ -1,23 +1,19 @@
 import type { Config } from "./config.ts";
 import { withE2ESpan } from "./tracer.ts";
 
-export interface SubmitBundleOptions {
-  jurisdictionFrom?: string;
-  jurisdictionTo?: string;
-}
-
 export function submitBundle(
   jwt: string,
   operationsMLXDR: string[],
   config: Config,
-  options: SubmitBundleOptions = {},
 ): Promise<string> {
   return withE2ESpan("bundle.submit", async () => {
     const maxRetries = 10;
     const retryDelayMs = 5_000;
+    const url =
+      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/bundles`;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
-      const res = await fetch(`${config.providerUrl}/api/v1/bundle`, {
+      const res = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -26,17 +22,11 @@ export function submitBundle(
         body: JSON.stringify({
           operationsMLXDR,
           channelContractId: config.channelContractId,
-          ...(options.jurisdictionFrom !== undefined
-            ? { jurisdictionFrom: options.jurisdictionFrom }
-            : {}),
-          ...(options.jurisdictionTo !== undefined
-            ? { jurisdictionTo: options.jurisdictionTo }
-            : {}),
         }),
       });
 
       if (res.status === 429) {
-        await res.text(); // drain body
+        await res.text();
         await new Promise((r) => setTimeout(r, retryDelayMs));
         continue;
       }
@@ -66,16 +56,16 @@ export function waitForBundle(
 ): Promise<void> {
   return withE2ESpan("bundle.wait", async () => {
     const start = Date.now();
+    const url =
+      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/bundles/${bundleId}`;
 
     while (Date.now() - start < timeoutMs) {
       await new Promise((r) => setTimeout(r, pollIntervalMs));
 
-      const res = await fetch(
-        `${config.providerUrl}/api/v1/bundle/${bundleId}`,
-        { headers: { "Authorization": `Bearer ${jwt}` } },
-      );
+      const res = await fetch(url, {
+        headers: { "Authorization": `Bearer ${jwt}` },
+      });
 
-      // Retry on rate limit
       if (res.status === 429) {
         await new Promise((r) => setTimeout(r, pollIntervalMs));
         continue;

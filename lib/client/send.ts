@@ -12,6 +12,10 @@ const SEND_FEE = 0.1; // LOW entropy fee
 export interface SendOptions {
   jurisdictionFrom?: string;
   jurisdictionTo?: string;
+  // When false, return the bundle id immediately after submission without
+  // awaiting completion. Used by send-loop's expire mode so it can force-
+  // expire the bundle before it settles.
+  waitForCompletion?: boolean;
 }
 
 export async function send(
@@ -22,7 +26,7 @@ export async function send(
   config: Config,
   tracer?: MoonlightTracer,
   options: SendOptions = {},
-): Promise<void> {
+): Promise<string> {
   const feeBigInt = fromDecimals(SEND_FEE, 7);
   const amountBigInt = fromDecimals(amount, 7);
   const totalToSpend = amountBigInt + feeBigInt;
@@ -92,9 +96,13 @@ export async function send(
     ...createOps.map((op) => op.toMLXDR()),
     ...spendOps.map((op) => op.toMLXDR()),
   ];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
   console.log(`  Bundle submitted: ${bundleId}`);
 
+  if (options.waitForCompletion === false) {
+    return bundleId;
+  }
   await waitForBundle(jwt, bundleId, config);
   console.log(`  Bundle completed`);
+  return bundleId;
 }

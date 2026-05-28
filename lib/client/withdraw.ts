@@ -89,7 +89,7 @@ export async function withdraw(
     ...changeCreateOps.map((op) => op.toMLXDR()),
     ...spendOps.map((op) => op.toMLXDR()),
   ];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
   console.log(`  Bundle submitted: ${bundleId}`);
 
   await waitForBundle(jwt, bundleId, config);

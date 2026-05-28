@@ -136,6 +136,10 @@ E2E_CHANNEL_ASSET_CONTRACT_ID=$TOKEN_ID
 E2E_PROVIDER_PK=$PROVIDER_PK
 E2E_PROVIDER_SK=$PROVIDER_SK
 E2E_TREASURY_PK=$TREASURY_PK
+# Bundles are URL-scoped to /providers/:ppPublicKey/bundles. lib/client/config.ts
+# requires E2E_PP_PUBLIC_KEY for every submission; in the single-PP e2e harness
+# it is the same as E2E_PROVIDER_PK.
+E2E_PP_PUBLIC_KEY=$PROVIDER_PK
 EOF
 
 # --- Write seed.json for provider DB seeding ---

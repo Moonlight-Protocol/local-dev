@@ -1,42 +1,38 @@
 /**
- * Local Dev — Council Setup
+ * Local Dev — Council Setup (multi-council)
  *
- * Sets up a council against a running local-dev stack. This is the production
- * flow exercised end-to-end against the local Stellar node and the local
- * council-platform service. Steps mirror lifecycle/testnet-verify.ts:
+ * Creates THREE councils against the local stack, each with its own
+ * channel-auth + privacy-channel contracts, name, and accepted jurisdictions.
+ * Drives the full production API surface for every council.
  *
- *   1. Generate fresh admin keypair, fund via Friendbot
- *   2. Deploy Channel Auth contract → councilId
- *   3. Deploy native XLM SAC (or fetch existing)
- *   4. Deploy Privacy Channel contract → channelContractId
- *   5. Admin authenticates to council-platform → JWT
- *   6. Admin creates the council via PUT /council/metadata
- *   7. Admin adds the channel via POST /council/channels
- *   8. Write all IDs + admin SK to .local-dev-state for setup-pp.sh and the
- *      browser-wallet seed files to consume
+ *   Mercado Libre Mercosur   — AR, BR, UY, PY
+ *   Amazon Europe            — GB, FR, DE, ES, IT
+ *   Amazon North America     — US, MX, CA
  *
- * Why production-like: every API call here is the same one council-console
- * makes against the deployed council-platform. If a council-platform release
- * breaks the public surface, this script breaks too — that's the point.
+ * Steps per council:
+ *   1. Deploy Channel Auth contract (deterministic salt per council index)
+ *   2. Deploy Privacy Channel contract (deterministic salt per council index)
+ *   3. PUT /council/metadata (name + description)
+ *   4. POST /council/channels (XLM channel)
+ *   5. POST /council/jurisdictions (one per jurisdiction)
+ *
+ * Shared:
+ *   - Native XLM SAC is deployed once and reused for all 3 councils
+ *   - Admin keypair is shared
+ *   - JWT is per-council via SEP-43 challenge/verify
+ *
+ * State file format (.local-dev-state) keys:
+ *   ADMIN_PK, ADMIN_SK, ASSET_ID, COUNCIL_URL, NETWORK_PASSPHRASE,
+ *   RPC_URL, FRIENDBOT_URL,
+ *   COUNCIL_COUNT,
+ *   COUNCIL_<i>_ID, COUNCIL_<i>_NAME, COUNCIL_<i>_CHANNEL,
+ *   COUNCIL_<i>_JURISDICTIONS  (comma-separated, e.g. AR,BR,UY,PY)
  *
  * Prereqs:
  *   - up.sh has run (Stellar quickstart on :8000, council-platform on :3015)
  *
- * Usage (preferred — via wrapper):
+ * Usage:
  *   ./setup-c.sh
- *
- * Usage (direct):
- *   deno run --allow-all setup-c.ts
- *
- * Env overrides:
- *   STELLAR_RPC_URL          default http://localhost:8000/soroban/rpc
- *   FRIENDBOT_URL            default http://localhost:8000/friendbot
- *   STELLAR_NETWORK_PASSPHRASE default "Standalone Network ; February 2017"
- *   COUNCIL_URL              default http://localhost:3015
- *   STATE_FILE               default ./.local-dev-state
- *   COUNCIL_NAME             default "Local Council"
- *   CHANNEL_AUTH_WASM        default ./e2e/wasms/channel_auth_contract.wasm
- *   PRIVACY_CHANNEL_WASM     default ./e2e/wasms/privacy_channel.wasm
  */
 import { Keypair } from "npm:@stellar/stellar-sdk@14.2.0";
 import { Buffer } from "node:buffer";
@@ -58,38 +54,37 @@ const NETWORK_PASSPHRASE = Deno.env.get("STELLAR_NETWORK_PASSPHRASE") ??
 const COUNCIL_URL = Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015";
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;
-const COUNCIL_NAME = Deno.env.get("COUNCIL_NAME") ?? "Local Council";
 const CHANNEL_AUTH_WASM = Deno.env.get("CHANNEL_AUTH_WASM") ??
   new URL("./e2e/wasms/channel_auth_contract.wasm", import.meta.url).pathname;
 const PRIVACY_CHANNEL_WASM = Deno.env.get("PRIVACY_CHANNEL_WASM") ??
   new URL("./e2e/wasms/privacy_channel.wasm", import.meta.url).pathname;
 
-// ─── DETERMINISTIC LOCAL-DEV IDENTITY ──────────────────────────────────
-//
-// Fixed admin secret + fixed contract salts → same admin G-address and
-// same channel-auth / privacy-channel contract IDs every run. This means
-// the wallet's seed file (channel contract ID) and any tooling that
-// references the council ID can be set ONCE and never change across
-// `down → up → setup-c` cycles.
-//
-// SAFETY: this secret is for local-dev against `Standalone Network ;
-// February 2017` ONLY. It is hard-coded in source so it must NEVER be
-// reused on testnet/mainnet. The Friendbot funding is gated to the local
-// network passphrase via FRIENDBOT_URL above.
-//
-// Override with env vars if you want to register a separate admin
-// (e.g. testing multi-council scenarios on the local stack).
-//
-// Admin G-address: GAEILCNSC4ZTA63RK3ACSADVSWC47NRG7KFVYHZ4HKS265YEZVEHWMHG
 const ADMIN_SECRET = Deno.env.get("ADMIN_SECRET") ??
   "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74";
-// Salts are arbitrary 32-byte values. hexToFixedBuffer pads with leading
-// zeros so a 20-hex-char tail is fine. The tails spell "LOCAL_CAUT" and
-// "LOCAL_PCHC" — recognizable in logs/dumps and obviously dev-only.
-const CHANNEL_AUTH_SALT_HEX = Deno.env.get("CHANNEL_AUTH_SALT_HEX") ??
-  "4c4f43414c5f43415554"; // "LOCAL_CAUT"
-const PRIVACY_CHANNEL_SALT_HEX = Deno.env.get("PRIVACY_CHANNEL_SALT_HEX") ??
-  "4c4f43414c5f50434843"; // "LOCAL_PCHC"
+const CHANNEL_AUTH_SALT_BASE = Deno.env.get("CHANNEL_AUTH_SALT_HEX") ??
+  "4c4f43414c5f43415554";
+const PRIVACY_CHANNEL_SALT_BASE = Deno.env.get("PRIVACY_CHANNEL_SALT_HEX") ??
+  "4c4f43414c5f50434843";
+
+interface CouncilSpec {
+  name: string;
+  jurisdictions: string[];
+}
+
+const COUNCILS: CouncilSpec[] = [
+  {
+    name: "Mercado Libre Mercosur",
+    jurisdictions: ["AR", "BR", "UY", "PY"],
+  },
+  {
+    name: "Amazon Europe",
+    jurisdictions: ["GB", "FR", "DE", "ES", "IT"],
+  },
+  {
+    name: "Amazon North America",
+    jurisdictions: ["US", "MX", "CA"],
+  },
+];
 
 function hexToFixedBuffer(hex: string, length = 32): Buffer {
   const bytes = Buffer.alloc(length);
@@ -98,8 +93,14 @@ function hexToFixedBuffer(hex: string, length = 32): Buffer {
   return bytes;
 }
 
+function saltForCouncil(baseHex: string, index: number): Buffer {
+  // Append 4 hex digits of the index so each council gets a distinct salt
+  // (and therefore a distinct deterministic contract ID).
+  const idxHex = index.toString(16).padStart(4, "0");
+  return hexToFixedBuffer(baseHex + idxHex);
+}
+
 async function fundAccount(publicKey: string): Promise<void> {
-  // Friendbot returns 200 on first fund, 400 "already funded" on retry. Both fine.
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
     throw new Error(
@@ -119,7 +120,6 @@ async function warmupCouncil(): Promise<void> {
   throw new Error(`council-platform not reachable at ${COUNCIL_URL}`);
 }
 
-/** SEP-43/53 wallet auth: challenge → sign → verify → JWT. */
 async function walletAuth(keypair: Keypair): Promise<string> {
   const challengeRes = await fetch(
     `${COUNCIL_URL}/api/v1/admin/auth/challenge`,
@@ -137,8 +137,6 @@ async function walletAuth(keypair: Keypair): Promise<string> {
   }
   const { data: { nonce } } = await challengeRes.json();
 
-  // The nonce is a base64-encoded random 32 bytes. We sign the raw bytes —
-  // council-platform's verifier accepts SEP-43, SEP-53, or raw formats.
   const nonceBytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
   const sig = keypair.sign(Buffer.from(nonceBytes));
   const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
@@ -161,7 +159,7 @@ async function walletAuth(keypair: Keypair): Promise<string> {
 async function writeStateFile(state: Record<string, string>): Promise<void> {
   const lines = [
     "# Generated by setup-c.sh — regenerated on every run.",
-    "# Consumed by setup-pp.sh and other follow-up scripts.",
+    "# Consumed by setup-pp.sh, setup-pay.sh, send-loop.sh.",
     `# Created: ${new Date().toISOString()}`,
     "",
     ...Object.entries(state).map(([k, v]) => `${k}=${v}`),
@@ -170,87 +168,60 @@ async function writeStateFile(state: Record<string, string>): Promise<void> {
   await Deno.writeTextFile(STATE_FILE, lines.join("\n"));
 }
 
-async function main() {
-  const startTime = Date.now();
+interface DeployedCouncil {
+  spec: CouncilSpec;
+  index: number;
+  channelAuthId: string;
+  channelContractId: string;
+}
 
-  console.log("\n=== local-dev — Council Setup ===\n");
-  console.log(`  RPC:        ${RPC_URL}`);
-  console.log(`  Friendbot:  ${FRIENDBOT_URL}`);
-  console.log(`  Council:    ${COUNCIL_URL}`);
-  console.log(`  State file: ${STATE_FILE}`);
+async function setupOneCouncil(
+  spec: CouncilSpec,
+  index: number,
+  admin: Keypair,
+  // deno-lint-ignore no-explicit-any
+  server: any,
+  assetContractId: string,
+  channelAuthWasmHash: Buffer,
+  privacyChannelWasmHash: Buffer,
+): Promise<DeployedCouncil> {
+  const tag = `[${index + 1}/${COUNCILS.length}] ${spec.name}`;
+  console.log(`\n=== ${tag} ===`);
 
-  console.log("\n[1/8] Warmup council-platform");
-  await warmupCouncil();
-  console.log("  council-platform reachable");
-
-  // Deterministic admin keypair — same address every run. See header comment.
-  const admin = Keypair.fromSecret(ADMIN_SECRET);
-  console.log(`\n  Admin: ${admin.publicKey()}`);
-
-  console.log("\n[2/8] Funding admin via Friendbot");
-  await fundAccount(admin.publicKey());
-  console.log("  Admin funded");
-
-  console.log("\n[3/8] Deploy Channel Auth contract");
-  const server = createServer(RPC_URL, true);
-  const channelAuthWasm = await Deno.readFile(CHANNEL_AUTH_WASM);
-  const channelAuthHash = await uploadWasm(
-    server,
-    admin,
-    NETWORK_PASSPHRASE,
-    channelAuthWasm,
-  );
-  // Fixed salt → deterministic contract ID across runs.
-  const channelAuthSalt = hexToFixedBuffer(CHANNEL_AUTH_SALT_HEX);
+  console.log("  Deploying Channel Auth…");
+  const channelAuthSalt = saltForCouncil(CHANNEL_AUTH_SALT_BASE, index);
   const { contractId: channelAuthId, txResponse: authDeployTx } =
     await deployChannelAuth(
       server,
       admin,
       NETWORK_PASSPHRASE,
-      channelAuthHash,
+      channelAuthWasmHash,
       channelAuthSalt,
     );
   if (
     verifyEvent(extractEvents(authDeployTx), "contract_initialized", true).found
   ) {
-    console.log("  contract_initialized event verified");
+    console.log("    contract_initialized event verified");
   }
-  console.log(`  Channel Auth: ${channelAuthId}`);
+  console.log(`    Channel Auth: ${channelAuthId}`);
 
-  console.log("\n[4/8] Deploy native XLM SAC");
-  const assetContractId = await getOrDeployNativeSac(
-    server,
-    admin,
-    NETWORK_PASSPHRASE,
-  );
-  console.log(`  XLM SAC: ${assetContractId}`);
-
-  console.log("\n[5/8] Deploy Privacy Channel contract");
-  const privacyChannelWasm = await Deno.readFile(PRIVACY_CHANNEL_WASM);
-  const privacyChannelHash = await uploadWasm(
-    server,
-    admin,
-    NETWORK_PASSPHRASE,
-    privacyChannelWasm,
-  );
-  // Fixed salt → deterministic contract ID across runs.
-  const privacyChannelSalt = hexToFixedBuffer(PRIVACY_CHANNEL_SALT_HEX);
+  console.log("  Deploying Privacy Channel…");
+  const privacyChannelSalt = saltForCouncil(PRIVACY_CHANNEL_SALT_BASE, index);
   const channelContractId = await deployPrivacyChannel(
     server,
     admin,
     NETWORK_PASSPHRASE,
-    privacyChannelHash,
+    privacyChannelWasmHash,
     channelAuthId,
     assetContractId,
     privacyChannelSalt,
   );
-  console.log(`  Privacy Channel: ${channelContractId}`);
+  console.log(`    Privacy Channel: ${channelContractId}`);
 
-  console.log("\n[6/8] Admin authenticates to council-platform");
+  console.log("  Authenticating admin to council-platform…");
   const adminJwt = await walletAuth(admin);
-  console.log("  Admin JWT acquired");
 
-  console.log("\n[7/8] Admin creates council + adds channel");
+  console.log("  Creating council metadata…");
   const createRes = await fetch(`${COUNCIL_URL}/api/v1/council/metadata`, {
     method: "PUT",
     headers: {
@@ -259,8 +230,8 @@ async function main() {
     },
     body: JSON.stringify({
       councilId: channelAuthId,
-      name: COUNCIL_NAME,
-      description: "Local-dev council created by setup-c.sh",
+      name: spec.name,
+      description: `Local-dev council: ${spec.name}`,
       contactEmail: "local-dev@moonlight.test",
     }),
   });
@@ -269,8 +240,9 @@ async function main() {
       `Create council failed: ${createRes.status} ${await createRes.text()}`,
     );
   }
-  console.log(`  Council created: ${channelAuthId}`);
+  console.log(`    Council created: ${channelAuthId}`);
 
+  console.log("  Adding XLM channel…");
   const addChannelRes = await fetch(
     `${COUNCIL_URL}/api/v1/council/channels?councilId=${
       encodeURIComponent(channelAuthId)
@@ -295,18 +267,10 @@ async function main() {
         .text()}`,
     );
   }
-  console.log(`  Channel added: ${channelContractId} (XLM)`);
 
-  // JURISDICTION accepts a comma-separated list of ISO 3166-1 alpha-2 codes,
-  // e.g. "US,UY,GB". Each is POSTed individually because the council-platform
-  // jurisdictions endpoint takes one country per call. Defaults to "US" so
-  // existing single-code callers keep working.
-  const jurisdictions = (Deno.env.get("JURISDICTION") ?? "US")
-    .split(",")
-    .map((c) => c.trim().toUpperCase())
-    .filter((c) => c.length > 0);
-  for (const jurisdiction of jurisdictions) {
-    const addJurisdictionRes = await fetch(
+  console.log("  Adding jurisdictions…");
+  for (const j of spec.jurisdictions) {
+    const r = await fetch(
       `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
         encodeURIComponent(channelAuthId)
       }`,
@@ -316,43 +280,118 @@ async function main() {
           "Content-Type": "application/json",
           "Authorization": `Bearer ${adminJwt}`,
         },
-        body: JSON.stringify({ countryCode: jurisdiction }),
+        body: JSON.stringify({ countryCode: j }),
       },
     );
-    if (!addJurisdictionRes.ok) {
+    if (!r.ok) {
       throw new Error(
-        `Add jurisdiction ${jurisdiction} failed: ${addJurisdictionRes.status} ${await addJurisdictionRes
-          .text()}`,
+        `Add jurisdiction ${j} failed: ${r.status} ${await r.text()}`,
       );
     }
-    console.log(`  Jurisdiction added: ${jurisdiction}`);
+    console.log(`    + ${j}`);
   }
 
-  console.log("\n[8/8] Write state file");
-  await writeStateFile({
+  return { spec, index, channelAuthId, channelContractId };
+}
+
+async function main() {
+  const startTime = Date.now();
+
+  console.log("\n=== local-dev — Council Setup (multi-council) ===\n");
+  console.log(`  RPC:        ${RPC_URL}`);
+  console.log(`  Friendbot:  ${FRIENDBOT_URL}`);
+  console.log(`  Council:    ${COUNCIL_URL}`);
+  console.log(`  State file: ${STATE_FILE}`);
+  console.log(`  Councils to create: ${COUNCILS.length}`);
+
+  console.log("\n[1/4] Warmup council-platform");
+  await warmupCouncil();
+  console.log("  council-platform reachable");
+
+  const admin = Keypair.fromSecret(ADMIN_SECRET);
+  console.log(`  Admin: ${admin.publicKey()}`);
+
+  console.log("\n[2/4] Funding admin via Friendbot");
+  await fundAccount(admin.publicKey());
+
+  console.log("\n[3/4] Pre-deploy: WASM upload + native XLM SAC");
+  const server = createServer(RPC_URL, true);
+  const channelAuthWasm = await Deno.readFile(CHANNEL_AUTH_WASM);
+  const channelAuthHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    channelAuthWasm,
+  );
+  console.log(`  Channel Auth WASM hash: ${channelAuthHash.toString("hex")}`);
+
+  const privacyChannelWasm = await Deno.readFile(PRIVACY_CHANNEL_WASM);
+  const privacyChannelHash = await uploadWasm(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+    privacyChannelWasm,
+  );
+  console.log(
+    `  Privacy Channel WASM hash: ${privacyChannelHash.toString("hex")}`,
+  );
+
+  const assetContractId = await getOrDeployNativeSac(
+    server,
+    admin,
+    NETWORK_PASSPHRASE,
+  );
+  console.log(`  XLM SAC: ${assetContractId}`);
+
+  console.log(`\n[4/4] Setting up ${COUNCILS.length} councils`);
+  const deployed: DeployedCouncil[] = [];
+  for (let i = 0; i < COUNCILS.length; i++) {
+    deployed.push(
+      await setupOneCouncil(
+        COUNCILS[i],
+        i,
+        admin,
+        server,
+        assetContractId,
+        channelAuthHash,
+        privacyChannelHash,
+      ),
+    );
+  }
+
+  console.log("\nWriting state file…");
+  const state: Record<string, string> = {
     ADMIN_PK: admin.publicKey(),
     ADMIN_SK: admin.secret(),
-    COUNCIL_ID: channelAuthId,
-    CHANNEL_ID: channelContractId,
     ASSET_ID: assetContractId,
     COUNCIL_URL,
     NETWORK_PASSPHRASE,
     RPC_URL,
     FRIENDBOT_URL,
-  });
+    COUNCIL_COUNT: String(deployed.length),
+  };
+  for (const d of deployed) {
+    const i = d.index + 1;
+    state[`COUNCIL_${i}_ID`] = d.channelAuthId;
+    state[`COUNCIL_${i}_NAME`] = d.spec.name;
+    state[`COUNCIL_${i}_CHANNEL`] = d.channelContractId;
+    state[`COUNCIL_${i}_JURISDICTIONS`] = d.spec.jurisdictions.join(",");
+  }
+  await writeStateFile(state);
   console.log(`  State written to ${STATE_FILE}`);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Council setup complete in ${elapsed}s ===\n`);
-  console.log(`  Admin:           ${admin.publicKey()}`);
-  console.log(`  Council ID:      ${channelAuthId}`);
-  console.log(`  Privacy Channel: ${channelContractId}`);
-  console.log(`  XLM SAC:         ${assetContractId}`);
+  for (const d of deployed) {
+    console.log(`  ${d.spec.name}`);
+    console.log(`    Council ID:      ${d.channelAuthId}`);
+    console.log(`    Privacy Channel: ${d.channelContractId}`);
+    console.log(`    Jurisdictions:   ${d.spec.jurisdictions.join(", ")}`);
+  }
   console.log("");
   console.log(
-    "Next: ./setup-pp.sh to register a privacy provider in this council.",
+    "Next: ./setup-pp.sh to register the 12 PPs across the councils.",
   );
-  console.log("");
 }
 
 main().catch((err) => {
