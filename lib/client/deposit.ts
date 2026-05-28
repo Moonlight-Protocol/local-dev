@@ -60,7 +60,7 @@ export async function deposit(
 
   // 5. Submit bundle
   const operationsMLXDR = [depositOp.toMLXDR(), createOp.toMLXDR()];
-  const bundleId = await submitBundle(jwt, operationsMLXDR, config, options);
+  const bundleId = await submitBundle(jwt, operationsMLXDR, config);
   console.log(`  Bundle submitted: ${bundleId}`);
 
   await waitForBundle(jwt, bundleId, config);

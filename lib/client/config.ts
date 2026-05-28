@@ -7,6 +7,8 @@ export interface Config {
   horizonUrl: string;
   friendbotUrl: string;
   providerUrl: string;
+  /** PP that owns this bundle's processing — encoded into the URL. */
+  ppPublicKey: string;
   channelContractId: ContractId;
   channelAuthId: ContractId;
   channelAssetContractId: ContractId;
@@ -74,12 +76,22 @@ export function loadConfig(): Config {
   const providerSecretKey = Deno.env.get("E2E_PROVIDER_SK") ??
     env["E2E_PROVIDER_SK"];
 
+  const ppPublicKey = Deno.env.get("E2E_PP_PUBLIC_KEY") ??
+    env["E2E_PP_PUBLIC_KEY"] ?? "";
+  if (!ppPublicKey) {
+    throw new Error(
+      "Missing E2E_PP_PUBLIC_KEY — bundle submissions are URL-scoped per PP. " +
+        "Set E2E_PP_PUBLIC_KEY before loading the config.",
+    );
+  }
+
   return {
     networkPassphrase,
     rpcUrl,
     horizonUrl,
     friendbotUrl,
     providerUrl,
+    ppPublicKey,
     channelContractId,
     channelAuthId,
     channelAssetContractId,
