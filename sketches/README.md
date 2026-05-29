@@ -14,7 +14,7 @@ Each `.excalidraw` file is one user-facing flow. Screens within a flow are drawn
 
 ## Status
 
-**First-cut.** Generated 2026-05-28 from a read of each frontend's current source (routes, views, navigation components). Intended as a starting point for design review — refine as the actual apps evolve, or rewrite from scratch where the read missed the intent. The accompanying user-flow understanding is more durable than the literal box positions.
+**Reworked 2026-05-29** on top of the 2026-05-28 first-cut. Each screen now sits inside a browser-window (4 web SPAs) or extension-popup (browser-wallet) container, with traffic-light dots, a URL bar showing the route the screen renders, and the page navbar pinned flush at the top of the container. The 4 browser-wallet privacy flows (send / receive / deposit / withdraw) now show the channel-picker → provider-auth sign-request sequence that precedes the form. The accompanying user-flow understanding is more durable than the literal box positions.
 
 ## Purpose
 
