@@ -60,6 +60,25 @@ function loadEnvFile(path: string): Record<string, string> {
   return env;
 }
 
+async function registerEntity(
+  providerUrl: string,
+  pubkey: string,
+  name: string,
+): Promise<void> {
+  const res = await fetch(`${providerUrl}/api/v1/entities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
+  });
+  // 409 = already APPROVED; treat as success for idempotency.
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `Entity registration failed for ${pubkey}: ${res.status} ${await res
+        .text()}`,
+    );
+  }
+}
+
 async function fundAccount(publicKey: string): Promise<void> {
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok) {
@@ -198,6 +217,9 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
+    // Bundles are URL-scoped to /providers/:ppPublicKey/bundles. Lifecycle
+    // CI runs against the single seeded PP, so ppPublicKey == ppOperator.
+    ppPublicKey: ppOperator.publicKey(),
     channelContractId: channelContractId as ContractId,
     channelAuthId: channelAuthId as ContractId,
     channelAssetContractId: assetContractId as ContractId,
@@ -418,11 +440,15 @@ async function main() {
 
   const aliceJwt = await authenticate(alice, e2eConfig);
   console.log("  Alice authenticated");
+  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  console.log("  Alice approved as entity");
   await deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, e2eConfig);
   console.log(`  Deposit ${DEPOSIT_AMOUNT} XLM complete`);
 
   const bobJwt = await authenticate(bob, e2eConfig);
   console.log("  Bob authenticated");
+  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  console.log("  Bob approved as entity");
   const receiverOps = await prepareReceive(
     bob.secret(),
     SEND_AMOUNT,
