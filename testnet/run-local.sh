@@ -49,6 +49,11 @@ export OTEL_EXPORTER_OTLP_ENDPOINT="${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localh
 # (provider-platform, council-platform) regardless of what's exported here.
 export JAEGER_URL="${JAEGER_URL:-http://localhost:16686}"
 
+# Pin the trace-IDs hand-off path so suites 3 and 4 agree on it. Suite 3 runs
+# from $LOCAL_DEV_DIR and would otherwise write to ./e2e-trace-ids.json; suite
+# 4's verifier looks under e2e/. Matches the same export in run-all.sh.
+export E2E_TRACE_IDS_PATH="$LOCAL_DEV_DIR/e2e/e2e-trace-ids.json"
+
 run_payment() {
   info "Suite 1: testnet payment flow → localhost"
   cd "$SCRIPT_DIR"
