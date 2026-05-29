@@ -61,6 +61,25 @@ const SEND_AMOUNT = 5;
 const WITHDRAW_AMOUNT = 4;
 
 // ─── Helpers ────────────────────────────────────────────────────────
+async function registerEntity(
+  providerUrl: string,
+  pubkey: string,
+  name: string,
+): Promise<void> {
+  const res = await fetch(`${providerUrl}/api/v1/entities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
+  });
+  // 409 = already APPROVED; idempotent.
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `Entity registration failed for ${pubkey}: ${res.status} ${await res
+        .text()}`,
+    );
+  }
+}
+
 async function fundAccount(publicKey: string): Promise<void> {
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
@@ -455,6 +474,10 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
+    // Bundles are URL-scoped: /providers/:ppPublicKey/bundles. testnet/main
+    // runs against the single PP it registered above, so ppPublicKey ==
+    // ppOperator.publicKey().
+    ppPublicKey: ppOperator.publicKey(),
     channelContractId: channelContractId as ContractId,
     channelAuthId: channelAuthId as ContractId,
     channelAssetContractId: assetContractId as ContractId,
@@ -490,6 +513,13 @@ async function main() {
     () => authenticate(bob, e2eConfig),
   );
   console.log("  Bob authenticated");
+
+  // provider-platform now gates bundle admission on the submitter's entity
+  // being APPROVED. Register Alice and Bob via POST /api/v1/entities before
+  // any deposit / send / withdraw.
+  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  console.log("  Alice + Bob approved as entities");
 
   await withE2ESpan(
     "e2e.deposit",
