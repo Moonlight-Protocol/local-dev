@@ -79,6 +79,25 @@ const SEND_AMOUNT = 5;
 const WITHDRAW_AMOUNT = 4;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
+async function registerEntity(
+  providerUrl: string,
+  pubkey: string,
+  name: string,
+): Promise<void> {
+  const res = await fetch(`${providerUrl}/api/v1/entities`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
+  });
+  // 409 = already APPROVED; idempotent.
+  if (!res.ok && res.status !== 409) {
+    throw new Error(
+      `Entity registration failed for ${pubkey}: ${res.status} ${await res
+        .text()}`,
+    );
+  }
+}
+
 async function fundAccount(publicKey: string): Promise<void> {
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
@@ -500,6 +519,10 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
+    // Bundles are URL-scoped: /providers/:ppPublicKey/bundles. testnet-verify
+    // runs against the single PP it just registered, so ppPublicKey ==
+    // ppKeypair.publicKey().
+    ppPublicKey: ppKeypair.publicKey(),
     channelContractId: channelContractId as ContractId,
     channelAuthId: channelAuthId as ContractId,
     channelAssetContractId: assetContractId as ContractId,
@@ -530,6 +553,11 @@ async function main() {
   );
   console.log("  Alice authenticated");
 
+  // provider-platform now gates bundle admission on the submitter's entity
+  // being APPROVED. Register Alice (and Bob below) before any bundle.
+  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  console.log("  Alice approved as entity");
+
   await withE2ESpan(
     "e2e.deposit",
     () =>
@@ -542,6 +570,8 @@ async function main() {
     () => authenticate(bob, e2eConfig),
   );
   console.log("  Bob authenticated");
+  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  console.log("  Bob approved as entity");
 
   const receiverOps = await withE2ESpan(
     "e2e.prepare_receive",
