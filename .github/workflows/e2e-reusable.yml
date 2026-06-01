@@ -23,6 +23,10 @@ on:
         description: "Full image ref override for provider-platform (e.g. ghcr.io/org/repo:sha-abc123)"
         type: string
         default: ""
+      local_dev_ref:
+        description: "Branch/tag/SHA of local-dev to check out for the test harness (default 'main'). Override when calling from a consumer PR whose changes assume a not-yet-merged local-dev branch."
+        type: string
+        default: "main"
     secrets:
       E2E_TRIGGER_TOKEN:
         required: true
@@ -40,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: moonlight-protocol/local-dev
-          ref: main
+          ref: ${{ inputs.local_dev_ref }}
           token: ${{ secrets.E2E_TRIGGER_TOKEN }}
 
       - name: Log in to GHCR
