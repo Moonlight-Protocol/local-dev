@@ -24,7 +24,7 @@ import { prepareReceive } from "./lib/client/receive.ts";
 import { send } from "./lib/client/send.ts";
 import { injectFailingBundle } from "./lib/client/fail-inject.ts";
 import { withdraw } from "./lib/client/withdraw.ts";
-import { registerEntity } from "./lib/register-entity.ts";
+import { registerEntity } from "./lib/client/register-entity.ts";
 
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;

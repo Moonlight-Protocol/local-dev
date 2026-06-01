@@ -38,7 +38,7 @@ import {
   payApi,
   walletAuth,
 } from "./e2e/pos-helpers.ts";
-import { registerEntity } from "../../lib/register-entity.ts";
+import { registerEntity } from "../../lib/client/register-entity.ts";
 
 __resetConfigForTests();
 

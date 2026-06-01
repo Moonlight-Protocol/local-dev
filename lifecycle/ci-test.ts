@@ -34,7 +34,7 @@ import { deposit } from "../lib/client/deposit.ts";
 import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
-import { registerEntity } from "../lib/register-entity.ts";
+import { registerEntity } from "../lib/client/register-entity.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL")!;
