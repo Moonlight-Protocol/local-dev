@@ -9,7 +9,7 @@ set -euo pipefail
 #   - Generates a fresh PP operator keypair, funds via Friendbot
 #   - PP operator authenticates to provider-platform dashboard
 #   - PP operator registers a PP via POST /dashboard/pp/register
-#   - PP operator submits a signed join envelope via POST /dashboard/council/join
+#   - PP operator submits a signed join envelope via POST /providers/:ppPublicKey/council/join
 #   - Admin authenticates to council-platform, lists requests, approves
 #   - Admin calls on-chain add_provider against the channel-auth contract
 #   - Polls provider-platform until the membership flips ACTIVE

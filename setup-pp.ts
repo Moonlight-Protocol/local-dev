@@ -260,9 +260,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+      `${PROVIDER_URL}/api/v1/providers/${
         encodeURIComponent(ppPublicKey)
-      }`,
+      }/council/membership`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -365,23 +365,27 @@ async function setupOnePP(
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, kp);
 
-  const joinRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/council/join`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${dashboardJwt}`,
+  const joinRes = await fetch(
+    `${PROVIDER_URL}/api/v1/providers/${
+      encodeURIComponent(kp.publicKey())
+    }/council/join`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${dashboardJwt}`,
+      },
+      body: JSON.stringify({
+        councilUrl: Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015",
+        councilId: council.id,
+        councilName: council.name,
+        label: spec.name,
+        contactEmail:
+          `${spec.jurisdiction.toLowerCase()}-pp@local-dev.moonlight.test`,
+        signedEnvelope,
+      }),
     },
-    body: JSON.stringify({
-      councilUrl: Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015",
-      councilId: council.id,
-      councilName: council.name,
-      ppPublicKey: kp.publicKey(),
-      label: spec.name,
-      contactEmail:
-        `${spec.jurisdiction.toLowerCase()}-pp@local-dev.moonlight.test`,
-      signedEnvelope,
-    }),
-  });
+  );
   if (!joinRes.ok) {
     throw new Error(
       `Join request failed: ${joinRes.status} ${await joinRes.text()}`,

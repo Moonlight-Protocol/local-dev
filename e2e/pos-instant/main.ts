@@ -38,6 +38,7 @@ import {
   payApi,
   walletAuth,
 } from "./e2e/pos-helpers.ts";
+import { registerEntity } from "./lib/client/register-entity.ts";
 
 __resetConfigForTests();
 
@@ -87,21 +88,12 @@ console.log(`  Funded (${elapsed()})`);
 // identity; provider-platform now gates bundle admission on the submitter
 // being an APPROVED entity, so this registration is required.
 console.log("\n[1b/5] Registering pay-service as APPROVED entity...");
-const entityRes = await fetch(`${PROVIDER_URL}/api/v1/entities`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({
-    pubkey: keys.payService.publicKey(),
-    name: "Pay Service",
-    jurisdictions: [],
-  }),
-});
-// 409 = already APPROVED; treat as success for idempotency.
-if (!entityRes.ok && entityRes.status !== 409) {
-  throw new Error(
-    `Entity registration failed: ${entityRes.status} ${await entityRes.text()}`,
-  );
-}
+await registerEntity(
+  PROVIDER_URL,
+  keys.pp.publicKey(),
+  keys.payService,
+  "Pay Service",
+);
 console.log(`  Pay-service approved (${elapsed()})`);
 
 // [2] Create merchant on pay-platform + store UTXOs

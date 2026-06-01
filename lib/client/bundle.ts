@@ -10,7 +10,7 @@ export function submitBundle(
     const maxRetries = 10;
     const retryDelayMs = 5_000;
     const url =
-      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/bundles`;
+      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/entity/bundles`;
 
     for (let attempt = 0; attempt < maxRetries; attempt++) {
       const res = await fetch(url, {
@@ -57,7 +57,7 @@ export function waitForBundle(
   return withE2ESpan("bundle.wait", async () => {
     const start = Date.now();
     const url =
-      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/bundles/${bundleId}`;
+      `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/entity/bundles/${bundleId}`;
 
     while (Date.now() - start < timeoutMs) {
       await new Promise((r) => setTimeout(r, pollIntervalMs));

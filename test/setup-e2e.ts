@@ -244,7 +244,7 @@ E2E_CHANNEL_ASSET_CONTRACT_ID=${assetContractId}
 # Provider keypair (registered on-chain by setup)
 E2E_PROVIDER_PK=${provider.publicKey()}
 E2E_PROVIDER_SK=${provider.secret()}
-# Bundles are URL-scoped to /providers/:ppPublicKey/bundles; in the single-PP
+# Bundles are URL-scoped to /providers/:ppPublicKey/entity/bundles; in the single-PP
 # e2e harness the PP key == the provider key.
 E2E_PP_PUBLIC_KEY=${provider.publicKey()}
 

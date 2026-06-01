@@ -202,7 +202,8 @@ services:
       - |
         cp /pos-src/*.ts /pos-src/deno.json . && cp /pos-src/deno.lock . 2>/dev/null || true
         mkdir -p e2e && cp /e2e-src/*.ts /e2e-src/deno.json e2e/ 2>/dev/null || true
-        mkdir -p lib && cp /lib-src/*.ts lib/
+        mkdir -p lib && cp /lib-src/*.ts lib/ 2>/dev/null || true
+        cp -r /lib-src/client lib/
         mkdir -p moonlight-pay-lib && cp /moonlight-pay-lib/*.ts moonlight-pay-lib/
         deno install
         echo "Waiting for provider, council, and pay-platform..."

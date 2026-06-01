@@ -13,7 +13,7 @@
  *   6. PP operator authenticates to provider-platform dashboard → JWT
  *   7. PP operator registers a PP via POST /dashboard/pp/register
  *   8. PP operator signs a join envelope and submits via
- *      POST /dashboard/council/join (forwarded to council-platform)
+ *      POST /providers/:ppPublicKey/council/join (forwarded to council-platform)
  *   9. Admin lists join requests and approves
  *  10. Admin calls on-chain add_provider
  *  11. Provider-platform's event watcher activates the membership
@@ -54,6 +54,7 @@ import { deposit } from "../lib/client/deposit.ts";
 import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
+import { registerEntity } from "../lib/client/register-entity.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
@@ -79,25 +80,6 @@ const SEND_AMOUNT = 5;
 const WITHDRAW_AMOUNT = 4;
 
 // ─── Helpers ──────────────────────────────────────────────────────────
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
-  });
-  // 409 = already APPROVED; idempotent.
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
-        .text()}`,
-    );
-  }
-}
-
 async function fundAccount(publicKey: string): Promise<void> {
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
@@ -193,9 +175,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+      `${PROVIDER_URL}/api/v1/providers/${
         encodeURIComponent(ppPublicKey)
-      }`,
+      }/council/membership`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -397,22 +379,26 @@ async function main() {
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, ppKeypair);
 
-  const joinRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/council/join`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${dashboardJwt}`,
+  const joinRes = await fetch(
+    `${PROVIDER_URL}/api/v1/providers/${
+      encodeURIComponent(ppKeypair.publicKey())
+    }/council/join`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${dashboardJwt}`,
+      },
+      body: JSON.stringify({
+        councilUrl: COUNCIL_URL,
+        councilId: channelAuthId,
+        councilName: "Testnet Verify Council",
+        label: "Testnet Verify PP",
+        contactEmail: "pp@testnet-verify.moonlight.test",
+        signedEnvelope,
+      }),
     },
-    body: JSON.stringify({
-      councilUrl: COUNCIL_URL,
-      councilId: channelAuthId,
-      councilName: "Testnet Verify Council",
-      ppPublicKey: ppKeypair.publicKey(),
-      label: "Testnet Verify PP",
-      contactEmail: "pp@testnet-verify.moonlight.test",
-      signedEnvelope,
-    }),
-  });
+  );
   if (!joinRes.ok) {
     throw new Error(
       `Join request failed: ${joinRes.status} ${await joinRes.text()}`,
@@ -519,7 +505,7 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
-    // Bundles are URL-scoped: /providers/:ppPublicKey/bundles. testnet-verify
+    // Bundles are URL-scoped: /providers/:ppPublicKey/entity/bundles. testnet-verify
     // runs against the single PP it just registered, so ppPublicKey ==
     // ppKeypair.publicKey().
     ppPublicKey: ppKeypair.publicKey(),
@@ -555,7 +541,7 @@ async function main() {
 
   // provider-platform now gates bundle admission on the submitter's entity
   // being APPROVED. Register Alice (and Bob below) before any bundle.
-  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  await registerEntity(PROVIDER_URL, ppKeypair.publicKey(), alice, "Alice");
   console.log("  Alice approved as entity");
 
   await withE2ESpan(
@@ -570,7 +556,7 @@ async function main() {
     () => authenticate(bob, e2eConfig),
   );
   console.log("  Bob authenticated");
-  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  await registerEntity(PROVIDER_URL, ppKeypair.publicKey(), bob, "Bob");
   console.log("  Bob approved as entity");
 
   const receiverOps = await withE2ESpan(
