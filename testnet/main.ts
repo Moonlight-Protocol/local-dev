@@ -36,6 +36,7 @@ import { deposit } from "../lib/client/deposit.ts";
 import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
+import { registerEntity } from "../lib/register-entity.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
@@ -61,25 +62,6 @@ const SEND_AMOUNT = 5;
 const WITHDRAW_AMOUNT = 4;
 
 // ─── Helpers ────────────────────────────────────────────────────────
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
-  });
-  // 409 = already APPROVED; idempotent.
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
-        .text()}`,
-    );
-  }
-}
-
 async function fundAccount(publicKey: string): Promise<void> {
   const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
@@ -164,9 +146,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+      `${PROVIDER_URL}/api/v1/providers/${
         encodeURIComponent(ppPublicKey)
-      }`,
+      }/council/membership`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -355,22 +337,26 @@ async function main() {
     contactEmail: "pp@testnet-e2e.moonlight.test",
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, ppOperator);
-  const joinRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/council/join`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${dashboardJwt}`,
+  const joinRes = await fetch(
+    `${PROVIDER_URL}/api/v1/providers/${
+      encodeURIComponent(ppOperator.publicKey())
+    }/council/join`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${dashboardJwt}`,
+      },
+      body: JSON.stringify({
+        councilUrl: COUNCIL_URL,
+        councilId: channelAuthId,
+        councilName: "Testnet E2E Council",
+        label: "Testnet E2E PP",
+        contactEmail: "pp@testnet-e2e.moonlight.test",
+        signedEnvelope,
+      }),
     },
-    body: JSON.stringify({
-      councilUrl: COUNCIL_URL,
-      councilId: channelAuthId,
-      councilName: "Testnet E2E Council",
-      ppPublicKey: ppOperator.publicKey(),
-      label: "Testnet E2E PP",
-      contactEmail: "pp@testnet-e2e.moonlight.test",
-      signedEnvelope,
-    }),
-  });
+  );
   if (!joinRes.ok) {
     throw new Error(
       `Join request failed: ${joinRes.status} ${await joinRes.text()}`,
@@ -474,7 +460,7 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
-    // Bundles are URL-scoped: /providers/:ppPublicKey/bundles. testnet/main
+    // Bundles are URL-scoped: /providers/:ppPublicKey/entity/bundles. testnet/main
     // runs against the single PP it registered above, so ppPublicKey ==
     // ppOperator.publicKey().
     ppPublicKey: ppOperator.publicKey(),
@@ -515,10 +501,10 @@ async function main() {
   console.log("  Bob authenticated");
 
   // provider-platform now gates bundle admission on the submitter's entity
-  // being APPROVED. Register Alice and Bob via POST /api/v1/entities before
+  // being APPROVED. Register Alice and Bob via POST /providers/:pp/entities before
   // any deposit / send / withdraw.
-  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
-  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  await registerEntity(PROVIDER_URL, ppOperator.publicKey(), alice, "Alice");
+  await registerEntity(PROVIDER_URL, ppOperator.publicKey(), bob, "Bob");
   console.log("  Alice + Bob approved as entities");
 
   await withE2ESpan(

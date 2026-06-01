@@ -19,6 +19,7 @@ import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
 
 import type { Config } from "../lib/client/config.ts";
+import { registerEntity } from "../lib/register-entity.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
 const SEND_AMOUNT = 5; // XLM
@@ -51,25 +52,6 @@ async function waitForFriendbot(): Promise<void> {
     await new Promise((r) => setTimeout(r, 1000));
   }
   throw new Error("Friendbot did not become ready after 180s");
-}
-
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
-  });
-  // 409 = already APPROVED; treat as success for idempotency.
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
-        .text()}`,
-    );
-  }
 }
 
 async function fundAccount(publicKey: string): Promise<void> {
@@ -240,7 +222,7 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
-    // Bundles are URL-scoped: /providers/:ppPublicKey/bundles. Lifecycle
+    // Bundles are URL-scoped: /providers/:ppPublicKey/entity/bundles. Lifecycle
     // runs against a single seeded PP, so ppPublicKey == provider.publicKey().
     ppPublicKey: provider.publicKey(),
     channelContractId: channelContractId as ContractId,
@@ -264,7 +246,7 @@ async function main() {
   console.log(`\n[4/7] Deposit (${DEPOSIT_AMOUNT} XLM)`);
   const aliceJwt = await authenticate(alice, e2eConfig);
   console.log("  Alice authenticated");
-  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  await registerEntity(PROVIDER_URL, provider.publicKey(), alice, "Alice");
   console.log("  Alice approved as entity");
   await deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, e2eConfig);
   console.log("  Deposit complete");
@@ -273,7 +255,7 @@ async function main() {
   console.log(`\n[5/7] Send (${SEND_AMOUNT} XLM)`);
   const bobJwt = await authenticate(bob, e2eConfig);
   console.log("  Bob authenticated");
-  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  await registerEntity(PROVIDER_URL, provider.publicKey(), bob, "Bob");
   console.log("  Bob approved as entity");
   const receiverOps = await prepareReceive(
     bob.secret(),

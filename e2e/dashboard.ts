@@ -111,10 +111,12 @@ export async function dashboardE2E(
   const token = await dashboardAuth(providerUrl, keypair);
   console.log("  [dashboard] Authenticated");
 
-  // 2. Channels
+  const ppPath = `/providers/${encodeURIComponent(keypair.publicKey())}`;
+
+  // 2. Channels (per-PP)
   await withE2ESpan("dashboard.channels", async () => {
-    console.log("  [dashboard] GET /dashboard/channels...");
-    const res = await fetchDashboard(providerUrl, token, "/dashboard/channels");
+    console.log(`  [dashboard] GET ${ppPath}/channels...`);
+    const res = await fetchDashboard(providerUrl, token, `${ppPath}/channels`);
     assertField(res, "data.channels");
     assertField(res, "data.summary.total");
     assertField(res, "data.summary.active");
@@ -123,10 +125,11 @@ export async function dashboardE2E(
     console.log("  [dashboard] Channels OK");
   });
 
-  // 3. Mempool
+  // 3. Mempool (per-PP — averages filtered to this PP; live stats still
+  // process-wide because the in-memory mempool is platform-shared.)
   await withE2ESpan("dashboard.mempool", async () => {
-    console.log("  [dashboard] GET /dashboard/mempool...");
-    const res = await fetchDashboard(providerUrl, token, "/dashboard/mempool");
+    console.log(`  [dashboard] GET ${ppPath}/mempool...`);
+    const res = await fetchDashboard(providerUrl, token, `${ppPath}/mempool`);
     assertField(res, "data.platformVersion");
     assertField(res, "data.live.totalSlots");
     assertField(res, "data.live.totalBundles");
@@ -135,13 +138,13 @@ export async function dashboardE2E(
     console.log("  [dashboard] Mempool OK");
   });
 
-  // 4. Operations
+  // 4. Operations (per-PP bundle + tx counts)
   await withE2ESpan("dashboard.operations", async () => {
-    console.log("  [dashboard] GET /dashboard/operations...");
+    console.log(`  [dashboard] GET ${ppPath}/operations...`);
     const res = await fetchDashboard(
       providerUrl,
       token,
-      "/dashboard/operations",
+      `${ppPath}/operations`,
     );
     assertField(res, "data.bundles.total");
     assertField(res, "data.bundles.successRate");
@@ -151,24 +154,20 @@ export async function dashboardE2E(
 
   // 5. Treasury
   await withE2ESpan("dashboard.treasury", async () => {
-    console.log("  [dashboard] GET /dashboard/treasury...");
-    const res = await fetchDashboard(
-      providerUrl,
-      token,
-      `/dashboard/treasury?ppPublicKey=${keypair.publicKey()}`,
-    );
+    console.log(`  [dashboard] GET ${ppPath}/treasury...`);
+    const res = await fetchDashboard(providerUrl, token, `${ppPath}/treasury`);
     assertField(res, "data.address");
     assertField(res, "data.balances");
     console.log("  [dashboard] Treasury OK");
   });
 
-  // 6. Audit export
+  // 6. Audit export (per-PP CSV)
   await withE2ESpan("dashboard.audit_export", async () => {
-    console.log("  [dashboard] GET /dashboard/audit-export...");
+    console.log(`  [dashboard] GET ${ppPath}/audit-export...`);
     const csv = await fetchDashboard(
       providerUrl,
       token,
-      "/dashboard/audit-export?status=COMPLETED",
+      `${ppPath}/audit-export?status=COMPLETED`,
     ) as string;
     if (typeof csv !== "string" || !csv.startsWith("id,")) {
       throw new Error(
@@ -183,7 +182,7 @@ export async function dashboardE2E(
   // 7. Verify unauthenticated access is blocked
   await withE2ESpan("dashboard.auth_required", async () => {
     console.log("  [dashboard] Verifying auth is required...");
-    const res = await fetch(`${providerUrl}/api/v1/dashboard/channels`);
+    const res = await fetch(`${providerUrl}/api/v1${ppPath}/channels`);
     if (res.status !== 401 && res.status !== 403) {
       throw new Error(
         `Expected 401/403 for unauthenticated request, got ${res.status}`,

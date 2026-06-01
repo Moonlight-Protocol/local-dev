@@ -156,7 +156,7 @@ async function waitForMembershipStatus(
   while (Date.now() - start < timeoutMs) {
     const m = await get(
       PROVIDER_API,
-      `/dashboard/council/membership?ppPublicKey=${ppPublicKey}`,
+      `/providers/${ppPublicKey}/council/membership`,
       token,
     );
     if (m.data.data?.status === expectedStatus) return true;
@@ -220,19 +220,23 @@ const j1Envelope = await signJoinPayload({
   contactEmail: "a@t",
   jurisdictions: null,
 }, pp1);
-const j1 = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp1.publicKey(),
-  signedEnvelope: j1Envelope,
-}, dashToken);
+const j1 = await post(
+  PROVIDER_API,
+  `/providers/${pp1.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j1Envelope,
+  },
+  dashToken,
+);
 check("Join submitted", j1.data.data?.status, "PENDING");
 
 const m1pre = await get(
   PROVIDER_API,
-  `/dashboard/council/membership?ppPublicKey=${pp1.publicKey()}`,
+  `/providers/${pp1.publicKey()}/council/membership`,
   dashToken,
 );
 check("Provider: PENDING before approve", m1pre.data.data?.status, "PENDING");
@@ -305,14 +309,18 @@ const j2Envelope = await signJoinPayload({
   contactEmail: "r@t",
   jurisdictions: null,
 }, pp2);
-const j2 = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp2.publicKey(),
-  signedEnvelope: j2Envelope,
-}, dashToken);
+const j2 = await post(
+  PROVIDER_API,
+  `/providers/${pp2.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j2Envelope,
+  },
+  dashToken,
+);
 check("Join submitted", j2.data.data?.status, "PENDING");
 
 const p2 = await get(
@@ -349,9 +357,12 @@ const ms2 = await fetch(
 check("Membership-status: REJECTED (404)", ms2.status, 404);
 
 // Sync rejection to provider-platform (simulates UI polling)
-const sync2 = await post(PROVIDER_API, "/dashboard/council/membership", {
-  ppPublicKey: pp2.publicKey(),
-}, dashToken);
+const sync2 = await post(
+  PROVIDER_API,
+  `/providers/${pp2.publicKey()}/council/membership`,
+  {},
+  dashToken,
+);
 check("Provider synced to REJECTED", sync2.data.data?.status, "REJECTED");
 
 // --- Test 3: PP with no council ---
@@ -364,7 +375,7 @@ await post(PROVIDER_API, "/dashboard/pp/register", {
 }, dashToken);
 const m3 = await get(
   PROVIDER_API,
-  `/dashboard/council/membership?ppPublicKey=${pp3.publicKey()}`,
+  `/providers/${pp3.publicKey()}/council/membership`,
   dashToken,
 );
 check("No membership", m3.data.data, null);
@@ -413,14 +424,18 @@ const j6aEnvelope = await signJoinPayload({
   contactEmail: "dup@t",
   jurisdictions: null,
 }, pp6);
-const j6a = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp6.publicKey(),
-  signedEnvelope: j6aEnvelope,
-}, dashToken);
+const j6a = await post(
+  PROVIDER_API,
+  `/providers/${pp6.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j6aEnvelope,
+  },
+  dashToken,
+);
 check("First join succeeds", j6a.data.data?.status, "PENDING");
 
 const j6bEnvelope = await signJoinPayload({
@@ -430,14 +445,18 @@ const j6bEnvelope = await signJoinPayload({
   contactEmail: "dup@t",
   jurisdictions: null,
 }, pp6);
-const j6b = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp6.publicKey(),
-  signedEnvelope: j6bEnvelope,
-}, dashToken);
+const j6b = await post(
+  PROVIDER_API,
+  `/providers/${pp6.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j6bEnvelope,
+  },
+  dashToken,
+);
 check("Duplicate join returns 409", j6b.status, 409);
 
 // --- Test 7: Membership-status edge cases ---
@@ -474,14 +493,18 @@ const j8aEnvelope = await signJoinPayload({
   contactEmail: null,
   jurisdictions: null,
 }, pp8a);
-const j8a = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp8a.publicKey(),
-  signedEnvelope: j8aEnvelope,
-}, dashToken);
+const j8a = await post(
+  PROVIDER_API,
+  `/providers/${pp8a.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j8aEnvelope,
+  },
+  dashToken,
+);
 check("PP-Multi-A join", j8a.data.data?.status, "PENDING");
 
 const j8bEnvelope = await signJoinPayload({
@@ -491,14 +514,18 @@ const j8bEnvelope = await signJoinPayload({
   contactEmail: null,
   jurisdictions: null,
 }, pp8b);
-const j8b = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: AUTH_ID,
-  councilName: "Test Council",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp8b.publicKey(),
-  signedEnvelope: j8bEnvelope,
-}, dashToken);
+const j8b = await post(
+  PROVIDER_API,
+  `/providers/${pp8b.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: AUTH_ID,
+    councilName: "Test Council",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j8bEnvelope,
+  },
+  dashToken,
+);
 check("PP-Multi-B join", j8b.data.data?.status, "PENDING");
 
 // Approve both
@@ -575,14 +602,18 @@ const j9Envelope = await signJoinPayload({
   contactEmail: null,
   jurisdictions: null,
 }, pp9);
-const j9 = await post(PROVIDER_API, "/dashboard/council/join", {
-  councilUrl: COUNCIL_URL,
-  councilId: council2Id,
-  councilName: "Council 2",
-  councilPublicKey: councilKp.publicKey(),
-  ppPublicKey: pp9.publicKey(),
-  signedEnvelope: j9Envelope,
-}, dashToken);
+const j9 = await post(
+  PROVIDER_API,
+  `/providers/${pp9.publicKey()}/council/join`,
+  {
+    councilUrl: COUNCIL_URL,
+    councilId: council2Id,
+    councilName: "Council 2",
+    councilPublicKey: councilKp.publicKey(),
+    signedEnvelope: j9Envelope,
+  },
+  dashToken,
+);
 check("Join council 2", j9.data.data?.status, "PENDING");
 
 // Council 2 requests should only show PP-Council2

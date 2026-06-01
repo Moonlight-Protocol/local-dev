@@ -15,8 +15,8 @@
  *   EXPIRE          default true  inject one EXPIRED bundle per country
  *   STATE_FILE      default ./.local-dev-state
  */
-import { Buffer } from "node:buffer";
 import { Keypair } from "stellar-sdk";
+import postgres from "postgres";
 import { authenticate } from "./lib/client/auth.ts";
 import { loadConfig } from "./lib/client/config.ts";
 import { deposit } from "./lib/client/deposit.ts";
@@ -24,6 +24,7 @@ import { prepareReceive } from "./lib/client/receive.ts";
 import { send } from "./lib/client/send.ts";
 import { injectFailingBundle } from "./lib/client/fail-inject.ts";
 import { withdraw } from "./lib/client/withdraw.ts";
+import { registerEntity } from "./lib/register-entity.ts";
 
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;
@@ -216,94 +217,55 @@ function loadState(): State {
   };
 }
 
-// Wallet-auth flow for the operator dashboard JWT (SEP-43 challenge/verify).
-// Mirrors local-dev/setup-pp.ts walletAuth(), inlined to avoid a one-off
-// shared util.
-async function dashboardWalletAuth(
-  providerUrl: string,
-  operator: Keypair,
-): Promise<string> {
-  const base = `${providerUrl}/api/v1/dashboard/auth`;
-  const challengeRes = await fetch(`${base}/challenge`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ publicKey: operator.publicKey() }),
-  });
-  if (!challengeRes.ok) {
-    throw new Error(
-      `Operator challenge failed: ${challengeRes.status} ${await challengeRes
-        .text()}`,
-    );
-  }
-  const { data: { nonce } } = await challengeRes.json();
-  const nonceBytes = Uint8Array.from(atob(nonce), (c) => c.charCodeAt(0));
-  const sig = operator.sign(Buffer.from(nonceBytes));
-  const signature = btoa(String.fromCharCode(...new Uint8Array(sig)));
-  const verifyRes = await fetch(`${base}/verify`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      nonce,
-      signature,
-      publicKey: operator.publicKey(),
-    }),
-  });
-  if (!verifyRes.ok) {
-    throw new Error(
-      `Operator verify failed: ${verifyRes.status} ${await verifyRes.text()}`,
-    );
-  }
-  const { data: { token } } = await verifyRes.json();
-  return token as string;
-}
-
+/**
+ * Force-expires the given bundles by writing EXPIRED to PostgreSQL and
+ * back-dating their TTL so the mempool's next TTL-check tick (default 5s)
+ * sees the past TTL and evicts them from the in-process mempool via the
+ * platform's own purge path. Replaces the now-deprecated admin HTTP endpoint
+ * POST /api/v1/dashboard/bundles/expire — there is intentionally no HTTP
+ * admin-expire surface.
+ *
+ * Caveats:
+ *   - There is a short race window: between the UPDATE landing and the
+ *     mempool's next TTL sweep, the executor may still pull the bundle from
+ *     the in-memory mempool and try to settle it. On settlement success
+ *     the executor's status-transition is gated on PENDING/PROCESSING so our
+ *     EXPIRED stands. On settlement failure the executor's failure-handler
+ *     writes FAILED unconditionally, which is the same kind of terminal
+ *     non-COMPLETED state INJECT_EXPIRE is designed to produce — so for the
+ *     test-injection purpose either outcome is acceptable. A clean DB-only
+ *     guarantee would require in-process mempool access we deliberately
+ *     don't expose over HTTP.
+ *   - Connects to localhost:5442 by default (the host-side PG port from
+ *     local-dev's compose). Override with DATABASE_URL.
+ */
 async function forceExpireBundles(
   bundleIds: string[],
-  state: State,
+  _state: State,
 ): Promise<void> {
-  if (!state.OPERATOR_SK) {
-    throw new Error(
-      "OPERATOR_SK missing from state — re-run setup-pp.sh so the operator JWT can be obtained.",
+  if (bundleIds.length === 0) return;
+  const databaseUrl = Deno.env.get("DATABASE_URL") ??
+    "postgresql://admin:devpass@localhost:5442/provider_platform_db";
+  const db = postgres(databaseUrl);
+  try {
+    const updated = await db<{ id: string }[]>`
+      UPDATE operations_bundles
+         SET status = 'EXPIRED',
+             ttl = NOW() - INTERVAL '1 hour',
+             updated_at = NOW()
+       WHERE id IN ${db(bundleIds)}
+         AND status IN ('PENDING', 'PROCESSING')
+         AND deleted_at IS NULL
+      RETURNING id
+    `;
+    console.log(
+      `  [INJECT_EXPIRE] force-expired ${updated.length} of ${bundleIds.length} bundle(s) via DB ` +
+        `(TTL back-dated so the mempool TTL-check sweep purges in ≤${
+          Number(Deno.env.get("MEMPOOL_TTL_CHECK_INTERVAL_MS") ?? 5000)
+        }ms)`,
     );
-  }
-  const operator = Keypair.fromSecret(state.OPERATOR_SK);
-  const jwt = await dashboardWalletAuth(state.PROVIDER_URL, operator);
-  const res = await fetch(
-    `${state.PROVIDER_URL}/api/v1/dashboard/bundles/expire`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${jwt}`,
-      },
-      body: JSON.stringify({ bundleIds }),
-    },
-  );
-  if (!res.ok) {
-    throw new Error(
-      `Force-expire failed: ${res.status} ${await res.text()}`,
-    );
-  }
-  const json = await res.json();
-  console.log(`  Expire response: ${JSON.stringify(json.data ?? json)}`);
-}
-
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-  jurisdictions: string[],
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions }),
-  });
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
-        .text()}`,
-    );
+  } finally {
+    await db.end({ timeout: 5 });
   }
 }
 
@@ -377,13 +339,15 @@ async function runCycleForPp(
   console.log("[2b/5] Registering KYC/KYB entities");
   await registerEntity(
     state.PROVIDER_URL,
-    alicia.publicKey(),
+    pp.pk,
+    alicia,
     senderName,
     [country],
   );
   await registerEntity(
     state.PROVIDER_URL,
-    roberto.publicKey(),
+    pp.pk,
+    roberto,
     receiverName,
     [country],
   );
@@ -438,7 +402,8 @@ async function runCycleForPp(
 
   if (INJECT_EXPIRE) {
     // Submit one extra bundle without waiting, then immediately admin-expire
-    // it via POST /dashboard/bundles/expire — bundle settles as EXPIRED.
+    // it via the now-deprecated POST /dashboard/bundles/expire path —
+    // currently a no-op stub, pending a DB-direct rewrite.
     console.log("\n[5/6] Injecting one EXPIRED bundle (force-expire)");
     try {
       const receiverOps = await prepareReceive(

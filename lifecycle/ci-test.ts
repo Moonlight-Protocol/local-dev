@@ -13,7 +13,7 @@
  *   4. Admin adds the channel via POST /council/channels
  *   5. PP operator authenticates to provider-platform dashboard → JWT
  *   6. PP operator registers the PP via POST /dashboard/pp/register
- *   7. PP operator signs a join envelope and posts it via POST /dashboard/council/join
+ *   7. PP operator signs a join envelope and posts it via POST /providers/:ppPublicKey/council/join
  *      (provider-platform forwards to council-platform; PENDING membership row created)
  *   8. Admin lists join requests, approves the PP's request
  *   9. Admin calls on-chain add_provider → emits provider_added event
@@ -34,6 +34,7 @@ import { deposit } from "../lib/client/deposit.ts";
 import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
+import { registerEntity } from "../lib/register-entity.ts";
 
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL")!;
 const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL")!;
@@ -58,25 +59,6 @@ function loadEnvFile(path: string): Record<string, string> {
     env[trimmed.slice(0, eq)] = trimmed.slice(eq + 1);
   }
   return env;
-}
-
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
-  });
-  // 409 = already APPROVED; treat as success for idempotency.
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
-        .text()}`,
-    );
-  }
 }
 
 async function fundAccount(publicKey: string): Promise<void> {
@@ -161,9 +143,9 @@ async function pollMembershipActive(
 ): Promise<void> {
   for (let i = 0; i < maxAttempts; i++) {
     const res = await fetch(
-      `${PROVIDER_URL}/api/v1/dashboard/council/membership?ppPublicKey=${
+      `${PROVIDER_URL}/api/v1/providers/${
         encodeURIComponent(ppPublicKey)
-      }`,
+      }/council/membership`,
       { headers: { "Authorization": `Bearer ${dashboardJwt}` } },
     );
     if (res.status === 200) {
@@ -217,7 +199,7 @@ async function main() {
     horizonUrl,
     friendbotUrl: FRIENDBOT_URL,
     providerUrl: PROVIDER_URL,
-    // Bundles are URL-scoped to /providers/:ppPublicKey/bundles. Lifecycle
+    // Bundles are URL-scoped to /providers/:ppPublicKey/entity/bundles. Lifecycle
     // CI runs against the single seeded PP, so ppPublicKey == ppOperator.
     ppPublicKey: ppOperator.publicKey(),
     channelContractId: channelContractId as ContractId,
@@ -336,22 +318,26 @@ async function main() {
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, ppKeypair);
 
-  const joinRes = await fetch(`${PROVIDER_URL}/api/v1/dashboard/council/join`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${dashboardJwt}`,
+  const joinRes = await fetch(
+    `${PROVIDER_URL}/api/v1/providers/${
+      encodeURIComponent(ppKeypair.publicKey())
+    }/council/join`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${dashboardJwt}`,
+      },
+      body: JSON.stringify({
+        councilUrl: COUNCIL_URL,
+        councilId: channelAuthId,
+        councilName: "Lifecycle Council",
+        label: "Lifecycle PP",
+        contactEmail: "pp@lifecycle.test",
+        signedEnvelope,
+      }),
     },
-    body: JSON.stringify({
-      councilUrl: COUNCIL_URL,
-      councilId: channelAuthId,
-      councilName: "Lifecycle Council",
-      ppPublicKey: ppKeypair.publicKey(),
-      label: "Lifecycle PP",
-      contactEmail: "pp@lifecycle.test",
-      signedEnvelope,
-    }),
-  });
+  );
   if (!joinRes.ok) {
     const body = await joinRes.json().catch(() => ({}));
     throw new Error(
@@ -440,14 +426,14 @@ async function main() {
 
   const aliceJwt = await authenticate(alice, e2eConfig);
   console.log("  Alice authenticated");
-  await registerEntity(PROVIDER_URL, alice.publicKey(), "Alice");
+  await registerEntity(PROVIDER_URL, ppOperator.publicKey(), alice, "Alice");
   console.log("  Alice approved as entity");
   await deposit(alice.secret(), DEPOSIT_AMOUNT, aliceJwt, e2eConfig);
   console.log(`  Deposit ${DEPOSIT_AMOUNT} XLM complete`);
 
   const bobJwt = await authenticate(bob, e2eConfig);
   console.log("  Bob authenticated");
-  await registerEntity(PROVIDER_URL, bob.publicKey(), "Bob");
+  await registerEntity(PROVIDER_URL, ppOperator.publicKey(), bob, "Bob");
   console.log("  Bob approved as entity");
   const receiverOps = await prepareReceive(
     bob.secret(),

@@ -6,6 +6,7 @@ import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
+import { registerEntity } from "../lib/register-entity.ts";
 
 const DEPOSIT_AMOUNT = 10; // XLM
 const SEND_AMOUNT = 5; // XLM
@@ -19,25 +20,6 @@ async function fundAccount(
   if (!res.ok) {
     throw new Error(
       `Friendbot funding failed for ${publicKey}: ${res.status} ${await res
-        .text()}`,
-    );
-  }
-}
-
-async function registerEntity(
-  providerUrl: string,
-  pubkey: string,
-  name: string,
-): Promise<void> {
-  const res = await fetch(`${providerUrl}/api/v1/entities`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ pubkey, name, jurisdictions: [] }),
-  });
-  // Idempotent: 409 means already APPROVED, treat as success.
-  if (!res.ok && res.status !== 409) {
-    throw new Error(
-      `Entity registration failed for ${pubkey}: ${res.status} ${await res
         .text()}`,
     );
   }
@@ -89,8 +71,13 @@ async function main() {
   // submission now gates on the submitter's entity being APPROVED.
   console.log("\n[4b/8] Registering Alice + Bob as APPROVED entities...");
   await withE2ESpan("e2e.register_entities", async () => {
-    await registerEntity(config.providerUrl, alice.publicKey(), "Alice");
-    await registerEntity(config.providerUrl, bob.publicKey(), "Bob");
+    await registerEntity(
+      config.providerUrl,
+      config.ppPublicKey,
+      alice,
+      "Alice",
+    );
+    await registerEntity(config.providerUrl, config.ppPublicKey, bob, "Bob");
   });
   console.log("  Entities registered");
 
