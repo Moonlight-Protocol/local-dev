@@ -21,9 +21,21 @@
  * local-dev default). See helpers/keys.ts for the derivation.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { execSync } from "child_process";
+import { Keypair } from "@stellar/stellar-sdk";
 import { getTarget, getUrls, type ServiceUrls } from "../helpers/urls";
-import { deriveAllProfiles, type DerivedProfiles } from "../helpers/keys";
+import {
+  deriveAllProfiles,
+  deriveKeypair,
+  type DerivedProfiles,
+  masterSeedFromSecret,
+  ROLES,
+} from "../helpers/keys";
+import {
+  cleanupPayPlatformDb,
+  fetchActivePpPublicKey,
+  fetchCompletedInboundStroops,
+} from "../helpers/db";
+import { registerEntityViaApi } from "../helpers/register-entity";
 import {
   closeAllContexts,
   createUserContext,
@@ -89,6 +101,24 @@ let posPage: Page;
 let posUrl: string;
 let testStartEpochS: number;
 
+// Discovered after Step 4 — the actual PP public key registered in
+// provider-platform (derived from the operator wallet's master seed, distinct
+// from the operator wallet pubkey).
+let ppPublicKey: string;
+
+// Derived alongside the user profiles; pay-platform submits bundles to
+// provider-platform under this identity, so its entity row must be APPROVED
+// before any POS payment will land. helpers/keys.ts exposes pay-service via
+// the ROLES table but not on the DerivedProfiles return — derive it directly.
+const PAY_SERVICE_KEYPAIR: Keypair = deriveKeypair(
+  masterSeedFromSecret(
+    process.env.MASTER_SECRET ||
+      "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74",
+  ),
+  ROLES.PAY_SERVICE,
+  0,
+);
+
 // ─── Test ───────────────────────────────────────────────────────────
 
 test.describe("Full UC Flow", () => {
@@ -98,18 +128,24 @@ test.describe("Full UC Flow", () => {
     testStartEpochS = Math.floor(Date.now() / 1000);
 
     // Clean up stale pay-platform data from previous test runs.
-    // Deterministic keys mean old accounts/councils accumulate and
-    // interfere with council selection (first council without a PP gets
-    // picked instead of the newly created one).
+    // Deterministic keys mean old accounts/councils/council_pps accumulate
+    // and (a) cause council selection to pick the wrong council, (b) leave
+    // multiple PP rows for the same council so the random PP selection in
+    // pay-platform/instant-execute hits a stale entry → 500.
+    //
+    // The previous psql-via-execSync attempt silently failed inside the
+    // test-runner container (no psql binary), masked by loose UI assertions.
+    // Use node-pg directly so the cleanup is actually authoritative.
     if (getTarget() === "local") {
       try {
-        execSync(
-          `PGPASSWORD=devpass psql -h localhost -p 5442 -U admin -d pay_platform_db -c "TRUNCATE councils CASCADE; TRUNCATE pay_accounts CASCADE;"`,
-          { stdio: "pipe" },
-        );
+        await cleanupPayPlatformDb();
         console.log("Cleaned up stale pay-platform data");
-      } catch {
-        console.log("DB cleanup skipped (psql not available)");
+      } catch (err) {
+        console.log(
+          `DB cleanup failed: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
       }
     }
 
@@ -434,6 +470,34 @@ test.describe("Full UC Flow", () => {
     ).toBeVisible({ timeout: 120_000 });
   });
 
+  // ── Step 6b: Approve pay-service as a bundle submitter ────────────
+  //
+  // pay-platform submits all POS-instant bundles to provider-platform under
+  // the pay-service identity. provider-platform's add-bundle pipeline
+  // requires the submitter's `entities.status` to be APPROVED; SEP-10
+  // first-time auth (which pay-platform does when acquiring its provider
+  // JWT) only auto-creates an UNVERIFIED row. A real deployment seeds the
+  // pay-service entity once at deploy time; the test does the equivalent
+  // here so the bundle in Step 12 can settle. Until this PR landed the
+  // bundle would 403 and the UI showed an error, but the loose Step 12
+  // assertion accepted any non-empty status text — so the flow silently
+  // skipped the only path it actually exists to validate.
+
+  test("Step 6b: Discover PP pubkey + register pay-service as APPROVED entity", async () => {
+    ppPublicKey = await fetchActivePpPublicKey();
+    console.log(`Discovered PP pubkey: ${ppPublicKey}`);
+
+    await registerEntityViaApi(
+      urls.providerApi,
+      ppPublicKey,
+      PAY_SERVICE_KEYPAIR,
+      "Pay Service",
+    );
+    console.log(
+      `Registered pay-service ${PAY_SERVICE_KEYPAIR.publicKey()} as APPROVED entity for PP ${ppPublicKey}`,
+    );
+  });
+
   // ── Step 7: Admin signs in to moonlight-pay ───────────────────────
 
   test("Step 7: Admin signs in to moonlight-pay/admin", async () => {
@@ -479,7 +543,14 @@ test.describe("Full UC Flow", () => {
     await adminPage.waitForSelector("#pp-name", { timeout: 5_000 });
     await adminPage.fill("#pp-name", PROVIDER_NAME);
     await adminPage.fill("#pp-url", urls.providerApi);
-    await adminPage.fill("#pp-pk", profiles.provider.publicKey);
+    // pp.publicKey is the *derived* PP keypair from the operator's wallet
+    // master seed (see provider-console/src/lib/wallet.ts), NOT the
+    // operator's own wallet pubkey. The original test mistakenly filled
+    // this field with profiles.provider.publicKey (the operator wallet);
+    // pay-platform then stored the wrong key and instant-execute later
+    // 500'd with "PP not found or inactive". ppPublicKey was discovered
+    // from provider-platform's DB in Step 6b.
+    await adminPage.fill("#pp-pk", ppPublicKey);
     await adminPage.click("#pp-save");
 
     // Verify PP appears in the list
@@ -687,10 +758,27 @@ test.describe("Full UC Flow", () => {
       await popup2.waitForEvent("close", { timeout: 10_000 }).catch(() => {});
     }
 
-    // Verify: payment status shown
+    // Verify: payment status shown AND the message indicates success, not
+    // an error. The previous assertion (toBeVisible + not.toBeEmpty) passed
+    // for both success ("Payment received!") and failure ("Payment
+    // processing failed: 500 …") strings — masking the very bug this test
+    // is meant to catch.
     const statusEl = posPage.locator("#pos-status");
     await expect(statusEl).toBeVisible({ timeout: 60_000 });
-    await expect(statusEl).not.toBeEmpty({ timeout: 10_000 });
+    const statusText = (await statusEl.textContent({ timeout: 10_000 }))
+      ?.trim() ?? "";
+    expect(statusText.length, "POS status must not be empty").toBeGreaterThan(
+      0,
+    );
+    // moonlight-pay surfaces failures as "Payment processing failed: …" /
+    // "rejected the bundle" / "preparation failed" etc. Any of those means
+    // the bundle never settled — fail the test loudly instead of swallowing
+    // it as a UI smoke pass.
+    const errorPatterns = /failed|reject|error|expired|insufficient/i;
+    expect(
+      errorPatterns.test(statusText),
+      `POS status indicates failure: "${statusText}"`,
+    ).toBe(false);
   });
 
   // ── Step 13: Merchant verifies received payment ───────────────────
@@ -702,6 +790,7 @@ test.describe("Full UC Flow", () => {
     await merchantPage.reload();
     await merchantPage.waitForLoadState("networkidle");
 
+    // UI smoke — merchant home renders.
     const hasBalance = await merchantPage
       .locator("#balance-display")
       .isVisible()
@@ -710,13 +799,96 @@ test.describe("Full UC Flow", () => {
       .locator("#tx-list")
       .isVisible()
       .catch(() => false);
-
     expect(hasBalance || hasTxList).toBeTruthy();
 
-    if (hasTxList) {
-      const txContent = await merchantPage.locator("#tx-list").textContent();
-      expect(txContent?.length).toBeGreaterThan(0);
+    // Protocol-level proof: pay-platform recorded at least one COMPLETED
+    // inbound transaction for the merchant. The previous assertion
+    // (txContent?.length > 0) accepted "No transactions yet" placeholder
+    // text, so a payment that never settled looked the same as one that
+    // did. The DB query is authoritative.
+    if (getTarget() === "local") {
+      const completed = await fetchCompletedInboundStroops(
+        profiles.merchant.publicKey,
+      );
+      expect(
+        completed > 0n,
+        `Expected at least one COMPLETED inbound tx for merchant ${profiles.merchant.publicKey}, got total ${completed} stroops`,
+      ).toBe(true);
     }
+  });
+
+  // ── Step 13b: Exercise the public KYC route ────────────────────────
+  //
+  // Independent UI smoke for #/entities/register?provider=<pp>. The POS
+  // user's identity has no entity row in provider-platform yet (POS only
+  // auths to moonlight-pay, never to provider-platform), so registering
+  // here exercises the create-new-APPROVED-entity branch of the route.
+  // Independent of Step 12's payment — the bundle submitter is pay-service
+  // and that one was registered in Step 6b.
+
+  test("Step 13b: POS user registers as entity via KYC route", async () => {
+    if (getTarget() !== "local") {
+      test.skip(true, "KYC route smoke is local-only");
+    }
+    const kycPage = await posCtx.context.newPage();
+    await kycPage.goto(
+      `${urls.providerConsole}/#/entities/register?provider=${ppPublicKey}`,
+    );
+    await kycPage.waitForLoadState("networkidle");
+
+    // Hard-error UI must NOT be showing.
+    await expect(
+      kycPage.locator("text=Cannot continue"),
+      "valid ?provider= should render the connect step, not the hard-error card",
+    ).toHaveCount(0);
+
+    await expect(kycPage.locator("#kyc-connect-btn")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Connect button opens the Stellar Wallets Kit modal first. The user
+    // (or the test) must select "Freighter" inside that modal to trigger
+    // the Freighter popup. Mirrors the Step 12 modal-handling pattern.
+    await withWalletApproval(posCtx.context, kycPage, async () => {
+      await kycPage.click("#kyc-connect-btn");
+      await kycPage.waitForTimeout(1000);
+      const freighterOption = kycPage.locator("text=Freighter").first();
+      if (
+        await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
+      ) {
+        await freighterOption.click();
+      } else {
+        await kycPage.evaluate(() => {
+          const modal = document.querySelector("stellar-wallets-modal");
+          if (modal?.shadowRoot) {
+            const btn =
+              modal.shadowRoot.querySelector("[data-wallet-id]") as
+                | HTMLElement
+                | null ??
+                modal.shadowRoot.querySelector("button") as HTMLElement | null;
+            btn?.click();
+          }
+        });
+      }
+    });
+
+    // After connect: the form shows.
+    await expect(kycPage.locator("#kyc-step-form")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await kycPage.fill("#kyc-name", "POS User");
+
+    await withWalletApproval(posCtx.context, kycPage, async () => {
+      await kycPage.click("#kyc-submit-btn");
+    });
+
+    // Success state — entity APPROVED.
+    await expect(kycPage.locator("#kyc-step-success")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await kycPage.close();
   });
 
   // ── Step 14: OTEL trace verification ──────────────────────────────
