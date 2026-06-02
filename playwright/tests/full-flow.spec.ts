@@ -21,21 +21,13 @@
  * local-dev default). See helpers/keys.ts for the derivation.
  */
 import { expect, type Page, test } from "@playwright/test";
-import { Keypair } from "@stellar/stellar-sdk";
 import { getTarget, getUrls, type ServiceUrls } from "../helpers/urls";
-import {
-  deriveAllProfiles,
-  deriveKeypair,
-  type DerivedProfiles,
-  masterSeedFromSecret,
-  ROLES,
-} from "../helpers/keys";
+import { deriveAllProfiles, type DerivedProfiles } from "../helpers/keys";
 import {
   cleanupPayPlatformDb,
   fetchActivePpPublicKey,
   fetchCompletedInboundStroops,
 } from "../helpers/db";
-import { registerEntityViaApi } from "../helpers/register-entity";
 import {
   closeAllContexts,
   createUserContext,
@@ -90,6 +82,10 @@ let providerCtx: UserContext;
 let adminCtx: UserContext;
 let merchantCtx: UserContext;
 let posCtx: UserContext;
+// pay-service has its own Freighter context so Step 6b can drive the public
+// KYC route end-to-end as the bundle-submitting identity rather than
+// seeding the entity DB via an API call.
+let payServiceCtx: UserContext;
 
 let councilPage: Page;
 let providerPage: Page;
@@ -105,19 +101,6 @@ let testStartEpochS: number;
 // provider-platform (derived from the operator wallet's master seed, distinct
 // from the operator wallet pubkey).
 let ppPublicKey: string;
-
-// Derived alongside the user profiles; pay-platform submits bundles to
-// provider-platform under this identity, so its entity row must be APPROVED
-// before any POS payment will land. helpers/keys.ts exposes pay-service via
-// the ROLES table but not on the DerivedProfiles return — derive it directly.
-const PAY_SERVICE_KEYPAIR: Keypair = deriveKeypair(
-  masterSeedFromSecret(
-    process.env.MASTER_SECRET ||
-      "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74",
-  ),
-  ROLES.PAY_SERVICE,
-  0,
-);
 
 // ─── Test ───────────────────────────────────────────────────────────
 
@@ -186,6 +169,11 @@ test.describe("Full UC Flow", () => {
       publicKey: profiles.pos.publicKey,
       secretKey: profiles.pos.secretKey,
     });
+    payServiceCtx = await createUserContext(null, {
+      name: profiles.payService.name,
+      publicKey: profiles.payService.publicKey,
+      secretKey: profiles.payService.secretKey,
+    });
   });
 
   test.afterAll(async () => {
@@ -195,6 +183,7 @@ test.describe("Full UC Flow", () => {
       admin: adminCtx,
       merchant: merchantCtx,
       pos: posCtx,
+      payService: payServiceCtx,
     });
   });
 
@@ -483,18 +472,76 @@ test.describe("Full UC Flow", () => {
   // assertion accepted any non-empty status text — so the flow silently
   // skipped the only path it actually exists to validate.
 
-  test("Step 6b: Discover PP pubkey + register pay-service as APPROVED entity", async () => {
+  test("Step 6b: Discover PP pubkey + register pay-service via the KYC UI", async () => {
     ppPublicKey = await fetchActivePpPublicKey();
     console.log(`Discovered PP pubkey: ${ppPublicKey}`);
 
-    await registerEntityViaApi(
-      urls.providerApi,
-      ppPublicKey,
-      PAY_SERVICE_KEYPAIR,
-      "Pay Service",
+    // Drive the public KYC route end-to-end as the pay-service identity.
+    // Uses the same provider-console#/entities/register?provider=… page a
+    // real submitter would use, signing the SEP-43/raw challenge through
+    // Freighter rather than seeding the entity DB by direct API call.
+    const kycPage = await payServiceCtx.context.newPage();
+    await kycPage.goto(
+      `${urls.providerConsole}/#/entities/register?provider=${ppPublicKey}`,
     );
+    await kycPage.waitForLoadState("networkidle");
+
+    // The hard-error UI must NOT be showing.
+    await expect(
+      kycPage.locator("text=Cannot continue"),
+      "valid ?provider= should render the connect step, not the hard-error card",
+    ).toHaveCount(0);
+
+    await expect(kycPage.locator("#kyc-connect-btn")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    // Connect button opens the Stellar Wallets Kit modal first. The user
+    // (or the test) must select "Freighter" inside that modal to trigger
+    // the Freighter approval popup. Mirrors the Step 12 modal-handling
+    // pattern.
+    await withWalletApproval(payServiceCtx.context, kycPage, async () => {
+      await kycPage.click("#kyc-connect-btn");
+      await kycPage.waitForTimeout(1000);
+      const freighterOption = kycPage.locator("text=Freighter").first();
+      if (
+        await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
+      ) {
+        await freighterOption.click();
+      } else {
+        await kycPage.evaluate(() => {
+          const modal = document.querySelector("stellar-wallets-modal");
+          if (modal?.shadowRoot) {
+            const btn =
+              modal.shadowRoot.querySelector("[data-wallet-id]") as
+                | HTMLElement
+                | null ??
+                modal.shadowRoot.querySelector("button") as HTMLElement | null;
+            btn?.click();
+          }
+        });
+      }
+    });
+
+    // After connect: the name-input form shows.
+    await expect(kycPage.locator("#kyc-step-form")).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await kycPage.fill("#kyc-name", "Pay Service");
+
+    await withWalletApproval(payServiceCtx.context, kycPage, async () => {
+      await kycPage.click("#kyc-submit-btn");
+    });
+
+    // Success card — entity APPROVED.
+    await expect(kycPage.locator("#kyc-step-success")).toBeVisible({
+      timeout: 30_000,
+    });
+
+    await kycPage.close();
     console.log(
-      `Registered pay-service ${PAY_SERVICE_KEYPAIR.publicKey()} as APPROVED entity for PP ${ppPublicKey}`,
+      `Registered pay-service ${profiles.payService.publicKey} as APPROVED entity for PP ${ppPublicKey}`,
     );
   });
 
@@ -815,80 +862,6 @@ test.describe("Full UC Flow", () => {
         `Expected at least one COMPLETED inbound tx for merchant ${profiles.merchant.publicKey}, got total ${completed} stroops`,
       ).toBe(true);
     }
-  });
-
-  // ── Step 13b: Exercise the public KYC route ────────────────────────
-  //
-  // Independent UI smoke for #/entities/register?provider=<pp>. The POS
-  // user's identity has no entity row in provider-platform yet (POS only
-  // auths to moonlight-pay, never to provider-platform), so registering
-  // here exercises the create-new-APPROVED-entity branch of the route.
-  // Independent of Step 12's payment — the bundle submitter is pay-service
-  // and that one was registered in Step 6b.
-
-  test("Step 13b: POS user registers as entity via KYC route", async () => {
-    if (getTarget() !== "local") {
-      test.skip(true, "KYC route smoke is local-only");
-    }
-    const kycPage = await posCtx.context.newPage();
-    await kycPage.goto(
-      `${urls.providerConsole}/#/entities/register?provider=${ppPublicKey}`,
-    );
-    await kycPage.waitForLoadState("networkidle");
-
-    // Hard-error UI must NOT be showing.
-    await expect(
-      kycPage.locator("text=Cannot continue"),
-      "valid ?provider= should render the connect step, not the hard-error card",
-    ).toHaveCount(0);
-
-    await expect(kycPage.locator("#kyc-connect-btn")).toBeVisible({
-      timeout: 10_000,
-    });
-
-    // Connect button opens the Stellar Wallets Kit modal first. The user
-    // (or the test) must select "Freighter" inside that modal to trigger
-    // the Freighter popup. Mirrors the Step 12 modal-handling pattern.
-    await withWalletApproval(posCtx.context, kycPage, async () => {
-      await kycPage.click("#kyc-connect-btn");
-      await kycPage.waitForTimeout(1000);
-      const freighterOption = kycPage.locator("text=Freighter").first();
-      if (
-        await freighterOption.isVisible({ timeout: 3_000 }).catch(() => false)
-      ) {
-        await freighterOption.click();
-      } else {
-        await kycPage.evaluate(() => {
-          const modal = document.querySelector("stellar-wallets-modal");
-          if (modal?.shadowRoot) {
-            const btn =
-              modal.shadowRoot.querySelector("[data-wallet-id]") as
-                | HTMLElement
-                | null ??
-                modal.shadowRoot.querySelector("button") as HTMLElement | null;
-            btn?.click();
-          }
-        });
-      }
-    });
-
-    // After connect: the form shows.
-    await expect(kycPage.locator("#kyc-step-form")).toBeVisible({
-      timeout: 15_000,
-    });
-
-    await kycPage.fill("#kyc-name", "POS User");
-
-    await withWalletApproval(posCtx.context, kycPage, async () => {
-      await kycPage.click("#kyc-submit-btn");
-    });
-
-    // Success state — entity APPROVED.
-    await expect(kycPage.locator("#kyc-step-success")).toBeVisible({
-      timeout: 30_000,
-    });
-
-    await kycPage.close();
   });
 
   // ── Step 14: OTEL trace verification ──────────────────────────────

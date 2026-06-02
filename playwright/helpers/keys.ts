@@ -62,6 +62,10 @@ export interface DerivedProfiles {
   admin: { name: string; publicKey: string; secretKey: string };
   merchant: { name: string; publicKey: string; secretKey: string };
   pos: { name: string; publicKey: string; secretKey: string };
+  /** The pay-platform service identity. Submits bundles to provider-platform
+   * on behalf of customers in the POS instant-payment flow, so its entity
+   * row must be APPROVED for any payment to settle. */
+  payService: { name: string; publicKey: string; secretKey: string };
 }
 
 /**
@@ -83,6 +87,7 @@ export function deriveAllProfiles(masterSecret?: string): DerivedProfiles {
   const admin = deriveKeypair(seed, ROLES.PAY_ADMIN, 0);
   const merchant = deriveKeypair(seed, ROLES.ALICE, 0);
   const pos = deriveKeypair(seed, ROLES.BOB, 0);
+  const payService = deriveKeypair(seed, ROLES.PAY_SERVICE, 0);
 
   return {
     council: {
@@ -109,6 +114,11 @@ export function deriveAllProfiles(masterSecret?: string): DerivedProfiles {
       name: "POS User",
       publicKey: pos.publicKey(),
       secretKey: pos.secret(),
+    },
+    payService: {
+      name: "Pay Service",
+      publicKey: payService.publicKey(),
+      secretKey: payService.secret(),
     },
   };
 }
