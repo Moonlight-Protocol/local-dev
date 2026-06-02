@@ -27,6 +27,8 @@ import {
   cleanupPayPlatformDb,
   fetchActivePpPublicKey,
   fetchCompletedInboundStroops,
+  fetchEncryptedDelegationKey,
+  payAccountExists,
 } from "../helpers/db";
 import {
   closeAllContexts,
@@ -862,6 +864,41 @@ test.describe("Full UC Flow", () => {
         `Expected at least one COMPLETED inbound tx for merchant ${profiles.merchant.publicKey}, got total ${completed} stroops`,
       ).toBe(true);
     }
+  });
+
+  // ── Step 13b: Merchant deletes their pay-platform account ─────────
+
+  test("Step 13b: Merchant deletes account, DB row gone", async () => {
+    if (getTarget() !== "local") {
+      test.skip(true, "DB-row assertion is local-only");
+      return;
+    }
+
+    // Pre-check: row exists + delegation key is set.
+    const existedBefore = await payAccountExists(profiles.merchant.publicKey);
+    expect(existedBefore, "merchant pay_account row should exist").toBe(true);
+    const key = await fetchEncryptedDelegationKey(profiles.merchant.publicKey);
+    expect(
+      typeof key === "string" && key.length > 0,
+      "merchant should have an encrypted_delegation_key set",
+    ).toBe(true);
+
+    await merchantPage.goto(`${urls.moonlightPay}/#/`);
+    await merchantPage.waitForLoadState("networkidle");
+
+    // Auto-confirm the browser confirm() dialog.
+    merchantPage.once("dialog", (d) => d.accept());
+
+    await merchantPage.locator("#delete-account-btn").click();
+
+    // The handler clears the session and routes to /login. Wait for that.
+    await merchantPage.waitForURL(/\/login$/, { timeout: 15_000 });
+
+    const existedAfter = await payAccountExists(profiles.merchant.publicKey);
+    expect(
+      existedAfter,
+      `merchant pay_account row must be gone after DELETE /account/me`,
+    ).toBe(false);
   });
 
   // ── Step 14: OTEL trace verification ──────────────────────────────

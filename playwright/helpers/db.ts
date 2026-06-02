@@ -67,10 +67,7 @@ export async function fetchActivePpPublicKey(): Promise<string> {
 /**
  * Returns the sum of completed inbound transaction amounts (stroops) for a
  * pay-platform wallet. Used by Step 13 to assert the payment actually
- * settled, not just that a UI element became visible. pay-platform's
- * displayed balance = sum(completed IN) - sum(completed OUT); for a
- * freshly-onboarded merchant in a single-payment test, sum-of-completed-IN
- * is the right signal that the bundle landed end-to-end.
+ * settled, not just that a UI element became visible.
  */
 export async function fetchCompletedInboundStroops(
   walletPubkey: string,
@@ -85,6 +82,49 @@ export async function fetchCompletedInboundStroops(
       [walletPubkey],
     );
     return BigInt(res.rows[0]?.total ?? "0");
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Returns whether a pay_accounts row exists for the wallet. Used to assert
+ * the DELETE /account/me endpoint hard-removed the row.
+ */
+export async function payAccountExists(walletPubkey: string): Promise<boolean> {
+  const client = new Client({
+    connectionString: resolveDsn("pay_platform_db"),
+  });
+  await client.connect();
+  try {
+    const res = await client.query<{ exists: boolean }>(
+      "SELECT EXISTS(SELECT 1 FROM pay_accounts WHERE wallet_public_key = $1) AS exists",
+      [walletPubkey],
+    );
+    return Boolean(res.rows[0]?.exists);
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Returns the encrypted_delegation_key column for the wallet, or null if
+ * the row exists but the key isn't set, or undefined if no row.
+ */
+export async function fetchEncryptedDelegationKey(
+  walletPubkey: string,
+): Promise<string | null | undefined> {
+  const client = new Client({
+    connectionString: resolveDsn("pay_platform_db"),
+  });
+  await client.connect();
+  try {
+    const res = await client.query<{ encrypted_delegation_key: string | null }>(
+      "SELECT encrypted_delegation_key FROM pay_accounts WHERE wallet_public_key = $1",
+      [walletPubkey],
+    );
+    if (res.rows.length === 0) return undefined;
+    return res.rows[0].encrypted_delegation_key;
   } finally {
     await client.end();
   }
