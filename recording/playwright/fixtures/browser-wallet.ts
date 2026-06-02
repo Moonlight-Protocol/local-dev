@@ -63,6 +63,10 @@ export const SEL = {
   // Setup (first run, no password set)
   passwordInput: 'input[type="password"]',
   setupConfirm: 'button:has-text("Confirm")',
+  providerPubkeyInput: "#provider-pubkey",
+  submitKycButton: 'button:has-text("Submit KYC"):not([disabled])',
+  kycNameInput: "#kyc-name",
+  kycPasswordInput: "#kyc-password",
 
   // Add wallet (after setup)
   importTab: 'button:has-text("Import")',
@@ -402,11 +406,18 @@ export async function createPrivacyChannel(
 
 /**
  * Open channel picker sheet, add a provider, connect (which navigates to
- * the in-popup sign-request page → password → Approve).
+ * the in-popup sign-request page → password → Approve). After connect, if
+ * the wallet reports the entity is not yet APPROVED, complete the KYC step.
  */
 export async function addAndConnectProvider(
   page: Page,
-  opts: { providerUrl: string; providerName: string; password: string },
+  opts: {
+    providerUrl: string;
+    providerName: string;
+    providerPubkey: string;
+    kycEntityName: string;
+    password: string;
+  },
 ): Promise<void> {
   await page.bringToFront();
   // Open the channel picker sheet (shows PrivateChannelManager).
@@ -418,7 +429,7 @@ export async function addAndConnectProvider(
   await addToggle.waitFor({ timeout: 10_000 });
   await clickWithPause(addToggle);
 
-  // Fill provider form.
+  // Fill provider form (url + name + pubkey).
   await typeSlowly(
     page.locator(SEL.providerUrlInput).first(),
     opts.providerUrl,
@@ -426,6 +437,10 @@ export async function addAndConnectProvider(
   await typeSlowly(
     page.locator(SEL.providerNameInput).first(),
     opts.providerName,
+  );
+  await typeSlowly(
+    page.locator(SEL.providerPubkeyInput).first(),
+    opts.providerPubkey,
   );
 
   // Submit add — picks the form button (not the toggle we just used).
@@ -450,8 +465,35 @@ export async function addAndConnectProvider(
   );
   await clickWithPause(page.locator(SEL.signRequestApproveButton).first());
 
-  // Success: navigates back to home with provider connected. The action
-  // buttons enable (Receive visible) and the header dot turns green.
+  // After Approve the popup navigates back to home with the channel-picker
+  // sheet closed. The KYC prompt lives inside that sheet, so re-open it,
+  // then probe for the "Submit KYC" button and complete the form if shown.
+  await page.locator(SEL.channelPickerTrigger).first().waitFor({
+    timeout: 30_000,
+  });
+  await clickWithPause(page.locator(SEL.channelPickerTrigger).first());
+  const kycButton = page.locator(SEL.submitKycButton).first();
+  if (await kycButton.isVisible({ timeout: 10_000 }).catch(() => false)) {
+    await clickWithPause(kycButton);
+    await typeSlowly(
+      page.locator(SEL.kycNameInput).first(),
+      opts.kycEntityName,
+    );
+    await typeSlowly(
+      page.locator(SEL.kycPasswordInput).first(),
+      opts.password,
+    );
+    // The button label is identical, but only the form's submit is enabled
+    // when both inputs are filled — pick the enabled one.
+    await clickWithPause(page.locator(SEL.submitKycButton).last());
+  }
+  // Close the sheet (whether the KYC step ran or not) so home (with
+  // Receive/Send/Ramp) is in view and not blocked by the sheet overlay.
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(500);
+
+  // Success: action buttons enable (Receive visible) and the header dot
+  // turns green.
   await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
   await page
     .locator('header span.bg-green-400, header [class*="bg-green-400"]')

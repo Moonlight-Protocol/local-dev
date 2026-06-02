@@ -42,6 +42,31 @@ test.describe.configure({ mode: "serial" });
 test("03 — private transfer (Bob receive → Alice deposit + send → Alice withdraw)", async () => {
   const env = loadRunEnv();
   const channelId = requireValue(env, "PRIVACY_CHANNEL_ID");
+  const councilId = requireValue(env, "CHANNEL_AUTH_ID");
+
+  // env.PP_PK is the operator pubkey from setup-recording-keys. The PP that
+  // spec 02 registered with the platform has its own server-derived pubkey,
+  // which is what /providers/:ppPublicKey/... URLs use. Look it up via the
+  // council-platform's public listing, matching on the spec-02 label.
+  const providerLabel = getProviderName();
+  const provListRes = await fetch(
+    `${env.COUNCIL_PLATFORM_URL}/api/v1/public/providers?councilId=${councilId}`,
+  );
+  if (!provListRes.ok) {
+    throw new Error(
+      `Failed to list providers: HTTP ${provListRes.status}`,
+    );
+  }
+  const provListBody = await provListRes.json() as {
+    data?: { publicKey: string; label: string }[];
+  };
+  const match = provListBody.data?.find((p) => p.label === providerLabel);
+  if (!match?.publicKey) {
+    throw new Error(
+      `Could not find provider "${providerLabel}" on council ${councilId}`,
+    );
+  }
+  const providerPubkey = match.publicKey;
 
   const bobHandle = await launchWalletContext({
     section: "03-bob",
@@ -71,7 +96,9 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     });
     await addAndConnectProvider(bobWallet, {
       providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: getProviderName(),
+      providerName: providerLabel,
+      providerPubkey,
+      kycEntityName: "Bob",
       password: RECORDING_PASSWORD,
     });
 
@@ -108,7 +135,9 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     });
     await addAndConnectProvider(aliceWallet, {
       providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: getProviderName(),
+      providerName: providerLabel,
+      providerPubkey,
+      kycEntityName: "Alice",
       password: RECORDING_PASSWORD,
     });
 
