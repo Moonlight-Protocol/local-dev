@@ -143,7 +143,6 @@ const opexRes = await payApi(PAY_API, "/account/opex", {
   body: JSON.stringify({
     secretKey: opexKeypair.secret(),
     publicKey: opexKeypair.publicKey(),
-    feePct: 1,
   }),
 });
 if (!opexRes.ok) {
@@ -300,8 +299,8 @@ if (!balanceRes.ok) {
 }
 const { data: balance } = await balanceRes.json();
 console.log(`  Merchant balance: ${balance.balanceXlm} XLM`);
-// With 1% fee, merchant receives 99% of the payment
-const expectedMin = PAYMENT_STROOPS * 99n / 100n;
+// Merchant gets the full payment — merchant-fee concept removed.
+const expectedMin = PAYMENT_STROOPS;
 if (BigInt(balance.balanceStroops) >= expectedMin) {
   console.log("  ✅ Merchant received funds");
 } else {
