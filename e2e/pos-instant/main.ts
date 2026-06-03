@@ -131,7 +131,8 @@ const delegationRes = await payApi(PAY_API, "/account/delegation-key", {
 });
 if (delegationRes.status !== 204 && delegationRes.status !== 200) {
   throw new Error(
-    `Store delegation key failed: ${delegationRes.status} ${await delegationRes.text()}`,
+    `Store delegation key failed: ${delegationRes.status} ${await delegationRes
+      .text()}`,
   );
 }
 // Register OpEx account for the merchant (instant flow requires this)
