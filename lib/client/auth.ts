@@ -38,7 +38,10 @@ export async function authenticate(
     const authRes = await fetch(`${config.providerUrl}/api/v1/stellar/auth`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ signedChallenge: await signedXdr }),
+      body: JSON.stringify({
+        signedChallenge: await signedXdr,
+        ppPublicKey: config.ppPublicKey,
+      }),
     });
     if (!authRes.ok) {
       throw new Error(

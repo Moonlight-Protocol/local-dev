@@ -22,9 +22,24 @@ const SEL_PASSWORD_INPUT = 'input[type="password"]';
 const SEL_UNLOCK_BUTTON =
   'button:has-text("Log In"), button:has-text("Unlock")';
 
-/** "Confirm" / "Approve" / "Sign" / "Connect" / "Allow" button on wallet popups */
-export const SEL_APPROVE_BUTTON =
-  'button:has-text("Confirm"), button:has-text("Approve"), button:has-text("Sign"), button:has-text("Connect"), button:has-text("Allow")';
+/**
+ * Approve button on Freighter wallet popups. Matches by data-testid first
+ * (deterministic, names taken from Freighter v5.39.0's source) and falls
+ * back to common text labels.
+ */
+export const SEL_APPROVE_BUTTON = [
+  // Freighter v5.39+ data-testids
+  '[data-testid="grant-access-connect-button"]',
+  '[data-testid="sign-message-approve-button"]',
+  '[data-testid="sign-transaction-sign"]',
+  '[data-testid="sign-auth-entry-approve-button"]',
+  // Text fallbacks for older builds / unforeseen popups.
+  'button:has-text("Confirm")',
+  'button:has-text("Approve")',
+  'button:has-text("Sign")',
+  'button:has-text("Connect")',
+  'button:has-text("Allow")',
+].join(", ");
 
 /** "Reject" / "Deny" / "Cancel" button on wallet popups */
 const SEL_REJECT_BUTTON =
