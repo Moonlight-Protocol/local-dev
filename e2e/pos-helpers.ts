@@ -56,9 +56,14 @@ export async function fundAccount(
   friendbotUrl: string,
   publicKey: string,
 ): Promise<void> {
+  // Fund with 1,000,000 XLM (standalone Friendbot's `starting_balance` param)
+  // — the deposit + privacy-hop bundle pattern in pay-platform's instant
+  // flow needs significant headroom to cover bundle fees + tx fees + the
+  // OPEX deposit, and the default Friendbot grant is too tight.
+  const url = `${friendbotUrl}?addr=${publicKey}&starting_balance=1000000`;
   for (let attempt = 0; attempt < 10; attempt++) {
     try {
-      const res = await fetch(`${friendbotUrl}?addr=${publicKey}`);
+      const res = await fetch(url, { method: "POST" });
       if (res.ok || res.status === 400) return;
     } catch { /* retry */ }
     await new Promise((r) => setTimeout(r, 2000));

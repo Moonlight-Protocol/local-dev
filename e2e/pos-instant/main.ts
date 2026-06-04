@@ -32,7 +32,6 @@ import {
   createTestSigner,
   deriveTestKeys,
   fundAccount,
-  generateP256PublicKey,
   getPayJwt,
   loadContractsEnv,
   payApi,
@@ -96,8 +95,8 @@ await registerEntity(
 );
 console.log(`  Pay-service approved (${elapsed()})`);
 
-// [2] Create merchant on pay-platform + store UTXOs
-console.log("\n[2/5] Creating merchant account + UTXOs...");
+// [2] Create merchant on pay-platform + register delegation key
+console.log("\n[2/5] Creating merchant account + delegation key...");
 const merchantJwt = await getPayJwt(
   PAY_API,
   merchant.publicKey(),
@@ -118,22 +117,22 @@ if (createRes.status !== 201 && createRes.status !== 200) {
   );
 }
 
-const utxoPayloads = [];
-for (let i = 0; i < 5; i++) {
-  const pk = await generateP256PublicKey();
-  utxoPayloads.push({
-    utxoPublicKey: btoa(String.fromCharCode(...pk)),
-    derivationIndex: i,
-  });
-}
-const utxoRes = await payApi(PAY_API, "/utxo/receive", {
+// Hand off a random 32-byte UTXO root. Same backend contract as the
+// production signup flow — pay-platform encrypts it at rest and derives
+// receive UTXOs on demand. The test bypasses the wallet UI, not the
+// contract.
+const utxoRoot = crypto.getRandomValues(new Uint8Array(32));
+const delegationRes = await payApi(PAY_API, "/account/delegation-key", {
   method: "POST",
   headers: { Authorization: `Bearer ${merchantJwt}` },
-  body: JSON.stringify({ utxos: utxoPayloads }),
+  body: JSON.stringify({
+    utxoRoot: btoa(String.fromCharCode(...utxoRoot)),
+  }),
 });
-if (utxoRes.status !== 201 && utxoRes.status !== 200) {
+if (delegationRes.status !== 204 && delegationRes.status !== 200) {
   throw new Error(
-    `Store UTXOs failed: ${utxoRes.status} ${await utxoRes.text()}`,
+    `Store delegation key failed: ${delegationRes.status} ${await delegationRes
+      .text()}`,
   );
 }
 // Register OpEx account for the merchant (instant flow requires this)
@@ -145,7 +144,6 @@ const opexRes = await payApi(PAY_API, "/account/opex", {
   body: JSON.stringify({
     secretKey: opexKeypair.secret(),
     publicKey: opexKeypair.publicKey(),
-    feePct: 1,
   }),
 });
 if (!opexRes.ok) {
@@ -154,7 +152,7 @@ if (!opexRes.ok) {
   );
 }
 console.log(
-  `  Merchant + ${utxoPayloads.length} UTXOs + OpEx created (${elapsed()})`,
+  `  Merchant + delegation key + OpEx created (${elapsed()})`,
 );
 
 // [3] Seed council via council-platform + pay-platform (production-like flow)
@@ -302,8 +300,8 @@ if (!balanceRes.ok) {
 }
 const { data: balance } = await balanceRes.json();
 console.log(`  Merchant balance: ${balance.balanceXlm} XLM`);
-// With 1% fee, merchant receives 99% of the payment
-const expectedMin = PAYMENT_STROOPS * 99n / 100n;
+// Merchant gets the full payment — merchant-fee concept removed.
+const expectedMin = PAYMENT_STROOPS;
 if (BigInt(balance.balanceStroops) >= expectedMin) {
   console.log("  ✅ Merchant received funds");
 } else {
