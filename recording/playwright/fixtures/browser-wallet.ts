@@ -21,6 +21,7 @@
 import { type BrowserContext, type Page } from "@playwright/test";
 import process from "node:process";
 import { clickWithPause, hold, holdAfterSuccess, typeSlowly } from "./pacing";
+import { withWalletApproval } from "../../../playwright/fixtures/freighter";
 
 // ─── Network selection (env-driven) ───────────────────────────────────
 //
@@ -63,10 +64,9 @@ export const SEL = {
   // Setup (first run, no password set)
   passwordInput: 'input[type="password"]',
   setupConfirm: 'button:has-text("Confirm")',
-  providerPubkeyInput: "#provider-pubkey",
-  submitKycButton: 'button:has-text("Submit KYC"):not([disabled])',
-  kycNameInput: "#kyc-name",
-  kycPasswordInput: "#kyc-password",
+  // KYC link-out: anchor with text "Submit KYC" surfaced inside the channel-
+  // picker sheet when the session.entityStatus is not APPROVED.
+  submitKycLink: 'a:has-text("Submit KYC")',
 
   // Add wallet (after setup)
   importTab: 'button:has-text("Import")',
@@ -405,31 +405,26 @@ export async function createPrivacyChannel(
 // ─── Provider add + connect ────────────────────────────────────────────
 
 /**
- * Open channel picker sheet, add a provider, connect (which navigates to
- * the in-popup sign-request page → password → Approve). After connect, if
- * the wallet reports the entity is not yet APPROVED, complete the KYC step.
+ * Open channel picker sheet, add a provider (single URL — pubkey is parsed
+ * out of the URL's last path segment), connect via the sign-request page,
+ * close the sheet. Does NOT follow the KYC link — see followKycLinkOut().
  */
-export async function addAndConnectProvider(
+export async function addProviderAndConnect(
   page: Page,
   opts: {
     providerUrl: string;
     providerName: string;
-    providerPubkey: string;
-    kycEntityName: string;
     password: string;
   },
 ): Promise<void> {
   await page.bringToFront();
-  // Open the channel picker sheet (shows PrivateChannelManager).
   const trigger = page.locator(SEL.channelPickerTrigger).first();
   await clickWithPause(trigger);
 
-  // Click "Add Provider" toggle (the dashed-border button at the bottom).
   const addToggle = page.locator(SEL.managerAddProviderToggle).first();
   await addToggle.waitFor({ timeout: 10_000 });
   await clickWithPause(addToggle);
 
-  // Fill provider form (url + name + pubkey).
   await typeSlowly(
     page.locator(SEL.providerUrlInput).first(),
     opts.providerUrl,
@@ -438,24 +433,16 @@ export async function addAndConnectProvider(
     page.locator(SEL.providerNameInput).first(),
     opts.providerName,
   );
-  await typeSlowly(
-    page.locator(SEL.providerPubkeyInput).first(),
-    opts.providerPubkey,
-  );
 
-  // Submit add — picks the form button (not the toggle we just used).
-  // Both have text "Add Provider" — prefer the visible submit inside the form card.
   const submitBtn = page
     .locator('button:has-text("Add Provider"):not(:has(svg))')
     .first();
   await clickWithPause(submitBtn);
 
-  // Provider row appears with Connect button.
   const connectBtn = page.locator(SEL.providerConnectButton).first();
   await connectBtn.waitFor({ timeout: 30_000 });
   await clickWithPause(connectBtn);
 
-  // In-popup signing page: enter password, approve.
   await page.locator(SEL.signRequestPasswordInput).first().waitFor({
     timeout: 30_000,
   });
@@ -465,35 +452,41 @@ export async function addAndConnectProvider(
   );
   await clickWithPause(page.locator(SEL.signRequestApproveButton).first());
 
-  // After Approve the popup navigates back to home with the channel-picker
-  // sheet closed. The KYC prompt lives inside that sheet, so re-open it,
-  // then probe for the "Submit KYC" button and complete the form if shown.
+  // Wait for the channel-picker trigger to be reachable again (popup
+  // returned home) — caller's choice whether to re-open the sheet next.
   await page.locator(SEL.channelPickerTrigger).first().waitFor({
     timeout: 30_000,
   });
+}
+
+/**
+ * Re-open the channel-picker sheet, follow the "Submit KYC" anchor in a new
+ * tab, run completeProviderConsoleKyc, then disconnect+reconnect so the
+ * wallet refreshes its session with entityStatus=APPROVED.
+ */
+export async function followKycLinkOut(
+  page: Page,
+  opts: { kycEntityName: string; password: string },
+): Promise<void> {
+  await page.bringToFront();
   await clickWithPause(page.locator(SEL.channelPickerTrigger).first());
-  const kycButton = page.locator(SEL.submitKycButton).first();
-  if (await kycButton.isVisible({ timeout: 10_000 }).catch(() => false)) {
-    await clickWithPause(kycButton);
-    await typeSlowly(
-      page.locator(SEL.kycNameInput).first(),
-      opts.kycEntityName,
-    );
-    await typeSlowly(
-      page.locator(SEL.kycPasswordInput).first(),
-      opts.password,
-    );
-    // The button label is identical, but only the form's submit is enabled
-    // when both inputs are filled — pick the enabled one.
-    await clickWithPause(page.locator(SEL.submitKycButton).last());
+  const kycLink = page.locator(SEL.submitKycLink).first();
+  await kycLink.waitFor({ timeout: 15_000 });
+  const href = await kycLink.getAttribute("href");
+  if (!href) {
+    throw new Error("Submit KYC link present but href is missing");
   }
-  // Close the sheet (whether the KYC step ran or not) so home (with
-  // Receive/Send/Ramp) is in view and not blocked by the sheet overlay.
+  const kycPage = await page.context().newPage();
+  try {
+    await kycPage.goto(href);
+    await kycPage.waitForLoadState("domcontentloaded");
+    await completeProviderConsoleKyc(kycPage, opts.kycEntityName);
+  } finally {
+    await kycPage.close();
+  }
+  await reconnectProvider(page, opts.password);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
-
-  // Success: action buttons enable (Receive visible) and the header dot
-  // turns green.
   await page.locator(SEL.receiveButton).first().waitFor({ timeout: 60_000 });
   await page
     .locator('header span.bg-green-400, header [class*="bg-green-400"]')
@@ -501,6 +494,80 @@ export async function addAndConnectProvider(
     .waitFor({ timeout: 15_000 })
     .catch(() => {});
   await holdAfterSuccess(page);
+}
+
+/**
+ * Drive provider-console's #/entities/register?provider=… route end-to-end.
+ *
+ * Beats:
+ *   1. Click "Connect Wallet" → Stellar Wallets Kit modal lists Freighter
+ *   2. Click the Freighter option → Freighter popup opens for connect
+ *      approval; withWalletApproval handles it
+ *   3. Page reads connected address, surfaces the name form
+ *   4. Fill name → click "Sign and submit"
+ *   5. Page calls signMessage → Freighter popup opens for sign approval;
+ *      withWalletApproval handles it
+ *   6. Page POSTs entity submission; success step renders
+ */
+async function completeProviderConsoleKyc(
+  page: Page,
+  entityName: string,
+): Promise<void> {
+  // Beat 1 — Connect Wallet button on the KYC page.
+  const connectBtn = page.locator("#kyc-connect-btn");
+  await connectBtn.waitFor({ timeout: 30_000 });
+  await connectBtn.click();
+
+  // Beat 2 — kit modal opens (in-page custom element, shadow DOM). Pick
+  // Freighter via getByText which pierces the shadow root. The kit modal
+  // sometimes wraps each wallet row in multiple containers; .first() picks
+  // the visible click target.
+  const freighterOpt = page.getByText(/^Freighter$/i).first();
+  await freighterOpt.waitFor({ timeout: 30_000 });
+  // Clicking Freighter triggers a Freighter approval popup; wrap in
+  // withWalletApproval so the popup is auto-approved.
+  await withWalletApproval(page.context(), page, async () => {
+    await freighterOpt.click();
+  }, 60_000);
+
+  // Beat 3 — wait for the form step (`#kyc-step-form` un-hidden).
+  await page.locator("#kyc-step-form:not([hidden])").waitFor({
+    timeout: 30_000,
+  });
+
+  // Beat 4 — fill name.
+  await typeSlowly(page.locator("#kyc-name"), entityName);
+
+  // Beat 5 — Sign + submit. The submit click triggers a signMessage call →
+  // Freighter popup → approve.
+  await withWalletApproval(page.context(), page, async () => {
+    await page.locator("#kyc-submit-btn").click();
+  }, 60_000);
+
+  // Beat 6 — success step visible.
+  await page.locator("#kyc-step-success:not([hidden])").waitFor({
+    timeout: 30_000,
+  });
+}
+
+async function reconnectProvider(page: Page, password: string): Promise<void> {
+  // Wallet is on home with the sheet open. Disconnect, wait, reconnect.
+  const disconnectBtn = page.locator('button:has-text("Disconnect")').first();
+  if (await disconnectBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
+    await clickWithPause(disconnectBtn);
+    await page.waitForTimeout(1_000);
+  }
+  const connectBtn = page.locator(SEL.providerConnectButton).first();
+  await connectBtn.waitFor({ timeout: 15_000 });
+  await clickWithPause(connectBtn);
+  await page.locator(SEL.signRequestPasswordInput).first().waitFor({
+    timeout: 30_000,
+  });
+  await typeSlowly(
+    page.locator(SEL.signRequestPasswordInput).first(),
+    password,
+  );
+  await clickWithPause(page.locator(SEL.signRequestApproveButton).first());
 }
 
 // ─── Actions ───────────────────────────────────────────────────────────

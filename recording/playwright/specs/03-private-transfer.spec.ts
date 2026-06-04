@@ -1,28 +1,42 @@
 /**
  * Section 03 — Private transfer (Bob + Alice in one continuous flow).
  *
+ * Each user runs through TWO browser-wallet passes:
+ *   Pass 1 — onboard → Freighter → network → channel → add provider + connect
+ *             → followKycLinkOut. KYC submission happens here, leaving the
+ *             user's entity APPROVED for this PP on the provider-platform.
+ *             Context is torn down at the end of pass 1.
+ *   Pass 2 — fresh context, redo onboard → Freighter → network → channel →
+ *             add provider + connect. Same mnemonic = same account, so the
+ *             PP's verify response carries entityStatus=APPROVED and the
+ *             KYC link-out is not surfaced. Pass 2's wallet drives the
+ *             remaining demo beats (receive / send / withdraw).
+ *
  * Demo beats:
- *   1. Bob onboards browser-wallet, joins channel, adds provider
- *   2. Bob navigates to Receive, generates an MLXDR, leaves the wallet open
- *   3. Alice onboards her browser-wallet (Bob's wallet stays alive)
- *   4. Alice deposits 100 XLM (waits for the deposit to actually land)
+ *   1. Bob (pass 1) onboards + submits KYC, then closes
+ *   2. Bob (pass 2) re-onboards, navigates to Receive, generates an MLXDR
+ *   3. Alice (pass 1) onboards + submits KYC, then closes
+ *   4. Alice (pass 2) re-onboards, deposits 100 XLM
  *   5. Alice sends 25 XLM to Bob using the MLXDR
  *   6. Bob's confidential balance updates to 25 XLM on screen
- *   7. Alice withdraws 70 XLM back to her public account
+ *   7. Bob withdraws 20 XLM back to his public account
  */
-import { test } from "@playwright/test";
-import { loadRunEnv, requireValue } from "../helpers/run-env";
+import { type Page, test } from "@playwright/test";
+import { loadRunEnv, requireValue, type RunEnv } from "../helpers/run-env";
 import { getProviderName } from "../helpers/run-variants";
 import {
   closeWalletContext,
   launchWalletContext,
+  type WalletContextHandle,
 } from "../fixtures/wallet-context";
+import { setupFreighterForKyc } from "../fixtures/freighter-setup";
 import {
-  addAndConnectProvider,
+  addProviderAndConnect,
   closeReceiveConfirmation,
   createPrivacyChannel,
   deposit,
   findBrowserWalletExtensionId,
+  followKycLinkOut,
   getRecordingChannelLabel,
   onboardWithMnemonic,
   openWalletPopup,
@@ -36,11 +50,64 @@ import {
 } from "../fixtures/browser-wallet";
 
 const RECORDING_PASSWORD = "recording";
+// Freighter rejects short/weak passwords. The recording browser-wallet
+// password stays short ("recording") so on-screen typing reads cleanly in
+// the demo; Freighter (which only signs the KYC nonce, no demo presence)
+// gets a stronger one.
+const FREIGHTER_PASSWORD = "What-a-useless-req";
 
 test.describe.configure({ mode: "serial" });
 
+interface UserSetup {
+  handle: WalletContextHandle;
+  wallet: Page;
+}
+
+interface UserSetupOpts {
+  section: string;
+  profileName: string;
+  runId: string;
+  mnemonic: string;
+  secretKey: string;
+  channelContractId: string;
+  providerUrl: string;
+  providerLabel: string;
+}
+
+async function setupUser(opts: UserSetupOpts): Promise<UserSetup> {
+  const handle = await launchWalletContext({
+    section: opts.section,
+    runId: opts.runId,
+    profileName: opts.profileName,
+  });
+  const extensionId = await findBrowserWalletExtensionId(handle.context);
+  const wallet = await openWalletPopup(handle.context, extensionId);
+  await onboardWithMnemonic(wallet, {
+    password: RECORDING_PASSWORD,
+    mnemonic: opts.mnemonic,
+  });
+  await setupFreighterForKyc(handle.context, {
+    secretKey: opts.secretKey,
+    password: FREIGHTER_PASSWORD,
+  });
+  await selectRecordingNetwork(wallet);
+  await toggleToPrivateView(wallet);
+  await createPrivacyChannel(wallet, {
+    contractId: opts.channelContractId,
+    channelName: "Moonlight Demo",
+    network: getRecordingChannelLabel(),
+    assetCode: "XLM",
+  });
+  await addProviderAndConnect(wallet, {
+    providerUrl: opts.providerUrl,
+    providerName: opts.providerLabel,
+    password: RECORDING_PASSWORD,
+  });
+  return { handle, wallet };
+}
+
 test("03 — private transfer (Bob receive → Alice deposit + send → Alice withdraw)", async () => {
-  const env = loadRunEnv();
+  const env: RunEnv = loadRunEnv();
   const channelId = requireValue(env, "PRIVACY_CHANNEL_ID");
   const councilId = requireValue(env, "CHANNEL_AUTH_ID");
 
@@ -67,107 +134,93 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     );
   }
   const providerPubkey = match.publicKey;
+  const providerUrl = `${
+    env.PROVIDER_PLATFORM_URL.replace(/\/$/, "")
+  }/${providerPubkey}`;
 
-  const bobHandle = await launchWalletContext({
-    section: "03-bob",
+  const bobSetupOpts = {
     runId: env.RUN_ID,
-    profileName: "bob",
-  });
+    mnemonic: env.BOB_MNEMONIC,
+    secretKey: env.BOB_SK,
+    channelContractId: channelId,
+    providerUrl,
+    providerLabel,
+  };
+  const aliceSetupOpts = {
+    runId: env.RUN_ID,
+    mnemonic: env.ALICE_MNEMONIC,
+    secretKey: env.ALICE_SK,
+    channelContractId: channelId,
+    providerUrl,
+    providerLabel,
+  };
 
-  let aliceHandle: Awaited<ReturnType<typeof launchWalletContext>> | undefined;
+  // ── Bob pass 1: full setup + KYC submission, then tear down. ──
+  const bobPass1 = await setupUser({
+    section: "03-bob-pass1",
+    profileName: "bob-pass1",
+    ...bobSetupOpts,
+  });
+  await followKycLinkOut(bobPass1.wallet, {
+    kycEntityName: "Bob",
+    password: RECORDING_PASSWORD,
+  });
+  await closeWalletContext(bobPass1.handle);
+
+  // ── Bob pass 2: fresh context, redo setup (no KYC — already APPROVED),
+  //    then continue with the demo. ──
+  const bob = await setupUser({
+    section: "03-bob",
+    profileName: "bob",
+    ...bobSetupOpts,
+  });
+  let aliceHandle: WalletContextHandle | undefined;
 
   try {
-    const bobExtensionId = await findBrowserWalletExtensionId(
-      bobHandle.context,
-    );
-    const bobWallet = await openWalletPopup(bobHandle.context, bobExtensionId);
-
-    await onboardWithMnemonic(bobWallet, {
-      password: RECORDING_PASSWORD,
-      mnemonic: env.BOB_MNEMONIC,
-    });
-    await selectRecordingNetwork(bobWallet);
-    await toggleToPrivateView(bobWallet);
-    await createPrivacyChannel(bobWallet, {
-      contractId: channelId,
-      channelName: "Moonlight Demo",
-      network: getRecordingChannelLabel(),
-      assetCode: "XLM",
-    });
-    await addAndConnectProvider(bobWallet, {
-      providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: providerLabel,
-      providerPubkey,
-      kycEntityName: "Bob",
-      password: RECORDING_PASSWORD,
-    });
-
-    const bobMlxdr = await showReceive(bobWallet, { amount: "25" });
+    const bobMlxdr = await showReceive(bob.wallet, { amount: "25" });
     if (!bobMlxdr || bobMlxdr.trim().length === 0) {
       throw new Error("Bob's MLXDR was not captured");
     }
 
-    aliceHandle = await launchWalletContext({
-      section: "03-alice",
-      runId: env.RUN_ID,
-      profileName: "alice",
+    // ── Alice pass 1: full setup + KYC submission, then tear down. ──
+    const alicePass1 = await setupUser({
+      section: "03-alice-pass1",
+      profileName: "alice-pass1",
+      ...aliceSetupOpts,
     });
-
-    const aliceExtensionId = await findBrowserWalletExtensionId(
-      aliceHandle.context,
-    );
-    const aliceWallet = await openWalletPopup(
-      aliceHandle.context,
-      aliceExtensionId,
-    );
-
-    await onboardWithMnemonic(aliceWallet, {
-      password: RECORDING_PASSWORD,
-      mnemonic: env.ALICE_MNEMONIC,
-    });
-    await selectRecordingNetwork(aliceWallet);
-    await toggleToPrivateView(aliceWallet);
-    await createPrivacyChannel(aliceWallet, {
-      contractId: channelId,
-      channelName: "Moonlight Demo",
-      network: getRecordingChannelLabel(),
-      assetCode: "XLM",
-    });
-    await addAndConnectProvider(aliceWallet, {
-      providerUrl: env.PROVIDER_PLATFORM_URL,
-      providerName: providerLabel,
-      providerPubkey,
+    await followKycLinkOut(alicePass1.wallet, {
       kycEntityName: "Alice",
       password: RECORDING_PASSWORD,
     });
+    await closeWalletContext(alicePass1.handle);
 
-    await deposit(aliceWallet, { amount: "100" });
+    // ── Alice pass 2: fresh context, redo setup (no KYC), continue. ──
+    const alice = await setupUser({
+      section: "03-alice",
+      profileName: "alice",
+      ...aliceSetupOpts,
+    });
+    aliceHandle = alice.handle;
 
-    await send(aliceWallet, {
+    await deposit(alice.wallet, { amount: "100" });
+
+    await send(alice.wallet, {
       receiverMlxdr: bobMlxdr,
       amount: "25",
     });
 
-    // Bob has been on the receive-confirmation page during Alice's send (nice
-    // "waiting for funds" beat). Close it so the home view is what we observe
-    // when the confidential balance lands.
-    await closeReceiveConfirmation(bobWallet);
-    await waitForConfidentialBalance(bobWallet, 24.99);
+    await closeReceiveConfirmation(bob.wallet);
+    await waitForConfidentialBalance(bob.wallet, 24.99);
 
-    // Bob withdraws ~all of what he received (25 minus the receive fee) so
-    // his public XLM balance visibly grows — that's the on-chain proof the
-    // private transfer landed.
-    await withdraw(bobWallet, {
+    await withdraw(bob.wallet, {
       amount: "20",
       destinationAddress: env.BOB_PK,
     });
 
-    // Closing beat: flip both wallets back to public view so the recording
-    // shows the on-chain XLM balances confirming deposit/withdraw worked.
-    await toggleToPublicView(aliceWallet);
-    await toggleToPublicView(bobWallet);
+    await toggleToPublicView(alice.wallet);
+    await toggleToPublicView(bob.wallet);
   } finally {
     if (aliceHandle) await closeWalletContext(aliceHandle);
-    await closeWalletContext(bobHandle);
+    await closeWalletContext(bob.handle);
   }
 });

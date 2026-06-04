@@ -23,8 +23,10 @@ export interface RunEnv {
   PP_SK: string;
   ALICE_MNEMONIC: string;
   ALICE_PK: string;
+  ALICE_SK: string;
   BOB_MNEMONIC: string;
   BOB_PK: string;
+  BOB_SK: string;
   COUNCIL_CONSOLE_URL: string;
   COUNCIL_PLATFORM_URL: string;
   DASHBOARD_URL: string;

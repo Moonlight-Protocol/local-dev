@@ -345,6 +345,11 @@ async function setupOnePP(
       secretKey: kp.secret(),
       derivationIndex: index,
       label: spec.name,
+      // local-dev convention: provider-console at :3020 hosts the KYC
+      // submission route; the wallet reads this verbatim from the SEP-10
+      // verify response and renders it as the "Submit KYC" anchor href.
+      kycSubmissionUrl:
+        `http://localhost:3020/#/entities/register?provider=${kp.publicKey()}`,
     }),
   });
   if (!regRes.ok) {

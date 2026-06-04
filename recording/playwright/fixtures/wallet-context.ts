@@ -12,8 +12,17 @@ import fs from "fs";
 import process from "node:process";
 import { addClickHighlight } from "./click-highlight";
 
+// Defaults to the sibling browser-wallet/dist of this recording folder
+// (`local-dev/recording/playwright/fixtures/` → `<root>/browser-wallet/dist`).
+// Override with BROWSER_WALLET_PATH when running against a different clone.
 const BROWSER_WALLET_PATH = process.env.BROWSER_WALLET_PATH ||
-  path.join(os.homedir(), "repos", "browser-wallet", "dist");
+  path.join(__dirname, "..", "..", "..", "..", "browser-wallet", "dist");
+
+// Freighter is loaded alongside browser-wallet so the recording rig can
+// drive provider-console's KYC link-out flow (it uses Stellar Wallets Kit
+// → Freighter for the entity-challenge signature).
+const FREIGHTER_EXTENSION_PATH = process.env.FREIGHTER_EXTENSION_PATH ||
+  path.join(__dirname, "..", "..", "..", "playwright", "freighter-extension");
 
 export interface WalletContextOptions {
   /** Subdir name under <run>/videos/ for the .webm */
@@ -54,8 +63,9 @@ export async function launchWalletContext(
     // --start-fullscreen produces a fullscreen page.
     viewport: null,
     args: [
-      `--disable-extensions-except=${BROWSER_WALLET_PATH}`,
+      `--disable-extensions-except=${BROWSER_WALLET_PATH},${FREIGHTER_EXTENSION_PATH}`,
       `--load-extension=${BROWSER_WALLET_PATH}`,
+      `--load-extension=${FREIGHTER_EXTENSION_PATH}`,
       "--no-first-run",
       "--disable-default-apps",
       // Use a large windowed window pinned to the top-left, NOT macOS
