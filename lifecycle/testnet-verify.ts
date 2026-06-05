@@ -58,6 +58,110 @@ import { registerEntity } from "../lib/client/register-entity.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
+// ─── Events-capture contract ──────────────────────────────────────────
+/**
+ * Strict-order, strict-value events this script should emit on each
+ * subscriber when run through `testnet/events-capture/harness.ts`.
+ * Identical shape to testnet/main.ts because the bundle flow is identical;
+ * only ppLabel differs ("Testnet Verify PP" vs "Testnet E2E PP").
+ *
+ * Provenance: PM-acked Phase 0 catalogue at
+ * /tmp/add-events-capture-framework-1/expected/lifecycle-testnet-verify.json.
+ */
+export const EXPECTED_EVENTS = {
+  perPp: {
+    "$PP_PK": [
+      {
+        kind: "channel.provider_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {
+          weight: 2,
+          newSlot: true,
+          entityName: "Alice",
+          jurisdictions: [] as string[],
+          amount: "100500000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "bundle.deposit_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: { depositorAddress: "$ALICE_PK", amount: "100500000" },
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {
+          weight: 12,
+          newSlot: true,
+          entityName: "Alice",
+          jurisdictions: [] as string[],
+          amount: "99000000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {
+          weight: 21,
+          newSlot: true,
+          entityName: "Bob",
+          jurisdictions: [] as string[],
+          amount: "40000000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: {},
+      },
+      {
+        kind: "bundle.withdraw_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        payload: { recipientAddress: "$BOB_PK", amount: "40000000" },
+      },
+    ],
+  },
+  // Same dedup behaviour + council_formed back-fill as testnet/main.ts —
+  // see comments there.
+  network: [
+    { kind: "council_formed", payload: {} },
+    { kind: "provider_added", payload: { providerPublicKey: "$PP_PK" } },
+    { kind: "channel_deposit", payload: { amount: "100500000" } },
+    { kind: "channel_bundle", payload: { providerPublicKey: "$PP_PK" } },
+    { kind: "channel_settlement", payload: { amount: "40000000" } },
+  ],
+};
+
 // ─── Testnet endpoints ────────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ??
   "https://soroban-testnet.stellar.org";
@@ -194,7 +298,7 @@ async function pollMembershipActive(
 }
 
 // ─── Main flow ────────────────────────────────────────────────────────
-async function main() {
+export async function main() {
   const startTime = Date.now();
 
   console.log(
@@ -604,8 +708,10 @@ async function main() {
   console.log(`  PP public key: ${ppKeypair.publicKey()}\n`);
 }
 
-main().catch((err) => {
-  console.error("\n=== Testnet Lifecycle Verification FAILED ===");
-  console.error(err);
-  Deno.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error("\n=== Testnet Lifecycle Verification FAILED ===");
+    console.error(err);
+    Deno.exit(1);
+  });
+}
