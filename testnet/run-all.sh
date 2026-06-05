@@ -67,9 +67,20 @@ export E2E_TRACE_IDS_PATH="$REPO_ROOT/e2e/e2e-trace-ids.json"
 
 cd "$REPO_ROOT"
 
-# Suite 1 — Payment flow (~5 min)
-info "Suite 1: payment flow"
-"$SCRIPT_DIR/run-tempo.sh"
+# Suite 1 — Payment flow (~5 min) through the events-capture harness so
+# the per-PP + network-wide WS streams are asserted against the script's
+# inlined EXPECTED_EVENTS. The harness skips assert and exits 0 if the
+# WS surfaces are unreachable (e.g. against deployed testnet with no
+# network-dashboard-platform URL set), so this swap is safe for both
+# local-stack and deployed-Tempo invocations.
+#
+# The wrapper assertions still apply — OTEL_EXPORTER_OTLP_ENDPOINT /
+# _HEADERS were already verified above. run-tempo.sh's job (asserting
+# those two vars before invoking deno) is preserved by the top-of-file
+# checks here.
+info "Suite 1: payment flow (events-capture harness)"
+"$DENO_BIN" run --allow-all "$SCRIPT_DIR/events-capture/harness.ts" \
+  --script testnet-main
 ok   "Suite 1 passed"
 
 # Suite 2 — OTEL verify payment (60s wait for Tempo ingestion)
@@ -78,9 +89,10 @@ sleep 60
 "$DENO_BIN" run --allow-all "$SCRIPT_DIR/verify-otel.ts"
 ok   "Suite 2 passed"
 
-# Suite 3 — Lifecycle flow (~5 min)
-info "Suite 3: lifecycle flow"
-"$DENO_BIN" run --allow-all "$REPO_ROOT/lifecycle/testnet-verify.ts"
+# Suite 3 — Lifecycle flow (~5 min) through the events-capture harness.
+info "Suite 3: lifecycle flow (events-capture harness)"
+"$DENO_BIN" run --allow-all "$SCRIPT_DIR/events-capture/harness.ts" \
+  --script lifecycle-testnet-verify
 ok   "Suite 3 passed"
 
 # Suite 4 — OTEL verify lifecycle (60s wait for Tempo ingestion)

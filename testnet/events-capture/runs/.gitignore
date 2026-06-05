@@ -1,0 +1,4 @@
+# Per-run artifacts. Each smoke run writes a fresh subdirectory here
+# with `report.json` (structured pass/diff dump). Not committed.
+*
+!.gitignore

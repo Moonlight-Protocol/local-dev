@@ -40,6 +40,119 @@ import { registerEntity } from "../lib/client/register-entity.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
 
+// ─── Events-capture contract ────────────────────────────────────────
+/**
+ * Strict-order, strict-value events this script should emit on each
+ * subscriber when run through `testnet/events-capture/harness.ts`. The
+ * harness resolves `$PP_PK` / `$ALICE_PK` / `$BOB_PK` at run-time from
+ * MASTER_SECRET. Fields under `payload` are compared after the harness
+ * deep-strips the always-skip set (see events-capture/types.ts).
+ *
+ * Provenance: derived from the PM-acked Phase 0 catalogue at
+ * /tmp/add-events-capture-framework-1/expected/testnet-main.json. Values
+ * come from operation counts in lib/client/{deposit,send,withdraw}.ts and
+ * the mempool weight defaults (EXPENSIVE=10, CHEAP=1).
+ */
+export const EXPECTED_EVENTS = {
+  perPp: {
+    "$PP_PK": [
+      {
+        kind: "channel.provider_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {
+          weight: 2,
+          newSlot: true,
+          entityName: "Alice",
+          jurisdictions: [] as string[],
+          amount: "100500000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "bundle.deposit_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: { depositorAddress: "$ALICE_PK", amount: "100500000" },
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {
+          weight: 12,
+          newSlot: true,
+          entityName: "Alice",
+          jurisdictions: [] as string[],
+          amount: "99000000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "mempool.bundle_added",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {
+          weight: 21,
+          newSlot: true,
+          entityName: "Bob",
+          jurisdictions: [] as string[],
+          amount: "40000000",
+        },
+      },
+      {
+        kind: "executor.transaction_submitted",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "verifier.bundle_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: {},
+      },
+      {
+        kind: "bundle.withdraw_completed",
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet E2E PP" },
+        payload: { recipientAddress: "$BOB_PK", amount: "40000000" },
+      },
+    ],
+  },
+  // network-dashboard-platform's processRawEventBatch (soroban-watcher.ts)
+  // drops `channel_bundle` events whenever the same tx ALSO produced a
+  // money-flow event (channel_deposit or channel_settlement). The deposit
+  // and withdraw bundles emit only their money-flow event; the send bundle
+  // emits channel_bundle (no transfer). `council_formed` is back-filled
+  // by the contract-init listener once the channel-auth deploy is
+  // recognised — Phase 3 smoke showed it landing deterministically so
+  // it's reinstated here (Phase 0 catalogue B was provisional).
+  network: [
+    { kind: "council_formed", payload: {} },
+    { kind: "provider_added", payload: { providerPublicKey: "$PP_PK" } },
+    { kind: "channel_deposit", payload: { amount: "100500000" } },
+    { kind: "channel_bundle", payload: { providerPublicKey: "$PP_PK" } },
+    { kind: "channel_settlement", payload: { amount: "40000000" } },
+  ],
+};
+
 // ─── Testnet endpoints ──────────────────────────────────────────────
 const RPC_URL = Deno.env.get("STELLAR_RPC_URL") ??
   "https://soroban-testnet.stellar.org";
@@ -161,7 +274,7 @@ async function pollMembershipActive(
 }
 
 // ─── Main ───────────────────────────────────────────────────────────
-async function main() {
+export async function main() {
   const startTime = Date.now();
 
   console.log("\n=== Testnet E2E — Payment Flow ===\n");
@@ -559,7 +672,9 @@ async function main() {
   console.log(`  PP public key: ${ppOperator.publicKey()}\n`);
 }
 
-main().catch((err) => {
-  console.error(`\n❌ Testnet E2E failed:`, err);
-  Deno.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(`\n❌ Testnet E2E failed:`, err);
+    Deno.exit(1);
+  });
+}
