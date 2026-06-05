@@ -54,10 +54,21 @@ export JAEGER_URL="${JAEGER_URL:-http://localhost:16686}"
 # 4's verifier looks under e2e/. Matches the same export in run-all.sh.
 export E2E_TRACE_IDS_PATH="$LOCAL_DEV_DIR/e2e/e2e-trace-ids.json"
 
+# Events-capture: assert each flow script's inlined EXPECTED_EVENTS against
+# the per-PP + network-wide WS streams.
+#
+#   PROVIDER_URL is already set above (line 39).
+#   NETWORK_DASHBOARD_PLATFORM_URL defaults to localhost:3035 — the harness
+#   reads it via env when the --network-dashboard-url flag is absent.
+#   MASTER_SECRET makes the alice/bob/PP keypairs deterministic and lets the
+#   harness derive the same values the scripts derive internally.
+export NETWORK_DASHBOARD_PLATFORM_URL="${NETWORK_DASHBOARD_PLATFORM_URL:-http://localhost:3035}"
+export MASTER_SECRET="${MASTER_SECRET:-SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74}"
+
 run_payment() {
-  info "Suite 1: testnet payment flow → localhost"
-  cd "$SCRIPT_DIR"
-  "$DENO_BIN" run --allow-all main.ts
+  info "Suite 1: testnet payment flow → localhost (events-capture harness)"
+  "$DENO_BIN" run --allow-all "$SCRIPT_DIR/events-capture/harness.ts" \
+    --script testnet-main
 }
 
 run_verify_payment() {
@@ -67,9 +78,9 @@ run_verify_payment() {
 }
 
 run_lifecycle() {
-  info "Suite 3: lifecycle flow → localhost"
-  cd "$LOCAL_DEV_DIR"
-  "$DENO_BIN" run --allow-all lifecycle/testnet-verify.ts
+  info "Suite 3: lifecycle flow → localhost (events-capture harness)"
+  "$DENO_BIN" run --allow-all "$SCRIPT_DIR/events-capture/harness.ts" \
+    --script lifecycle-testnet-verify
 }
 
 run_verify_lifecycle() {
