@@ -59,7 +59,19 @@ interface HarnessOpts {
   tailMs: number;
 }
 
-const DEFAULT_TAIL_MS = 5000;
+/**
+ * Default tail window. Must cover:
+ *   - `network-dashboard-platform`'s 5s Soroban poll tick that picks up the
+ *     `contract_initialized` event for a freshly-deployed council.
+ *   - The next 5s poll tick's `drainPendingAdoptions` call (which refreshes
+ *     topology against council-platform and adopts the new council).
+ *   - The one-shot `backfillFromLedger` scan that publishes the missed
+ *     `provider_added` + first SAC `transfer` events on the bus.
+ * 15s would suffice in the typical case; 30s gives margin for the
+ * back-fill's chunked page walk plus the WS push latency. Override via
+ * `EVENTS_CAPTURE_TAIL_MS` per run.
+ */
+const DEFAULT_TAIL_MS = 30_000;
 
 async function main(): Promise<void> {
   const opts = parseArgs();

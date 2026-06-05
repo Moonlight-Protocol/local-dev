@@ -5,15 +5,30 @@
  * Both subscribers buffer every incoming message into an append-only array.
  * The harness reads the buffers after the script + tail window finish.
  *
+ * Robustness:
+ *  - The server-side WebSocket has an `idleTimeout` (300 s on
+ *    network-dashboard-platform; 30 s on provider-platform). For long-running
+ *    deploys where chain events don't fire for tens of seconds after `onopen`,
+ *    a single dropped frame would lose `council_formed` or
+ *    `channel.provider_added`. Both subscribers therefore auto-reconnect on
+ *    close (RECONNECT_BACKOFF below).
+ *  - The network subscriber deduplicates on reconnect by parsing the new
+ *    `SnapshotFrame.recent` (newest-first ring buffer) and re-emitting any
+ *    `NetworkEvent` whose `id` we haven't observed yet. This recovers events
+ *    that landed on the bus during the disconnect window.
+ *  - Per-PP messages have no stable id field, so its reconnect path just
+ *    resumes live capture — same as the SPA behaviour. The 300 s idle window
+ *    is wide enough for any practical script that we don't expect mid-run
+ *    drops on the per-PP socket.
+ *
  * Implementation notes:
  *  - Deno's built-in `WebSocket` global is used directly — no new dep, per
  *    the prompt's no-new-WS-lib rule.
  *  - The provider-platform WS expects `Sec-WebSocket-Protocol: bearer.<jwt>`;
  *    Deno's `WebSocket(url, protocols)` argument is mapped to that header.
  *  - Per-PP WS open can race ahead of the script's PP-registration step.
- *    `openPerPpSubscriber` polls until the PP exists in the operator's view
- *    (HTTP 200 from the dashboard PP-detail endpoint) before opening.
- *  - Network WS open never blocks — endpoint is public.
+ *    `openPerPpSubscriber` polls `GET /api/v1/dashboard/pp/list` until the
+ *    operator's PP appears, then opens the WS.
  */
 import type { CapturedEvent } from "./types.ts";
 
@@ -21,6 +36,8 @@ const PER_PP_SUBPROTOCOL = "moonlight.events.v1";
 const NETWORK_SUBPROTOCOL = "moonlight.network.v2";
 const PER_PP_OPEN_RETRY_INTERVAL_MS = 500;
 const PER_PP_OPEN_TIMEOUT_MS = 60_000;
+const RECONNECT_BACKOFF_INITIAL_MS = 250;
+const RECONNECT_BACKOFF_MAX_MS = 5_000;
 
 export interface Subscriber {
   /** Identity used by the harness to key the captured-events buffer. */
@@ -35,12 +52,16 @@ export interface Subscriber {
 
 /**
  * Open a subscriber on `/api/v1/network/ws` (no auth, public). Discards the
- * initial `SnapshotFrame` (PM-acked: snapshot state depends on prior runs
- * and is not deterministic); captures every subsequent `LiveFrame`.
+ * initial `SnapshotFrame` from the FIRST open (PM-acked: snapshot state at
+ * connect-time depends on prior runs and is not deterministic). On
+ * subsequent reconnects, replays any `SnapshotFrame.recent` entries whose
+ * event.id hasn't been observed yet — so events that fired during the
+ * disconnect window are recovered from the server's ring buffer.
  */
 export function openNetworkSubscriber(networkWsUrl: string): Subscriber {
   const subscriberId = "network";
   const captured: CapturedEvent[] = [];
+  const seenEventIds = new Set<string>();
 
   let resolveReady!: () => void;
   let rejectReady!: (err: Error) => void;
@@ -55,52 +76,108 @@ export function openNetworkSubscriber(networkWsUrl: string): Subscriber {
   });
 
   const url = toWsUrl(networkWsUrl);
-  const socket = new WebSocket(url, NETWORK_SUBPROTOCOL);
+  let cancelled = false;
+  let socket: WebSocket | null = null;
+  let openCount = 0;
+  let backoffMs = RECONNECT_BACKOFF_INITIAL_MS;
 
-  socket.onopen = () => {
-    resolveReady();
-  };
-  socket.onmessage = (evt) => {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(typeof evt.data === "string" ? evt.data : "");
-    } catch {
-      return;
+  const ingestNetworkEvent = (event: Record<string, unknown>): void => {
+    const id = typeof event.id === "string" ? event.id : null;
+    if (id !== null) {
+      if (seenEventIds.has(id)) return;
+      seenEventIds.add(id);
     }
-    if (
-      parsed === null || typeof parsed !== "object" ||
-      Array.isArray(parsed)
-    ) {
-      return;
-    }
-    const message = parsed as Record<string, unknown>;
-    // SnapshotFrame is dropped per PM ack — only LiveFrame.event is captured.
-    if (message.type !== "event") return;
     captured.push({
       subscriberId,
-      message,
+      // Wrap NetworkEvent in the original LiveFrame shape so the rest of
+      // the framework (assert.ts strips it back out) sees the same envelope
+      // whether the event arrived live or via snapshot replay.
+      message: { type: "event", event },
       receivedAtMs: Date.now(),
     });
   };
-  socket.onerror = () => {
-    if (socket.readyState !== WebSocket.OPEN) {
-      rejectReady(new Error(`network WS error before open: ${url}`));
-    }
+
+  const connect = (): void => {
+    if (cancelled) return;
+    socket = new WebSocket(url, NETWORK_SUBPROTOCOL);
+
+    socket.onopen = () => {
+      openCount++;
+      backoffMs = RECONNECT_BACKOFF_INITIAL_MS;
+      if (openCount === 1) resolveReady();
+    };
+    socket.onmessage = (evt) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(typeof evt.data === "string" ? evt.data : "");
+      } catch {
+        return;
+      }
+      if (
+        parsed === null || typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        return;
+      }
+      const message = parsed as Record<string, unknown>;
+      if (message.type === "snapshot") {
+        // First snapshot: drop entirely (per PM ack). Reconnect snapshots:
+        // walk recent[] (newest-first per `seedRecent`) in reverse so
+        // ingested order is chronological, ingestNetworkEvent dedups by
+        // event.id so we only pick up events that landed during the
+        // disconnect window.
+        if (openCount === 1) return;
+        const recent = Array.isArray(message.recent) ? message.recent : [];
+        for (let i = recent.length - 1; i >= 0; i--) {
+          const ev = recent[i];
+          if (ev && typeof ev === "object" && !Array.isArray(ev)) {
+            ingestNetworkEvent(ev as Record<string, unknown>);
+          }
+        }
+        return;
+      }
+      if (message.type === "event") {
+        const ev = message.event;
+        if (ev && typeof ev === "object" && !Array.isArray(ev)) {
+          ingestNetworkEvent(ev as Record<string, unknown>);
+        }
+      }
+    };
+    socket.onerror = () => {
+      if (
+        openCount === 0 && socket && socket.readyState !== WebSocket.OPEN
+      ) {
+        rejectReady(new Error(`network WS error before open: ${url}`));
+      }
+    };
+    socket.onclose = () => {
+      if (cancelled) {
+        resolveClose();
+        return;
+      }
+      // Reconnect with exponential backoff. Snapshot replay on the next
+      // open re-fills events that fired during the disconnect window.
+      const wait = backoffMs;
+      backoffMs = Math.min(backoffMs * 2, RECONNECT_BACKOFF_MAX_MS);
+      setTimeout(connect, wait);
+    };
   };
-  socket.onclose = () => {
-    resolveClose();
-  };
+
+  connect();
 
   return {
     subscriberId,
     captured,
     ready,
     close: () => {
+      cancelled = true;
       if (
-        socket.readyState !== WebSocket.CLOSING &&
+        socket && socket.readyState !== WebSocket.CLOSING &&
         socket.readyState !== WebSocket.CLOSED
       ) {
         socket.close();
+      } else {
+        resolveClose();
       }
       return closeDone;
     },
@@ -114,8 +191,15 @@ export function openNetworkSubscriber(networkWsUrl: string): Subscriber {
  * `PpRepository.findByPublicKeyAndOwner(ppPublicKey, session.sub)`. Until
  * the script's PP-registration step lands a row in `payment_providers`,
  * the WS upgrade returns 403. This helper polls
- * `GET /api/v1/dashboard/pp/<ppPublicKey>` until the response is 200, then
+ * `GET /api/v1/dashboard/pp/list` until the operator's PP appears, then
  * opens the WS.
+ *
+ * Reconnects on close (same backoff as the network subscriber). Per-PP
+ * events don't carry a stable id field, so reconnects just resume live
+ * capture — any frame that landed during the disconnect window is lost
+ * (provider-platform doesn't expose a recent-events replay). In practice
+ * the per-PP socket's 30 s idle timeout is wide enough that no mid-run
+ * drop has been observed for the testnet flow scripts.
  *
  * `ready` resolves after the WS is OPEN — the harness awaits this before
  * letting the script proceed to chain ops that emit per-PP events.
@@ -142,6 +226,62 @@ export function openPerPpSubscriber(args: {
 
   let socket: WebSocket | null = null;
   let cancelled = false;
+  let openCount = 0;
+  let backoffMs = RECONNECT_BACKOFF_INITIAL_MS;
+
+  const wsUrl = toWsUrl(
+    `${args.providerUrl}/api/v1/providers/${
+      encodeURIComponent(args.ppPublicKey)
+    }/events/ws`,
+  );
+
+  const connect = (): void => {
+    if (cancelled) return;
+    socket = new WebSocket(wsUrl, [
+      `bearer.${args.operatorJwt}`,
+      PER_PP_SUBPROTOCOL,
+    ]);
+    socket.onopen = () => {
+      openCount++;
+      backoffMs = RECONNECT_BACKOFF_INITIAL_MS;
+      if (openCount === 1) resolveReady();
+    };
+    socket.onmessage = (evt) => {
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(typeof evt.data === "string" ? evt.data : "");
+      } catch {
+        return;
+      }
+      if (
+        parsed === null || typeof parsed !== "object" ||
+        Array.isArray(parsed)
+      ) {
+        return;
+      }
+      captured.push({
+        subscriberId,
+        message: parsed as Record<string, unknown>,
+        receivedAtMs: Date.now(),
+      });
+    };
+    socket.onerror = () => {
+      if (
+        openCount === 0 && socket && socket.readyState !== WebSocket.OPEN
+      ) {
+        rejectReady(new Error(`per-PP WS error before open: ${wsUrl}`));
+      }
+    };
+    socket.onclose = () => {
+      if (cancelled) {
+        resolveClose();
+        return;
+      }
+      const wait = backoffMs;
+      backoffMs = Math.min(backoffMs * 2, RECONNECT_BACKOFF_MAX_MS);
+      setTimeout(connect, wait);
+    };
+  };
 
   // Async open loop — retries while the PP is being registered upstream.
   (async () => {
@@ -168,42 +308,7 @@ export function openPerPpSubscriber(args: {
       resolveClose();
       return;
     }
-
-    const wsUrl = toWsUrl(
-      `${args.providerUrl}/api/v1/providers/${
-        encodeURIComponent(args.ppPublicKey)
-      }/events/ws`,
-    );
-    socket = new WebSocket(wsUrl, [
-      `bearer.${args.operatorJwt}`,
-      PER_PP_SUBPROTOCOL,
-    ]);
-    socket.onopen = () => resolveReady();
-    socket.onmessage = (evt) => {
-      let parsed: unknown;
-      try {
-        parsed = JSON.parse(typeof evt.data === "string" ? evt.data : "");
-      } catch {
-        return;
-      }
-      if (
-        parsed === null || typeof parsed !== "object" ||
-        Array.isArray(parsed)
-      ) {
-        return;
-      }
-      captured.push({
-        subscriberId,
-        message: parsed as Record<string, unknown>,
-        receivedAtMs: Date.now(),
-      });
-    };
-    socket.onerror = () => {
-      if (socket && socket.readyState !== WebSocket.OPEN) {
-        rejectReady(new Error(`per-PP WS error before open: ${wsUrl}`));
-      }
-    };
-    socket.onclose = () => resolveClose();
+    connect();
   })();
 
   return {
@@ -217,9 +322,9 @@ export function openPerPpSubscriber(args: {
         socket.readyState !== WebSocket.CLOSED
       ) {
         socket.close();
+      } else if (!socket) {
+        resolveClose();
       }
-      // If we cancelled before the socket existed, resolve now.
-      if (!socket) resolveClose();
       return closeDone;
     },
   };
