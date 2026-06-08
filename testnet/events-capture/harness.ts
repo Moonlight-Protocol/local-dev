@@ -27,7 +27,7 @@
  * Exit codes: 0 = pass, 1 = fail / assert mismatch, 2 = harness error
  * (subscriber didn't open, script threw before completion, etc.).
  */
-import type { Keypair } from "stellar-sdk";
+import { Keypair } from "stellar-sdk";
 import { Buffer } from "node:buffer";
 import {
   deriveKeypair,
@@ -81,9 +81,25 @@ async function main(): Promise<void> {
   // and call its exported main() in-process.
   const scriptModule = await loadScript(opts.scriptName);
 
+  // Derive a per-suite root secret so consecutive harness invocations
+  // under one wrapper-level MASTER_SECRET (e.g. suite 1 + suite 3 in
+  // run-local.sh) don't collide on the PP/admin keys against
+  // provider-platform's "PP already active for this council" check.
+  // scriptName is the KDF differentiator: same root + same scriptName ⇒
+  // same per-suite SK ⇒ reproducible across re-runs; different scriptName
+  // ⇒ disjoint key sets.
+  const perSuiteSecret = await derivePerSuiteSecret(
+    opts.masterSecret,
+    opts.scriptName,
+  );
+  // Re-export so the dynamically-imported script's own
+  // Deno.env.get("MASTER_SECRET") inside main() reads the per-suite SK and
+  // derives matching role keys.
+  Deno.env.set("MASTER_SECRET", perSuiteSecret);
+
   // 2. Derive the operator (PP) keypair and acquire a dashboard JWT —
   // matches what the script does internally via lib/master-seed + walletAuth.
-  const seed = await masterSeedFromSecret(opts.masterSecret);
+  const seed = await masterSeedFromSecret(perSuiteSecret);
   const ppOperator = await deriveKeypair(seed, ROLES.PP, 0);
   const ppPublicKey = ppOperator.publicKey();
   console.log(
@@ -292,6 +308,27 @@ function resolvePlaceholders(
   return { perPp, network };
 }
 
+/**
+ * SHA-256(rootSeed || `suite/${scriptName}`) → 32 bytes → Stellar SK.
+ * Matches the SHA-256-of-concatenation style used by lib/master-seed.ts so
+ * the harness's per-suite layer is a natural extension of the existing
+ * derivation, not a parallel KDF.
+ */
+async function derivePerSuiteSecret(
+  rootSecret: string,
+  scriptName: string,
+): Promise<string> {
+  const rootSeed = await masterSeedFromSecret(rootSecret);
+  const suiteTag = new TextEncoder().encode(`suite/${scriptName}`);
+  const input = new Uint8Array(rootSeed.length + suiteTag.length);
+  input.set(rootSeed, 0);
+  input.set(suiteTag, rootSeed.length);
+  const subSeed = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", input),
+  );
+  return Keypair.fromRawEd25519Seed(Buffer.from(subSeed)).secret();
+}
+
 function parseArgs(): HarnessOpts {
   const args = Deno.args;
   const flags: Record<string, string> = {};
@@ -307,10 +344,15 @@ function parseArgs(): HarnessOpts {
       `--script must be one of: ${Object.keys(SUPPORTED_SCRIPTS).join(", ")}`,
     );
   }
-  const masterSecret = flags["master-secret"] ?? Deno.env.get("MASTER_SECRET");
+  // MASTER_SECRET is the *root* the harness will derive a per-suite SK from.
+  // If unset, mint an ephemeral root so the harness is callable in the same
+  // shape the scripts used to be (random keys when MASTER_SECRET is unset),
+  // and run-all.sh / direct `deno run` calls don't have to set anything.
+  let masterSecret = flags["master-secret"] ?? Deno.env.get("MASTER_SECRET");
   if (!masterSecret) {
-    throw new Error(
-      `harness requires MASTER_SECRET (set the env var or pass --master-secret) so the operator/alice/bob keypairs are deterministic`,
+    masterSecret = Keypair.random().secret();
+    console.log(
+      `[events-capture] MASTER_SECRET unset — minted ephemeral root for this harness invocation`,
     );
   }
   const providerUrl = flags["provider-url"] ?? Deno.env.get("PROVIDER_URL") ??
