@@ -65,6 +65,17 @@ export OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf
 export MOONLIGHT_NETWORK=testnet
 export E2E_TRACE_IDS_PATH="$REPO_ROOT/e2e/e2e-trace-ids.json"
 
+# events-capture harness reads PROVIDER_URL / COUNCIL_URL /
+# NETWORK_DASHBOARD_PLATFORM_URL to point its subscribers and the
+# acquire-JWT helper at the same backend the script targets. The script
+# defaults to the deployed-testnet URLs when these are unset; the harness
+# defaults to localhost. Export the testnet values here so harness and
+# script agree. Caller can override any one (e.g. for mainnet or local
+# debugging).
+export PROVIDER_URL="${PROVIDER_URL:-https://provider-api-testnet.moonlightprotocol.io}"
+export COUNCIL_URL="${COUNCIL_URL:-https://council-api-testnet.moonlightprotocol.io}"
+export NETWORK_DASHBOARD_PLATFORM_URL="${NETWORK_DASHBOARD_PLATFORM_URL:-https://dashboard-api-testnet.moonlightprotocol.io}"
+
 cd "$REPO_ROOT"
 
 # Suite 1 — Payment flow (~5 min) through the events-capture harness so
