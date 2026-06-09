@@ -35,7 +35,25 @@ import type { CapturedEvent } from "./types.ts";
 const PER_PP_SUBPROTOCOL = "moonlight.events.v1";
 const NETWORK_SUBPROTOCOL = "moonlight.network.v2";
 const PER_PP_OPEN_RETRY_INTERVAL_MS = 500;
-const PER_PP_OPEN_TIMEOUT_MS = 60_000;
+/**
+ * How long the per-PP WebSocket subscriber will poll provider-platform's
+ * dashboard view waiting for the PP to be registered before giving up.
+ *
+ * 60 s was sufficient on local stack (`testnet/run-local.sh`) where the
+ * full flow completes in ~80 s. On deployed testnet under load, the
+ * flow regularly runs 4–9 minutes — Tempo trace
+ * `44207a4b4cacf8c1101cc4332076ee2c` shows `Testnet E2E passed in 539.4s`
+ * end-to-end with individual council-platform handler spans hitting the
+ * 30 s `postgres-js` `connect_timeout` ceiling. PP registration sits
+ * behind those handlers (steps 8–9 of the flow), so the per-PP
+ * subscriber needs to be patient enough to outlast a slow upstream
+ * round-trip without giving up before the PP exists.
+ *
+ * 300 s gives the harness 5 minutes of patience — long enough to cover
+ * the observed worst-case testnet latency, short enough to still fail
+ * loud rather than hang indefinitely.
+ */
+const PER_PP_OPEN_TIMEOUT_MS = 300_000;
 const RECONNECT_BACKOFF_INITIAL_MS = 250;
 const RECONNECT_BACKOFF_MAX_MS = 5_000;
 
