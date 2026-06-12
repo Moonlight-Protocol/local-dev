@@ -4,7 +4,7 @@
     "exclude": ["**/*.md"]
   },
   "imports": {
-    "@colibri/core": "jsr:@colibri/core@^0.20.2",
+    "@colibri/core": "jsr:@colibri/core@^0.22.0",
     "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.9.1",
     "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
     "stellar-sdk": "npm:@stellar/stellar-sdk@^15.0.1",
