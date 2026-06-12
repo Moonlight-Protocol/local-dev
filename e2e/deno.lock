@@ -1,40 +1,51 @@
 {
   "version": "5",
   "specifiers": {
-    "jsr:@colibri/core@~0.20.2": "0.20.2",
+    "jsr:@colibri/core@0.22": "0.22.0",
+    "jsr:@colibri/core@~0.20.2": "0.20.3",
     "jsr:@fifo/convee@1.0.0": "1.0.0",
-    "jsr:@moonlight/moonlight-sdk@0.8": "0.8.0",
+    "jsr:@moonlight/moonlight-sdk@~0.9.1": "0.9.1",
     "jsr:@noble/curves@^1.8.0": "1.9.0",
     "jsr:@noble/hashes@1.8.0": "1.8.0",
     "jsr:@noble/hashes@^1.6.1": "1.8.0",
-    "jsr:@std/collections@^1.1.3": "1.1.7",
+    "jsr:@std/collections@^1.1.3": "1.2.0",
     "jsr:@std/toml@^1.0.11": "1.0.11",
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
-    "npm:@stellar/stellar-sdk@^15.0.1": "15.0.1",
+    "npm:@stellar/stellar-sdk@^15.0.1": "15.1.0",
+    "npm:@stellar/stellar-sdk@^15.1.0": "15.1.0",
     "npm:asn1js@3.0.5": "3.0.5",
     "npm:buffer@6.0.3": "6.0.3",
     "npm:buffer@^6.0.3": "6.0.3"
   },
   "jsr": {
-    "@colibri/core@0.20.2": {
-      "integrity": "2cf091a7d0045b542a9b45097a57d068c5388542243c24d7804fdbc08f5a74e1",
+    "@colibri/core@0.20.3": {
+      "integrity": "87179e93a331341c78060d663a221b2d09044a3d85d0e41bba5fa1cee2fe0b01",
       "dependencies": [
         "jsr:@fifo/convee",
         "jsr:@std/toml",
-        "npm:@stellar/stellar-sdk",
+        "npm:@stellar/stellar-sdk@^15.0.1",
+        "npm:buffer@^6.0.3"
+      ]
+    },
+    "@colibri/core@0.22.0": {
+      "integrity": "043b141c75c9759f16ae3d9655301a681026edea4fa0fdca4380ba7f3b20121d",
+      "dependencies": [
+        "jsr:@fifo/convee",
+        "jsr:@std/toml",
+        "npm:@stellar/stellar-sdk@^15.0.1",
         "npm:buffer@^6.0.3"
       ]
     },
     "@fifo/convee@1.0.0": {
       "integrity": "b61bfa222b9b8a53f0f2af1f35148fd54d86afc2fc3d6b5d073d56aaa369d9a3"
     },
-    "@moonlight/moonlight-sdk@0.8.0": {
-      "integrity": "680e75432c2d84707a9d7bf9df9564304066eb08d5dbc88eafdfe167eecfd423",
+    "@moonlight/moonlight-sdk@0.9.1": {
+      "integrity": "fc2b58567117030be971bb66a7154c8a1d6e077af5ef7015ae2b24331352aca1",
       "dependencies": [
-        "jsr:@colibri/core",
+        "jsr:@colibri/core@0.22",
         "jsr:@noble/curves",
         "jsr:@noble/hashes@^1.6.1",
-        "npm:@stellar/stellar-sdk",
+        "npm:@stellar/stellar-sdk@^15.1.0",
         "npm:asn1js",
         "npm:buffer@6.0.3"
       ]
@@ -48,8 +59,8 @@
     "@noble/hashes@1.8.0": {
       "integrity": "b52a2fcb4d02f8d8137871564a31f1ee9e2b0d15eedabbf32d2f7333f0abc939"
     },
-    "@std/collections@1.1.7": {
-      "integrity": "56f659d011218a69740b12829cf5ea2c9b70bbed0af02597e27dc1eb5e69e208"
+    "@std/collections@1.2.0": {
+      "integrity": "47627a21d3a13138b77fd0e4d790ba9d2e603c3510b686cde6b132fe9aa98a88"
     },
     "@std/toml@1.0.11": {
       "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
@@ -85,8 +96,8 @@
         "sha.js"
       ]
     },
-    "@stellar/stellar-sdk@15.0.1": {
-      "integrity": "sha512-iZjWKXtfohsPh+CX9wRyQNIlXLeA9VyuQB6UMC7AFBD9XnR92eOjnlfeONzk/Bsrkk6+UPlpzSy2MuF+ydHP1A==",
+    "@stellar/stellar-sdk@15.1.0": {
+      "integrity": "sha512-GsJUcWx2yboVzYdhTe/LHS3V1wVLSHkUkglC5bBoYWGJt31vzIhbSGno60NP9CdCTNkLJdnrsLJ63oA58Zvh5A==",
       "dependencies": [
         "@stellar/stellar-base",
         "axios",
@@ -117,8 +128,8 @@
         "possible-typed-array-names"
       ]
     },
-    "axios@1.14.0": {
-      "integrity": "sha512-3Y8yrqLSwjuzpXuZ0oIYZ/XGgLwUIBU3uLvbcpb0pidD9ctpShJd43KSlEEkVQg6DS0G9NKyzOvBfUtDKEyHvQ==",
+    "axios@1.15.0": {
+      "integrity": "sha512-wWyJDlAatxk30ZJer+GeCWS209sA42X+N5jU2jy6oHTp7ufw8uzUTVFBX9+wTfAlhiJXGS0Bq7X6efruWjuK9Q==",
       "dependencies": [
         "follow-redirects",
         "form-data",
@@ -198,8 +209,8 @@
     "es-errors@1.3.0": {
       "integrity": "sha512-Zf5H2Kxt2xjTvbJvP2ZWLEICxA6j+hAmMzIlypy4xcBg1vKVnx89Wy0GbS+kf5cwCVFFzdCFh2XSCFNULS6csw=="
     },
-    "es-object-atoms@1.1.1": {
-      "integrity": "sha512-FGgH2h8zKNim9ljj7dankFPcICIK9Cp5bm+c2gQSYePhpaG5+esrLODihIorn+Pe6FGJzWhXQotPv73jTaldXA==",
+    "es-object-atoms@1.1.2": {
+      "integrity": "sha512-HWcBoN6NileqtSydK2FqHbS/LoDd2pqrnQHLyJzBj4kOp/ky2MWMN694xOfkK8/SnUsW2DH7EfyVlydKCsm1Zw==",
       "dependencies": [
         "es-errors"
       ]
@@ -284,8 +295,8 @@
         "has-symbols"
       ]
     },
-    "hasown@2.0.3": {
-      "integrity": "sha512-ej4AhfhfL2Q2zpMmLo7U1Uv9+PyhIZpgQLGT1F9miIGmiCJIoCgSmczFdrc97mWT4kVY72KA+WnnhJ5pghSvSg==",
+    "hasown@2.0.4": {
+      "integrity": "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==",
       "dependencies": [
         "function-bind"
       ]
@@ -392,8 +403,8 @@
     "urijs@1.19.11": {
       "integrity": "sha512-HXgFDgDommxn5/bIv0cnQZsPhHDA90NPHD6+c/v21U5+Sx5hoP8+dP9IZXBU1gIfvdRfhG8cel9QNPeionfcCQ=="
     },
-    "which-typed-array@1.1.20": {
-      "integrity": "sha512-LYfpUkmqwl0h9A2HL09Mms427Q1RZWuOHsukfVcKRq9q95iQxdw0ix1JQrqbcDR9PH1QDwf5Qo8OZb5lksZ8Xg==",
+    "which-typed-array@1.1.22": {
+      "integrity": "sha512-fvO4ExWMFsqyhG3AiPAObMuY1lxaqgYcxbc49CNdWDDECOJNgQyvsOWVwbZc+qf3rzRtxojBK+CMEv0Ld5CYpw==",
       "dependencies": [
         "available-typed-arrays",
         "call-bind",
@@ -408,7 +419,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@colibri/core@~0.20.2",
-      "jsr:@moonlight/moonlight-sdk@0.8",
+      "jsr:@moonlight/moonlight-sdk@~0.9.1",
       "npm:@opentelemetry/api@^1.9.0",
       "npm:@stellar/stellar-sdk@^15.0.1",
       "npm:buffer@6.0.3"
