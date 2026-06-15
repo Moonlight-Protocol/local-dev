@@ -43,7 +43,10 @@ services:
     volumes:
       - ./.traces/multi-asset:/badger
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:16686/api/services || exit 1"]
+      test: [
+        "CMD-SHELL",
+        "wget -qO- http://localhost:16686/api/services || exit 1",
+      ]
       interval: 2s
       timeout: 3s
       retries: 15
@@ -61,7 +64,7 @@ services:
       - sh
       - -c
       - |
-        cp test/setup-multi-asset.ts setup.ts && deno run --allow-all setup.ts
+          cp test/setup-multi-asset.ts setup.ts && deno run --allow-all setup.ts
     environment:
       STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
@@ -153,28 +156,28 @@ services:
       - sh
       - -c
       - |
-        mkdir -p multi-asset lib
-        cp /multi-asset-src/*.ts multi-asset/ && cp /multi-asset-src/deno.json multi-asset/ 2>/dev/null || true
-        cp /lib-src/*.ts lib/
-        cp -r /lib-src/client lib/
-        cd multi-asset && deno install && cd ..
-        echo "Waiting for provider and Stellar..."
-        for i in $$(seq 1 60); do
-          provider_ok=false stellar_ok=false
-          PROBE_URL="$$PROVIDER_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && provider_ok=true
-          PROBE_URL="$$STELLAR_RPC_URL" deno eval "
-            const url = Deno.env.get('PROBE_URL');
-            const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getHealth'})});
-            const d = await r.json(); Deno.exit(d.result?.status==='healthy'?0:1)
-          " 2>/dev/null && stellar_ok=true
-          if [ "$$provider_ok" = true ] && [ "$$stellar_ok" = true ]; then
-            echo "Provider and Stellar are ready."
-            break
-          fi
-          if [ "$$i" -eq 60 ]; then echo "Services not ready after 120s"; exit 1; fi
-          sleep 2
-        done
-        exec deno run --allow-all multi-asset/main.ts
+          mkdir -p multi-asset lib
+          cp /multi-asset-src/*.ts multi-asset/ && cp /multi-asset-src/deno.json multi-asset/ 2>/dev/null || true
+          cp /lib-src/*.ts lib/
+          cp -r /lib-src/client lib/
+          cd multi-asset && deno install && cd ..
+          echo "Waiting for provider and Stellar..."
+          for i in $$(seq 1 60); do
+            provider_ok=false stellar_ok=false
+            PROBE_URL="$$PROVIDER_URL" deno eval "try { await fetch(Deno.env.get('PROBE_URL')); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null && provider_ok=true
+            PROBE_URL="$$STELLAR_RPC_URL" deno eval "
+              const url = Deno.env.get('PROBE_URL');
+              const r = await fetch(url, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method:'getHealth'})});
+              const d = await r.json(); Deno.exit(d.result?.status==='healthy'?0:1)
+            " 2>/dev/null && stellar_ok=true
+            if [ "$$provider_ok" = true ] && [ "$$stellar_ok" = true ]; then
+              echo "Provider and Stellar are ready."
+              break
+            fi
+            if [ "$$i" -eq 60 ]; then echo "Services not ready after 120s"; exit 1; fi
+            sleep 2
+          done
+          exec deno run --allow-all multi-asset/main.ts
     environment:
       NETWORK: local
       PROVIDER_URL: http://provider:3000
@@ -186,6 +189,7 @@ services:
       FRIENDBOT_URL: http://stellar:8000/friendbot
       JAEGER_QUERY_URL: http://jaeger:16686
       DATABASE_URL: postgresql://admin:devpass@db:5432/provider_platform_db
+      COUNCIL_DATABASE_URL: postgresql://admin:devpass@db:5432/council_platform_db
       WASM_DIR: /wasms
       OTEL_DENO: "true"
       OTEL_SERVICE_NAME: "moonlight-e2e"

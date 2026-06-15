@@ -138,6 +138,7 @@ services:
       STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
       FRIENDBOT_URL: http://stellar:8000/friendbot
       DATABASE_URL: postgresql://admin:devpass@db:5432/multi_asset_db
+      COUNCIL_DATABASE_URL: postgresql://admin:devpass@council-db:5432/council_multi_asset_db
       WASM_DIR: /wasms
     entrypoint:
       - sh
