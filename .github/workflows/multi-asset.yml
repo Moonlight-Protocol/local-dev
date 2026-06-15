@@ -1,18 +1,66 @@
 name: Multi-Asset E2E
 
-# Runs the UC6 multi-asset suite (one council, XLM + USDC channels) on every
-# local-dev PR, so a change here can't silently break multi-asset support. The
-# reusable workflow is pointed at this PR's local-dev ref while provider/council
-# images stay at latest.
+# Runs the UC6 multi-asset suite (one council, XLM + USDC channels) wherever the
+# e2e gate runs, so a change in any stack repo that breaks multi-asset is caught:
+#   - pull_request: on every local-dev PR (reusable points at the PR head ref)
+#   - repository_dispatch [module-release]: when a stack repo releases an
+#     artifact — runs against the triggering module's version, latest for the rest
+#   - workflow_dispatch: manual, with pinnable version inputs
+# Version-resolution mirrors e2e.yml exactly (payload-vs-latest / inputs).
 
 on:
   pull_request:
     branches: [main]
+  repository_dispatch:
+    types: [module-release]
+  workflow_dispatch:
+    inputs:
+      contracts_version:
+        description: "soroban-core release tag (e.g. v0.1.0)"
+        required: false
+        default: "latest"
+      provider_version:
+        description: "provider-platform image tag (e.g. 0.2.0)"
+        required: false
+        default: "latest"
 
 jobs:
+  # Resolve versions in a plain job (a `uses:` job can't also run steps), then
+  # pass them into the reusable. Mirrors e2e.yml's resolution.
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      contracts: ${{ steps.versions.outputs.contracts }}
+      provider: ${{ steps.versions.outputs.provider }}
+    steps:
+      - name: Resolve versions
+        id: versions
+        run: |
+          # repository_dispatch: use payload version for the triggering module, latest for the rest
+          # workflow_dispatch: use inputs
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            MODULE="${{ github.event.client_payload.module }}"
+            VERSION="${{ github.event.client_payload.version }}"
+            case "$MODULE" in
+              soroban-core)       echo "contracts=$VERSION" >> "$GITHUB_OUTPUT" ;;
+              *)                  echo "contracts=latest" >> "$GITHUB_OUTPUT" ;;
+            esac
+            case "$MODULE" in
+              provider-platform)  echo "provider=$VERSION" >> "$GITHUB_OUTPUT" ;;
+              *)                  echo "provider=latest" >> "$GITHUB_OUTPUT" ;;
+            esac
+          else
+            echo "contracts=${{ inputs.contracts_version || 'latest' }}" >> "$GITHUB_OUTPUT"
+            echo "provider=${{ inputs.provider_version || 'latest' }}" >> "$GITHUB_OUTPUT"
+          fi
+
   multi-asset:
+    needs: resolve
     uses: ./.github/workflows/multi-asset-reusable.yml
     with:
-      local_dev_ref: ${{ github.head_ref }}
+      # PRs test the PR head ref; dispatches fall back to the ref the run is on.
+      local_dev_ref: ${{ github.head_ref || github.ref_name }}
+      contracts_version: ${{ needs.resolve.outputs.contracts }}
+      provider_version: ${{ needs.resolve.outputs.provider }}
     secrets:
       E2E_TRIGGER_TOKEN: ${{ secrets.E2E_TRIGGER_TOKEN }}
