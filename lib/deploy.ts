@@ -111,37 +111,84 @@ export async function deployPrivacyChannel(
  * Deploy the native XLM Stellar Asset Contract.
  * If already deployed, computes and returns the deterministic contract ID.
  */
-export async function getOrDeployNativeSac(
+export function getOrDeployNativeSac(
   server: rpc.Server,
   admin: Keypair,
   networkPassphrase: string,
 ): Promise<string> {
+  return getOrDeploySac(server, admin, networkPassphrase, Asset.native());
+}
+
+/**
+ * Deploy the Stellar Asset Contract for a custom-issued classic asset
+ * (e.g. `USDC:GBBD47…`). Sibling of `getOrDeployNativeSac` — the channel is
+ * asset-parameterized, so a second channel can bind to this SAC to enable a
+ * second asset under the same council.
+ *
+ * On testnet, pass Circle's USDC (`code="USDC"`, `issuer="GBBD47…"`); locally,
+ * pass a custom asset issued from a local issuer (see `lib/classic-asset.ts`).
+ * Anyone may deploy a SAC, so `admin` (or any funded account) can call this.
+ *
+ * `code`/`issuer` are passed as strings (not an `Asset`) so the `Asset` is
+ * constructed with this module's stellar-sdk version — passing an `Asset` built
+ * by a different SDK version fails `Operation`'s `instanceof Asset` check.
+ */
+export function getOrDeployCustomSac(
+  server: rpc.Server,
+  admin: Keypair,
+  networkPassphrase: string,
+  code: string,
+  issuer: string,
+): Promise<string> {
+  return getOrDeploySac(
+    server,
+    admin,
+    networkPassphrase,
+    new Asset(code, issuer),
+  );
+}
+
+/**
+ * Deploy the SAC for any asset (native or custom). If it is already deployed,
+ * computes and returns the deterministic contract ID.
+ */
+async function getOrDeploySac(
+  server: rpc.Server,
+  admin: Keypair,
+  networkPassphrase: string,
+  asset: Asset,
+): Promise<string> {
+  const label = asset.isNative() ? "XLM" : asset.getCode();
   try {
-    const op = Operation.createStellarAssetContract({
-      asset: Asset.native(),
-    });
+    const op = Operation.createStellarAssetContract({ asset });
     const result = await submitTx(server, admin, networkPassphrase, op);
     const contractId = Address.fromScVal(result.returnValue!).toString();
-    console.log(`  XLM SAC deployed: ${contractId}`);
+    console.log(`  ${label} SAC deployed: ${contractId}`);
     return contractId;
-  } catch {
-    // Already deployed — compute the deterministic contract ID
-    const contractId = computeNativeSacId(networkPassphrase);
-    console.log(`  XLM SAC (already deployed): ${contractId}`);
+  } catch (err) {
+    // Typically "contract already exists" — recompute the deterministic ID.
+    // Log the underlying reason so a genuine deploy failure isn't masked as
+    // "already deployed".
+    const contractId = computeSacId(networkPassphrase, asset);
+    console.log(
+      `  ${label} SAC (already deployed): ${contractId} (deploy skipped: ${
+        err instanceof Error ? err.message : String(err)
+      })`,
+    );
     return contractId;
   }
 }
 
 /**
- * Compute the deterministic contract ID for native XLM SAC.
+ * Compute the deterministic contract ID for an asset's SAC.
  */
-function computeNativeSacId(networkPassphrase: string): string {
+function computeSacId(networkPassphrase: string, asset: Asset): string {
   const networkId = hash(Buffer.from(networkPassphrase));
   const preimage = xdr.HashIdPreimage.envelopeTypeContractId(
     new xdr.HashIdPreimageContractId({
       networkId,
       contractIdPreimage: xdr.ContractIdPreimage.contractIdPreimageFromAsset(
-        Asset.native().toXDRObject(),
+        asset.toXDRObject(),
       ),
     }),
   );
