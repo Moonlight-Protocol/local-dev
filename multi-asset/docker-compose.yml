@@ -1,0 +1,163 @@
+## Multi-asset (UC6) CI compose — image-based provider/council (mirrors
+## lifecycle/docker-compose.yml). Used by the multi-asset-reusable workflow.
+##
+## The test-runner (multi-asset/main.ts) is self-contained: it deploys both
+## privacy channels under one Channel Auth, seeds the membership with both
+## channels, and runs deposit→send→withdraw per asset. `setup` only writes the
+## boot-time provider/council .env files into the shared /config volume.
+##
+## Provider & council come from prebuilt images:
+##   PROVIDER_IMAGE / COUNCIL_IMAGE  (default to *:local for local builds)
+
+services:
+  stellar:
+    image: stellar/quickstart:latest
+    command: --local --limits unlimited
+    healthcheck:
+      test: >
+        curl -sf http://localhost:8000/soroban/rpc -X POST
+        -H "Content-Type: application/json"
+        -d '{"jsonrpc":"2.0","id":1,"method":"getHealth"}'
+        | grep -q healthy
+      interval: 5s
+      timeout: 5s
+      retries: 60
+      start_period: 10s
+
+  db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: multi_asset_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d multi_asset_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  council-db:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: devpass
+      POSTGRES_DB: council_multi_asset_db
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d council_multi_asset_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  setup:
+    image: denoland/deno:latest
+    depends_on:
+      stellar:
+        condition: service_healthy
+    volumes:
+      - ../test:/app/test:ro
+      - shared-config:/config
+    working_dir: /app
+    entrypoint:
+      - sh
+      - -c
+      - |
+          cp test/setup-multi-asset.ts setup.ts && deno run --allow-all setup.ts
+    environment:
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      CONFIG_DIR: /config
+      PROVIDER_INTERNAL_PORT: "3000"
+      COUNCIL_INTERNAL_PORT: "8080"
+
+  council:
+    image: ${COUNCIL_IMAGE:-council-platform:local}
+    depends_on:
+      council-db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - shared-config:/config:ro
+      - ../lifecycle/council-entrypoint.sh:/app/entrypoint.sh:ro
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@council-db:5432/council_multi_asset_db
+    healthcheck:
+      test: [
+        "CMD-SHELL",
+        "deno eval \"try { const r = await fetch('http://localhost:8080/api/v1/health'); Deno.exit(r.ok ? 0 : 1); } catch { Deno.exit(1); }\"",
+      ]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  provider:
+    image: ${PROVIDER_IMAGE:-provider-platform:local}
+    depends_on:
+      db:
+        condition: service_healthy
+      setup:
+        condition: service_completed_successfully
+    volumes:
+      - shared-config:/config:ro
+      - ../e2e/provider-entrypoint.sh:/app/entrypoint.sh:ro
+    entrypoint: ["sh", "/app/entrypoint.sh"]
+    environment:
+      DATABASE_URL: postgresql://admin:devpass@db:5432/multi_asset_db
+    healthcheck:
+      test: >
+        sh -c 'deno eval "
+          const r = await fetch(\"http://localhost:3000/api/v1/stellar/auth?account=GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF\");
+          Deno.exit(r.status < 500 ? 0 : 1);
+        " 2>/dev/null'
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 10s
+
+  test-runner:
+    image: denoland/deno:latest
+    depends_on:
+      provider:
+        condition: service_healthy
+      council:
+        condition: service_healthy
+    volumes:
+      - shared-config:/config:ro
+      - .:/multi-asset-src:ro
+      - ../lib:/lib-src:ro
+      - ${WASM_DIR:-../e2e}/wasms:/wasms:ro
+    working_dir: /app
+    environment:
+      NETWORK: local
+      PROVIDER_URL: http://provider:3000
+      COUNCIL_URL: http://council:8080
+      STELLAR_RPC_URL: http://stellar:8000/soroban/rpc
+      STELLAR_NETWORK_PASSPHRASE: "Standalone Network ; February 2017"
+      FRIENDBOT_URL: http://stellar:8000/friendbot
+      DATABASE_URL: postgresql://admin:devpass@db:5432/multi_asset_db
+      WASM_DIR: /wasms
+    entrypoint:
+      - sh
+      - -c
+      - |
+          mkdir -p multi-asset lib
+          cp /multi-asset-src/*.ts multi-asset/ && cp /multi-asset-src/deno.json multi-asset/ 2>/dev/null || true
+          cp /lib-src/*.ts lib/
+          cp -r /lib-src/client lib/
+          cd multi-asset && deno install && cd ..
+          echo "Waiting for provider..."
+          for i in $(seq 1 60); do
+            if deno eval "try { await fetch('$PROVIDER_URL'); Deno.exit(0) } catch { Deno.exit(1) }" 2>/dev/null; then
+              echo "Provider is ready."
+              break
+            fi
+            if [ "$i" -eq 60 ]; then echo "Provider not ready after 120s"; exit 1; fi
+            sleep 2
+          done
+          deno run --allow-all multi-asset/main.ts
+
+volumes:
+  shared-config:

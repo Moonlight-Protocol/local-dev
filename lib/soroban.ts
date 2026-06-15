@@ -52,6 +52,38 @@ export async function submitTx(
   return poll(server, sent.hash);
 }
 
+/**
+ * Build, sign, submit, and poll a classic (non-Soroban) transaction — e.g.
+ * changeTrust / payment for issuing a custom asset. Unlike `submitTx`, this
+ * skips simulation/assembly (classic operations carry no Soroban footprint).
+ * Accepts one or more operations sharing a single source account (`signer`).
+ */
+export async function submitClassicTx(
+  server: rpc.Server,
+  signer: Keypair,
+  networkPassphrase: string,
+  operations: xdr.Operation[],
+): Promise<rpc.Api.GetSuccessfulTransactionResponse> {
+  const account = await server.getAccount(signer.publicKey());
+
+  const builder = new TransactionBuilder(account, {
+    fee: FEE,
+    networkPassphrase,
+  }).setTimeout(30);
+  for (const op of operations) builder.addOperation(op);
+  const tx = builder.build();
+  tx.sign(signer);
+
+  const sent = await server.sendTransaction(tx);
+  if (sent.status === "ERROR") {
+    throw new Error(
+      `Classic tx send error: ${JSON.stringify(sent.errorResult)}`,
+    );
+  }
+
+  return poll(server, sent.hash);
+}
+
 async function poll(
   server: rpc.Server,
   hash: string,

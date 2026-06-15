@@ -1,0 +1,15 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "multi-asset": "deno run --allow-all main.ts",
+    "multi-asset:testnet": "NETWORK=testnet deno run --allow-all main.ts"
+  },
+  "imports": {
+    "@colibri/core": "jsr:@colibri/core@^0.20.2",
+    "@moonlight/moonlight-sdk": "jsr:@moonlight/moonlight-sdk@^0.9.1",
+    "@opentelemetry/api": "npm:@opentelemetry/api@^1.9.0",
+    "stellar-sdk": "npm:@stellar/stellar-sdk@^15.0.1",
+    "buffer": "npm:buffer@6.0.3",
+    "postgres": "npm:postgres@3.4.7"
+  }
+}

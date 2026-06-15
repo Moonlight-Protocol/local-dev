@@ -1,0 +1,117 @@
+name: Multi-Asset E2E (Reusable)
+
+# UC6 multi-asset validation: one council (Channel Auth), two single-asset
+# privacy channels (XLM + USDC), one provider operating both. Runs the
+# self-contained multi-asset/main.ts in Docker (deploy → deposit/send/withdraw
+# per asset). Mirrors lifecycle-reusable.yml.
+
+on:
+  workflow_call:
+    inputs:
+      local_dev_ref:
+        description: "local-dev branch or ref. Set to the PR head ref when called from a local-dev PR; defaults to main."
+        type: string
+        default: "main"
+      contracts_version:
+        description: "soroban-core release tag (e.g. v0.1.0)"
+        type: string
+        default: "latest"
+      provider_version:
+        description: "provider-platform image tag (e.g. 0.2.0)"
+        type: string
+        default: "latest"
+      council_version:
+        description: "council-platform image tag (e.g. 0.3.0)"
+        type: string
+        default: "latest"
+      contracts_artifact:
+        description: "Name of a workflow artifact containing wasms (overrides release download)"
+        type: string
+        default: ""
+      provider_image_override:
+        description: "Full image ref override for provider-platform (e.g. ghcr.io/org/repo:sha-abc123)"
+        type: string
+        default: ""
+      council_image_override:
+        description: "Full image ref override for council-platform (e.g. ghcr.io/org/repo:sha-abc123)"
+        type: string
+        default: ""
+    secrets:
+      E2E_TRIGGER_TOKEN:
+        required: true
+
+env:
+  REGISTRY: ghcr.io
+  ORG: moonlight-protocol
+
+jobs:
+  multi-asset:
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: moonlight-protocol/local-dev
+          ref: ${{ inputs.local_dev_ref }}
+          token: ${{ secrets.E2E_TRIGGER_TOKEN }}
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.E2E_TRIGGER_TOKEN }}
+
+      - name: Download contract wasms from artifact
+        if: inputs.contracts_artifact != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.contracts_artifact }}
+          path: e2e/wasms
+
+      - name: Download contract wasms from release
+        if: inputs.contracts_artifact == ''
+        env:
+          GH_TOKEN: ${{ secrets.E2E_TRIGGER_TOKEN }}
+          VERSION: ${{ inputs.contracts_version }}
+        run: |
+          mkdir -p e2e/wasms
+          if [ "$VERSION" = "latest" ]; then
+            gh release download --repo ${{ env.ORG }}/soroban-core -p '*.wasm' -D e2e/wasms/
+          else
+            gh release download "$VERSION" --repo ${{ env.ORG }}/soroban-core -p '*.wasm' -D e2e/wasms/
+          fi
+          ls -la e2e/wasms/
+
+      - name: Run Multi-Asset E2E
+        env:
+          PROVIDER_IMAGE: ${{ inputs.provider_image_override != '' && inputs.provider_image_override || format('{0}/{1}/provider-platform:{2}', env.REGISTRY, env.ORG, inputs.provider_version) }}
+          COUNCIL_IMAGE: ${{ inputs.council_image_override != '' && inputs.council_image_override || format('{0}/{1}/council-platform:{2}', env.REGISTRY, env.ORG, inputs.council_version) }}
+        working-directory: multi-asset
+        run: |
+          set +e
+          docker compose up -d
+          UP_EXIT=$?
+          if [ "$UP_EXIT" -ne 0 ]; then
+            echo "--- docker compose up failed (exit $UP_EXIT) ---"
+            echo "--- setup logs ---"
+            docker compose logs setup
+            echo "--- stellar logs ---"
+            docker compose logs stellar
+            echo "--- council logs ---"
+            docker compose logs council
+            docker compose down
+            exit $UP_EXIT
+          fi
+          EXIT_CODE=$(docker wait multi-asset-test-runner-1)
+          echo "--- setup logs ---"
+          docker compose logs setup
+          echo "--- council logs ---"
+          docker compose logs council
+          echo "--- provider logs ---"
+          docker compose logs provider
+          echo "--- test-runner logs ---"
+          docker compose logs test-runner
+          docker compose down
+          exit $EXIT_CODE

@@ -10,7 +10,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        dir: [testnet, lifecycle, e2e, e2e/pos-instant, e2e/governance]
+        dir: [testnet, lifecycle, multi-asset, e2e, e2e/pos-instant, e2e/governance]
     steps:
       - uses: actions/checkout@v4
       - uses: denoland/setup-deno@v2

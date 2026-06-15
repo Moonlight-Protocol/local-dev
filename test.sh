@@ -34,6 +34,7 @@ usage() {
   echo "  otel          Payment flow + OTEL trace verification (16 checks)"
   echo "  governance    UC2 governance flows (40+ checks)"
   echo "  lifecycle     Full lifecycle (deploy → payment → remove)"
+  echo "  multi-asset   Multi-asset UC6 (one council, XLM + USDC channels)"
   echo "  pos-instant   POS crypto instant payment (temp P256 hop)"
   echo "  playwright    Full UI flow (Freighter + 3 frontends, ~6min)"
   echo "  invite-gate   Invite-only allowlist gate (blocked + allowed wallets)"
@@ -145,7 +146,7 @@ case "$SUITE" in
     run_suite "$SUITE"
     ;;
 
-  e2e|otel|governance|lifecycle|pos-instant)
+  e2e|otel|governance|lifecycle|multi-asset|pos-instant)
     ensure_wasms
     run_suite "$SUITE"
     ;;
@@ -156,7 +157,7 @@ case "$SUITE" in
     pids=()
     results=()
 
-    for s in e2e otel governance lifecycle pos-instant; do
+    for s in e2e otel governance lifecycle multi-asset pos-instant; do
       # Intentional: each subshell gets its own trap handler from run_suite,
       # so cleanup runs independently per suite when it exits or is interrupted.
       (run_suite "$s") &
@@ -165,7 +166,7 @@ case "$SUITE" in
 
     all_passed=true
     for i in "${!pids[@]}"; do
-      suite_names=(e2e otel governance lifecycle pos-instant)
+      suite_names=(e2e otel governance lifecycle multi-asset pos-instant)
       if wait "${pids[$i]}"; then
         results+=("${suite_names[$i]}: passed")
       else

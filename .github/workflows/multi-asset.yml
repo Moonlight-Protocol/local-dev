@@ -1,0 +1,18 @@
+name: Multi-Asset E2E
+
+# Runs the UC6 multi-asset suite (one council, XLM + USDC channels) on every
+# local-dev PR, so a change here can't silently break multi-asset support. The
+# reusable workflow is pointed at this PR's local-dev ref while provider/council
+# images stay at latest.
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  multi-asset:
+    uses: ./.github/workflows/multi-asset-reusable.yml
+    with:
+      local_dev_ref: ${{ github.head_ref }}
+    secrets:
+      E2E_TRIGGER_TOKEN: ${{ secrets.E2E_TRIGGER_TOKEN }}
