@@ -4,7 +4,7 @@
 
 services:
   stellar:
-    image: stellar/quickstart:latest
+    image: stellar/quickstart:v639-b1103.1-latest
     command: --local --limits unlimited
     healthcheck:
       test: >
