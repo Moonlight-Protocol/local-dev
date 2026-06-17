@@ -2,9 +2,8 @@
   "version": "5",
   "specifiers": {
     "jsr:@colibri/core@0.22": "0.22.0",
-    "jsr:@colibri/core@~0.20.2": "0.20.3",
     "jsr:@fifo/convee@1.0.0": "1.0.0",
-    "jsr:@moonlight/moonlight-sdk@~0.9.1": "0.9.1",
+    "jsr:@moonlight/moonlight-sdk@0.10": "0.10.0",
     "jsr:@noble/curves@^1.8.0": "1.9.0",
     "jsr:@noble/hashes@1.8.0": "1.8.0",
     "jsr:@noble/hashes@^1.6.1": "1.8.0",
@@ -18,15 +17,6 @@
     "npm:buffer@^6.0.3": "6.0.3"
   },
   "jsr": {
-    "@colibri/core@0.20.3": {
-      "integrity": "87179e93a331341c78060d663a221b2d09044a3d85d0e41bba5fa1cee2fe0b01",
-      "dependencies": [
-        "jsr:@fifo/convee",
-        "jsr:@std/toml",
-        "npm:@stellar/stellar-sdk@^15.0.1",
-        "npm:buffer@^6.0.3"
-      ]
-    },
     "@colibri/core@0.22.0": {
       "integrity": "043b141c75c9759f16ae3d9655301a681026edea4fa0fdca4380ba7f3b20121d",
       "dependencies": [
@@ -39,10 +29,10 @@
     "@fifo/convee@1.0.0": {
       "integrity": "b61bfa222b9b8a53f0f2af1f35148fd54d86afc2fc3d6b5d073d56aaa369d9a3"
     },
-    "@moonlight/moonlight-sdk@0.9.1": {
-      "integrity": "fc2b58567117030be971bb66a7154c8a1d6e077af5ef7015ae2b24331352aca1",
+    "@moonlight/moonlight-sdk@0.10.0": {
+      "integrity": "2e53005b3c38085fb4d508fc18c6ffdc1f3e7eb44ca2c941b520236594034f69",
       "dependencies": [
-        "jsr:@colibri/core@0.22",
+        "jsr:@colibri/core",
         "jsr:@noble/curves",
         "jsr:@noble/hashes@^1.6.1",
         "npm:@stellar/stellar-sdk@^15.1.0",
@@ -418,8 +408,8 @@
   },
   "workspace": {
     "dependencies": [
-      "jsr:@colibri/core@~0.20.2",
-      "jsr:@moonlight/moonlight-sdk@~0.9.1",
+      "jsr:@colibri/core@0.22",
+      "jsr:@moonlight/moonlight-sdk@0.10",
       "npm:@opentelemetry/api@^1.9.0",
       "npm:@stellar/stellar-sdk@^15.0.1",
       "npm:buffer@6.0.3"
