@@ -114,6 +114,35 @@ local source code:
 No `up.sh` needed. Each run is independent — parallel runs don't interfere with
 each other or with your dev stack.
 
+### Suites that need extra setup
+
+The suites above source-mount only `provider-platform` + `council-platform`, so
+`e2e`, `otel`, `governance`, `lifecycle`, and `multi-asset` work once those two
+are cloned next to `local-dev`. The rest source-mount more — clone the extra
+repos as siblings (or set the matching `*_PATH` env var), or their container
+exits on boot:
+
+- **`pos-instant`** also needs `pay-platform` + `moonlight-pay`.
+- **`invite-gate`** and **`playwright`** also need `provider-console` +
+  `council-console`, **and** the Freighter extension vendored at
+  `playwright/freighter-extension/` via `./setup-freighter.sh` (builds
+  `stellar/freighter@5.39.0` in a `node:20` container; set
+  `FREIGHTER_EXTENSION_PATH` to use a prebuilt one).
+
+To iterate on the **full playwright UI flow**, use the dev-host path instead of
+`test.sh`: `./up.sh`, then `npx playwright test` — see
+[`playwright/README.md`](../playwright/README.md). On that path the test's
+direct DB access defaults to `localhost:5442`; only the Docker `test-runner`
+overrides it to `db:5432`.
+
+### Testnet suites
+
+`./testnet/run-all.sh` targets the **deployed** testnet platforms (not your
+local branch) and needs `TEMPO_URL`, `TEMPO_AUTH`,
+`OTEL_EXPORTER_OTLP_ENDPOINT`, and `OTEL_EXPORTER_OTLP_HEADERS`. To run the same
+suites against your local `up.sh` stack instead, use `./testnet/run-local.sh`
+(reads local Jaeger; no Tempo credentials needed).
+
 ## Files
 
 | File                     | Purpose                                                   |
