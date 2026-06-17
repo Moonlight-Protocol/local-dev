@@ -388,3 +388,7 @@ services:
       FRIENDBOT_URL: http://stellar:8000/friendbot
       FREIGHTER_EXTENSION_PATH: /app/freighter-extension
       JAEGER_QUERY_URL: http://jaeger:16686
+      # In the Docker network postgres is reachable at `db:5432`. helpers/db.ts
+      # defaults to the dev-host DSN (localhost:5442), so the in-network run
+      # must override it here.
+      PG_BASE_URL: postgresql://admin:devpass@db:5432

@@ -8,18 +8,20 @@
  * fixes that without infra changes to the container image.
  *
  * Both DBs (provider_platform_db, pay_platform_db) live on the same PG
- * instance (host `db` inside the test compose network, `localhost:5442` from
- * the dev host). The CLEANUP_DATABASE_URL / DISCOVERY_DATABASE_URL env vars
- * default to the in-container DSN; override when running playwright off-host.
+ * instance — reachable at `localhost:5442` from the dev host (the documented
+ * `npx playwright test` flow against the up.sh stack), and at `db:5432`
+ * inside the playwright Docker network. The default targets the dev host so
+ * local runs work with no env; the Docker `test-runner` sets `PG_BASE_URL` to
+ * the in-network DSN. Override a single DB via `<DBNAME>_URL` if needed.
  */
 import { Client } from "pg";
 
-const DEFAULT_DSN_IN_CONTAINER = "postgresql://admin:devpass@db:5432";
+const DEFAULT_DSN_DEV_HOST = "postgresql://admin:devpass@localhost:5442";
 
 function resolveDsn(dbName: string): string {
   const explicit = process.env[`${dbName.toUpperCase()}_URL`];
   if (explicit) return explicit;
-  const base = process.env.PG_BASE_URL || DEFAULT_DSN_IN_CONTAINER;
+  const base = process.env.PG_BASE_URL || DEFAULT_DSN_DEV_HOST;
   return `${base}/${dbName}`;
 }
 
