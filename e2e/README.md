@@ -138,10 +138,10 @@ overrides it to `db:5432`.
 ### Testnet suites
 
 `./testnet/run-all.sh` targets the **deployed** testnet platforms (not your
-local branch) and needs `TEMPO_URL`, `TEMPO_AUTH`, `OTEL_EXPORTER_OTLP_ENDPOINT`,
-and `OTEL_EXPORTER_OTLP_HEADERS`. To run the same suites against your local
-`up.sh` stack instead, use `./testnet/run-local.sh` (reads local Jaeger; no
-Tempo credentials needed).
+local branch) and needs `TEMPO_URL`, `TEMPO_AUTH`,
+`OTEL_EXPORTER_OTLP_ENDPOINT`, and `OTEL_EXPORTER_OTLP_HEADERS`. To run the same
+suites against your local `up.sh` stack instead, use `./testnet/run-local.sh`
+(reads local Jaeger; no Tempo credentials needed).
 
 ## Files
 
