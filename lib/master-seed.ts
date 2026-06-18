@@ -58,6 +58,10 @@ export async function deriveKeypair(
 export const ROLES = {
   ADMIN: "admin",
   PP: "pp",
+  /** Rust provider-stack standin — runs alongside the Deno provider-platform
+   *  on a separate port so suites can target either. Distinct PP keypair so
+   *  Stellar accounts + on-chain state don't collide with the Deno PP. */
+  STANDIN_PP: "standin-pp",
   OPEX: "opex",
   PAY_ADMIN: "pay-admin",
   PAY_SERVICE: "pay-service",

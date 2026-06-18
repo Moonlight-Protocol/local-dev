@@ -15,6 +15,12 @@ export interface Config {
   networkConfig: NetworkConfig;
   networkId: StellarNetworkId;
   providerSecretKey?: string;
+  /**
+   * Provider route shape this Config targets.
+   * - "multi-pp" (default) → /api/v1/providers/:ppPublicKey/... (Deno provider-platform)
+   * - "single-pp"          → /api/v1/provider/...               (Rust standin)
+   */
+  urlShape?: "multi-pp" | "single-pp";
 }
 
 function loadEnvFile(path: string): Record<string, string> {

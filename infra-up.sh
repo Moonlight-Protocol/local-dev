@@ -146,7 +146,14 @@ if curl -sf "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" -X POST \
   info "Stellar RPC on port $STELLAR_RPC_PORT is healthy (shared)."
 else
   info "Stellar RPC not running, starting local network..."
-  stellar container start local 2>/dev/null || true
+  # Pin to v639-b1103.1-latest — see local-dev PR #120: the rolling
+  # stellar/quickstart:testing tag (default for `stellar container start`)
+  # silently rejects all WASM uploads with HostError(Context,
+  # InternalError) since 2026-06-15. PR #120 pinned the docker-compose
+  # paths; this pins the CLI path used by up.sh.
+  stellar container start local --image-tag-override v639-b1103.1-latest 2>/dev/null \
+    || stellar container start local 2>/dev/null \
+    || true
 
   info "Waiting for Stellar RPC to be ready..."
   for i in $(seq 1 60); do
@@ -287,6 +294,95 @@ for i in $(seq 1 15); do
   fi
   sleep 1
 done
+
+# ============================================================
+section "5b/13  Provider Stack standin (port ${STANDIN_PORT:-3011})"
+# ============================================================
+#
+# The Rust provider-stack runs ALONGSIDE the Deno provider-platform on a
+# separate port (default 3011). They share the postgres + jaeger + stellar
+# infra but use:
+#   - distinct DB (provider_stack_db, created on demand)
+#   - distinct PP keypair (STANDIN_PP role from setup-keys.sh)
+#   - distinct OTEL service name (provider-platform-standin) so verify-otel
+#     queries can distinguish their traces
+# Suites can target either; testnet/run-local.sh has Suite 5+6 for the
+# standin path.
+
+STANDIN_PORT="${STANDIN_PORT:-3011}"
+STANDIN_BINARY="${STANDIN_BINARY:-$BASE_DIR/provider-stack/target/release/provider-stack}"
+STANDIN_KEYS_FILE="$SCRIPT_DIR/.local-dev-keys"
+
+if [ ! -f "$STANDIN_BINARY" ]; then
+  warn "Standin binary not found at $STANDIN_BINARY — skipping."
+  warn "Build with: (cd $BASE_DIR/provider-stack && cargo build --release -p provider-stack-api --bin provider-stack)"
+elif [ ! -f "$STANDIN_KEYS_FILE" ]; then
+  warn "Standin keys not generated yet (run setup-keys.sh) — skipping standin."
+else
+  STANDIN_PP_PK=$(grep '^STANDIN_PP_PK=' "$STANDIN_KEYS_FILE" | cut -d= -f2)
+  STANDIN_PP_SK=$(grep '^STANDIN_PP_SK=' "$STANDIN_KEYS_FILE" | cut -d= -f2)
+
+  if [ -z "$STANDIN_PP_PK" ] || [ -z "$STANDIN_PP_SK" ]; then
+    warn "STANDIN_PP_{PK,SK} missing from $STANDIN_KEYS_FILE — rerun setup-keys.sh. Skipping standin."
+  else
+    info "Ensuring provider_stack_db exists on postgres..."
+    docker exec "$PG_CONTAINER" psql -U admin -d postgres -tc \
+      "SELECT 1 FROM pg_database WHERE datname='provider_stack_db'" 2>/dev/null \
+      | grep -q 1 \
+      || docker exec "$PG_CONTAINER" psql -U admin -d postgres \
+           -c "CREATE DATABASE provider_stack_db OWNER admin;" >/dev/null 2>&1
+
+    STANDIN_SAS=$("$STANDIN_BINARY" gen-service-secret 2>/dev/null | cut -d= -f2)
+
+    info "Starting provider-stack standin (background, PP=$STANDIN_PP_PK)..."
+    STANDIN_LOG="$SCRIPT_DIR/standin.log"
+    nohup env \
+      PORT="$STANDIN_PORT" \
+      MODE=development \
+      LOG_LEVEL=INFO \
+      DATABASE_URL="postgres://admin:devpass@localhost:${PG_PORT}/provider_stack_db" \
+      NETWORK=standalone \
+      NETWORK_FEE=1000000 \
+      STELLAR_RPC_URL="http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" \
+      TRANSACTION_EXPIRATION_OFFSET=1000 \
+      SERVICE_DOMAIN=localhost \
+      SERVICE_AUTH_SECRET="$STANDIN_SAS" \
+      PROVIDER_BASE_URL="http://localhost:${STANDIN_PORT}" \
+      OPERATOR_PUBLIC_KEY="$STANDIN_PP_PK" \
+      PP_SECRET_KEY="$STANDIN_PP_SK" \
+      CHALLENGE_TTL=900 \
+      SESSION_TTL=21600 \
+      MEMPOOL_SLOT_CAPACITY=10 \
+      MEMPOOL_EXPENSIVE_OP_WEIGHT=10 \
+      MEMPOOL_CHEAP_OP_WEIGHT=1 \
+      MEMPOOL_EXECUTOR_INTERVAL_MS=2000 \
+      MEMPOOL_VERIFIER_INTERVAL_MS=2000 \
+      MEMPOOL_TTL_CHECK_INTERVAL_MS=5000 \
+      MEMPOOL_MAX_RETRY_ATTEMPTS=3 \
+      BUNDLE_MAX_OPERATIONS=200 \
+      ALLOWED_ORIGINS="http://localhost:${STANDIN_PORT}" \
+      OTEL_EXPORTER_OTLP_ENDPOINT="http://localhost:${JAEGER_OTLP_PORT}" \
+      OTEL_EXPORTER_OTLP_PROTOCOL=http/protobuf \
+      OTEL_SERVICE_NAME=provider-platform-standin \
+      "$STANDIN_BINARY" > "$STANDIN_LOG" 2>&1 &
+    STANDIN_PID=$!
+    echo "$STANDIN_PID" > "$SCRIPT_DIR/.standin.pid"
+    info "Standin running (PID $STANDIN_PID, log: $STANDIN_LOG)"
+
+    for i in $(seq 1 15); do
+      if curl -sf "http://localhost:${STANDIN_PORT}/api/v1/health" >/dev/null 2>&1; then
+        info "Standin is ready on port $STANDIN_PORT."
+        break
+      fi
+      if [ "$i" -eq 15 ]; then
+        warn "Standin may not be ready yet. Check $STANDIN_LOG"
+      fi
+      sleep 1
+    done
+  fi
+fi
+
+cd "$PROVIDER_PLATFORM_PATH"
 
 # ============================================================
 section "6/13  Council Platform (port $COUNCIL_PLATFORM_PORT)"

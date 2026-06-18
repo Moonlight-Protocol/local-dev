@@ -226,9 +226,19 @@ export function openPerPpSubscriber(args: {
   providerUrl: string;
   ppPublicKey: string;
   operatorJwt: string;
+  /**
+   * "multi-pp" (default) → /api/v1/providers/:ppPublicKey/events/ws
+   *                       + checkPpExists polls /dashboard/pp/list
+   * "single-pp"          → /api/v1/provider/events/ws
+   *                       + checkPpExists fetches /dashboard/pp (singular)
+   * The Rust standin uses single-pp shape; the Deno provider-platform uses
+   * multi-pp. Set per-script via the harness's SUPPORTED_SCRIPTS config.
+   */
+  urlShape?: "multi-pp" | "single-pp";
 }): Subscriber {
   const subscriberId = `perPp:${args.ppPublicKey}`;
   const captured: CapturedEvent[] = [];
+  const urlShape = args.urlShape ?? "multi-pp";
 
   let resolveReady!: () => void;
   let rejectReady!: (err: Error) => void;
@@ -248,9 +258,11 @@ export function openPerPpSubscriber(args: {
   let backoffMs = RECONNECT_BACKOFF_INITIAL_MS;
 
   const wsUrl = toWsUrl(
-    `${args.providerUrl}/api/v1/providers/${
-      encodeURIComponent(args.ppPublicKey)
-    }/events/ws`,
+    urlShape === "single-pp"
+      ? `${args.providerUrl}/api/v1/provider/events/ws`
+      : `${args.providerUrl}/api/v1/providers/${
+        encodeURIComponent(args.ppPublicKey)
+      }/events/ws`,
   );
 
   const connect = (): void => {
@@ -309,6 +321,7 @@ export function openPerPpSubscriber(args: {
         args.providerUrl,
         args.ppPublicKey,
         args.operatorJwt,
+        urlShape,
       );
       if (ppExists) break;
       if (Date.now() - start > PER_PP_OPEN_TIMEOUT_MS) {
@@ -349,17 +362,23 @@ export function openPerPpSubscriber(args: {
 }
 
 /**
- * Provider-platform exposes `GET /api/v1/dashboard/pp/list` (scoped to the
- * authenticated operator). No single-PP GET endpoint exists today, so the
- * harness polls list and matches on publicKey.
+ * Confirm the operator's PP is reachable on the provider before opening
+ * the WS. The multi-PP path polls `/dashboard/pp/list` until the
+ * script-registered PP appears; the single-PP path checks `/dashboard/pp`
+ * (singular — returns one object). Both return false on transient errors
+ * so the surrounding loop keeps polling.
  */
 async function checkPpExists(
   providerUrl: string,
   ppPublicKey: string,
   operatorJwt: string,
+  urlShape: "multi-pp" | "single-pp",
 ): Promise<boolean> {
+  const url = urlShape === "single-pp"
+    ? `${providerUrl}/api/v1/dashboard/pp`
+    : `${providerUrl}/api/v1/dashboard/pp/list`;
   try {
-    const res = await fetch(`${providerUrl}/api/v1/dashboard/pp/list`, {
+    const res = await fetch(url, {
       headers: { Authorization: `Bearer ${operatorJwt}` },
     });
     if (res.status !== 200) {
@@ -367,9 +386,17 @@ async function checkPpExists(
       return false;
     }
     const body = await res.json() as {
-      data?: Array<{ publicKey?: string }>;
+      data?:
+        | Array<{ publicKey?: string }>
+        | { publicKey?: string };
     };
-    return body.data?.some((pp) => pp.publicKey === ppPublicKey) ?? false;
+    if (urlShape === "single-pp") {
+      return (body.data as { publicKey?: string } | undefined)?.publicKey ===
+        ppPublicKey;
+    }
+    return (body.data as Array<{ publicKey?: string }> | undefined)?.some(
+      (pp) => pp.publicKey === ppPublicKey,
+    ) ?? false;
   } catch {
     return false;
   }
