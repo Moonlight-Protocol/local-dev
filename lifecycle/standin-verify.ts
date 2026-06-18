@@ -620,7 +620,14 @@ export async function main() {
 
   // provider-platform now gates bundle admission on the submitter's entity
   // being APPROVED. Register Alice (and Bob below) before any bundle.
-  await registerEntity(PROVIDER_URL, ppKeypair.publicKey(), alice, "Alice", [], "single-pp");
+  await registerEntity(
+    PROVIDER_URL,
+    ppKeypair.publicKey(),
+    alice,
+    "Alice",
+    [],
+    "single-pp",
+  );
   console.log("  Alice approved as entity");
 
   await withE2ESpan(
@@ -635,7 +642,14 @@ export async function main() {
     () => authenticate(bob, e2eConfig),
   );
   console.log("  Bob authenticated");
-  await registerEntity(PROVIDER_URL, ppKeypair.publicKey(), bob, "Bob", [], "single-pp");
+  await registerEntity(
+    PROVIDER_URL,
+    ppKeypair.publicKey(),
+    bob,
+    "Bob",
+    [],
+    "single-pp",
+  );
   console.log("  Bob approved as entity");
 
   const receiverOps = await withE2ESpan(
