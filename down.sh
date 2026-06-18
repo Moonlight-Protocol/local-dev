@@ -71,6 +71,7 @@ stop_process() {
 
 # --- Stop all processes ---
 stop_process "provider-platform" "$SCRIPT_DIR/.provider.pid" "$PROVIDER_PORT"
+stop_process "provider-stack-standin" "$SCRIPT_DIR/.standin.pid" "${STANDIN_PORT:-3011}"
 stop_process "council-platform" "$SCRIPT_DIR/.council-platform.pid" "$COUNCIL_PLATFORM_PORT"
 stop_process "pay-platform" "$SCRIPT_DIR/.pay-platform.pid" "$PAY_PLATFORM_PORT"
 stop_process "provider-console" "$SCRIPT_DIR/.provider-console.pid" "$PROVIDER_CONSOLE_PORT"

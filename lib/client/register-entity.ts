@@ -22,10 +22,13 @@ export async function registerEntity(
   user: Keypair,
   name: string,
   jurisdictions: string[] = [],
+  urlShape: "multi-pp" | "single-pp" = "multi-pp",
 ): Promise<void> {
-  const base = `${providerUrl}/api/v1/providers/${
-    encodeURIComponent(ppPublicKey)
-  }/entities`;
+  const base = urlShape === "single-pp"
+    ? `${providerUrl}/api/v1/provider/entities`
+    : `${providerUrl}/api/v1/providers/${
+      encodeURIComponent(ppPublicKey)
+    }/entities`;
 
   const challengeRes = await fetch(`${base}/challenge`, {
     method: "POST",

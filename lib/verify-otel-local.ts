@@ -30,6 +30,13 @@ export interface VerifyOtelLocalConfig {
    * don't run cp (e.g. local-CI e2e/docker-compose.yml). Defaults to true.
    */
   assertCouncilSpans?: boolean;
+  /**
+   * Override the OTEL service name used to look up provider spans. The
+   * standin emits as `provider-platform-standin` so its traces can be
+   * distinguished from the Deno provider-platform's in the shared local
+   * Jaeger; the standin-side verify passes this override.
+   */
+  providerServiceOverride?: string;
 }
 
 interface JaegerTracesResponse {
@@ -157,9 +164,10 @@ export async function verifyOtelTracesLocal(
     pollTimeoutMs = 30000,
     network,
     assertCouncilSpans = true,
+    providerServiceOverride,
   } = config;
   const names = serviceNamesFor(network);
-  const PROVIDER_SERVICE = names.provider;
+  const PROVIDER_SERVICE = providerServiceOverride ?? names.provider;
   const SDK_SERVICE = names.sdk;
   const councilService = assertCouncilSpans ? names.council : undefined;
 

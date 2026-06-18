@@ -39,9 +39,40 @@ import { assertCaptured } from "./assert.ts";
 import { makeRunId, writeReport } from "./report.ts";
 import type { CapturedEvent, ExpectedEvents, RunReport } from "./types.ts";
 
-const SUPPORTED_SCRIPTS = {
-  "testnet-main": "../main.ts",
-  "lifecycle-testnet-verify": "../../lifecycle/testnet-verify.ts",
+interface ScriptConfig {
+  path: string;
+  /**
+   * Role key used to derive the script's PP operator from the seed. Default
+   * is ROLES.PP; the standin script uses ROLES.STANDIN_PP because the
+   * standin's env-pinned PP comes from that role (set at boot by
+   * infra-up.sh from setup-keys.sh's `.local-dev-keys`).
+   */
+  ppRole?: typeof ROLES[keyof typeof ROLES];
+  /**
+   * When false, the harness skips the per-suite secret derivation and
+   * derives PP directly from the wrapper-level MASTER_SECRET. The standin
+   * is env-pinned at boot to a fixed key (LOCAL_DEV_MASTER_SECRET +
+   * ROLES.STANDIN_PP) — per-suite derivation would produce a different key
+   * that the standin would reject.
+   */
+  perSuiteSecret?: boolean;
+  /**
+   * Which provider route shape the WS subscriber + checkPpExists should use.
+   * - "multi-pp" (default) → /api/v1/providers/:pp/events/ws + /dashboard/pp/list
+   * - "single-pp"          → /api/v1/provider/events/ws + /dashboard/pp
+   */
+  urlShape?: "multi-pp" | "single-pp";
+}
+
+const SUPPORTED_SCRIPTS: Record<string, ScriptConfig> = {
+  "testnet-main": { path: "../main.ts" },
+  "lifecycle-testnet-verify": { path: "../../lifecycle/testnet-verify.ts" },
+  "lifecycle-standin-verify": {
+    path: "../../lifecycle/standin-verify.ts",
+    ppRole: ROLES.STANDIN_PP,
+    perSuiteSecret: false,
+    urlShape: "single-pp",
+  },
 } as const;
 
 type ScriptName = keyof typeof SUPPORTED_SCRIPTS;
@@ -81,26 +112,27 @@ async function main(): Promise<void> {
   // and call its exported main() in-process.
   const scriptModule = await loadScript(opts.scriptName);
 
-  // Derive a per-suite root secret so consecutive harness invocations
-  // under one wrapper-level MASTER_SECRET (e.g. suite 1 + suite 3 in
-  // run-local.sh) don't collide on the PP/admin keys against
-  // provider-platform's "PP already active for this council" check.
-  // scriptName is the KDF differentiator: same root + same scriptName ⇒
-  // same per-suite SK ⇒ reproducible across re-runs; different scriptName
-  // ⇒ disjoint key sets.
-  const perSuiteSecret = await derivePerSuiteSecret(
-    opts.masterSecret,
-    opts.scriptName,
-  );
+  // Per-suite secret derivation prevents consecutive harness invocations
+  // from colliding on PP/admin keys (e.g. suite 1 + suite 3 in run-local.sh
+  // both hitting the same Deno provider with the same PP). The standin
+  // path skips this — its PP is env-pinned at boot to a fixed key, so the
+  // harness must derive THAT key directly from the wrapper-level
+  // MASTER_SECRET (no per-suite KDF), or the auth fails.
+  const scriptCfg = SUPPORTED_SCRIPTS[opts.scriptName];
+  const ppRole = scriptCfg.ppRole ?? ROLES.PP;
+  const usePerSuite = scriptCfg.perSuiteSecret !== false;
+  const effectiveSecret = usePerSuite
+    ? await derivePerSuiteSecret(opts.masterSecret, opts.scriptName)
+    : opts.masterSecret;
   // Re-export so the dynamically-imported script's own
-  // Deno.env.get("MASTER_SECRET") inside main() reads the per-suite SK and
+  // Deno.env.get("MASTER_SECRET") inside main() reads the same secret and
   // derives matching role keys.
-  Deno.env.set("MASTER_SECRET", perSuiteSecret);
+  Deno.env.set("MASTER_SECRET", effectiveSecret);
 
   // 2. Derive the operator (PP) keypair and acquire a dashboard JWT —
   // matches what the script does internally via lib/master-seed + walletAuth.
-  const seed = await masterSeedFromSecret(perSuiteSecret);
-  const ppOperator = await deriveKeypair(seed, ROLES.PP, 0);
+  const seed = await masterSeedFromSecret(effectiveSecret);
+  const ppOperator = await deriveKeypair(seed, ppRole, 0);
   const ppPublicKey = ppOperator.publicKey();
   console.log(
     `[events-capture] script=${opts.scriptName} ppPublicKey=${ppPublicKey}`,
@@ -128,6 +160,7 @@ async function main(): Promise<void> {
     providerUrl: opts.providerUrl,
     ppPublicKey,
     operatorJwt,
+    urlShape: scriptCfg.urlShape ?? "multi-pp",
   });
 
   // Capture per-PP and network subscriber open errors without crashing the
@@ -208,7 +241,7 @@ async function main(): Promise<void> {
 }
 
 async function loadScript(scriptName: ScriptName): Promise<LoadedScriptModule> {
-  const relativePath = SUPPORTED_SCRIPTS[scriptName];
+  const relativePath = SUPPORTED_SCRIPTS[scriptName].path;
   const moduleUrl = new URL(relativePath, import.meta.url).href;
   const mod = await import(moduleUrl);
   if (typeof mod.main !== "function") {

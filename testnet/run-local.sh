@@ -89,6 +89,21 @@ run_verify_lifecycle() {
   "$DENO_BIN" run --allow-all lifecycle/verify-otel-local.ts
 }
 
+run_standin_lifecycle() {
+  info "Suite 5: lifecycle flow → standin (events-capture harness)"
+  # Standin runs on :3011 by default (infra-up.sh section 5b); harness
+  # subscribes to its WS at /provider/events/ws and runs lifecycle/standin-verify.ts.
+  PROVIDER_URL="${STANDIN_URL:-http://localhost:3011}" \
+    "$DENO_BIN" run --allow-all "$SCRIPT_DIR/events-capture/harness.ts" \
+    --script lifecycle-standin-verify
+}
+
+run_verify_standin_lifecycle() {
+  info "Suite 6: OTEL verify (standin lifecycle) ← Jaeger"
+  cd "$LOCAL_DEV_DIR"
+  "$DENO_BIN" run --allow-all lifecycle/standin-verify-otel-local.ts
+}
+
 target="${1:-all}"
 
 case "$target" in
@@ -96,12 +111,19 @@ case "$target" in
   2)         run_verify_payment ;;
   3)         run_lifecycle ;;
   4)         run_verify_lifecycle ;;
+  5)         run_standin_lifecycle ;;
+  6)         run_verify_standin_lifecycle ;;
   payment)   run_payment; run_verify_payment ;;
   lifecycle) run_lifecycle; run_verify_lifecycle ;;
-  all)       run_payment; run_verify_payment; run_lifecycle; run_verify_lifecycle ;;
+  standin)   run_standin_lifecycle; run_verify_standin_lifecycle ;;
+  all)
+    run_payment; run_verify_payment
+    run_lifecycle; run_verify_lifecycle
+    run_standin_lifecycle; run_verify_standin_lifecycle
+    ;;
   *)
     warn "Unknown target: $target"
-    echo "Usage: $0 [1|2|3|4|payment|lifecycle|all]" >&2
+    echo "Usage: $0 [1|2|3|4|5|6|payment|lifecycle|standin|all]" >&2
     exit 2
     ;;
 esac
