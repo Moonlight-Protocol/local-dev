@@ -1,20 +1,21 @@
 /**
- * Local Dev — Pay Platform Setup
+ * Local Dev — Pay Platform Setup (multi-council)
  *
- * Seeds pay-platform with council configuration via the admin API.
- * This runs AFTER setup-c.sh and setup-pp.sh — it reads their outputs from
- * .local-dev-state and combines them with the PAY_ADMIN identity from
- * .local-dev-keys.
+ * Seeds pay-platform with config for every council created by setup-c.sh via
+ * the admin API. This runs AFTER setup-c.sh and setup-pp.sh — it reads their
+ * outputs from .local-dev-state and combines them with the PAY_ADMIN identity
+ * from .local-dev-keys.
  *
  * Steps:
  *   1. Load PAY_ADMIN keypair from env (passed by setup-pay.sh wrapper)
- *   2. Load council/channel/asset IDs from .local-dev-state
+ *   2. Load COUNCIL_COUNT + per-council channel/asset IDs from .local-dev-state
  *   3. Fund PAY_ADMIN via Friendbot (needed for wallet auth challenge)
  *   4. PAY_ADMIN authenticates to pay-platform → JWT
- *   5. Create council record via POST /admin/councils (includes councilUrl)
+ *   5. Create one council record per COUNCIL_<i>_* via POST /admin/councils
+ *      (includes councilUrl)
  *
  * PP data is fetched live from council-platform at bundle time, not stored
- * locally. The councilUrl stored with the council record tells pay-platform
+ * locally. The councilUrl stored with each council record tells pay-platform
  * where to query.
  *
  * Why production-like: the admin API endpoints exercised here are the same
@@ -23,8 +24,8 @@
  *
  * Prereqs:
  *   - up.sh has run (pay-platform on :3025 with ADMIN_WALLETS set)
- *   - setup-c.sh has run (.local-dev-state has council IDs)
- *   - setup-pp.sh has run (.local-dev-state has PP_PK + PROVIDER_URL)
+ *   - setup-c.sh has run (.local-dev-state has COUNCIL_COUNT + COUNCIL_<i>_*)
+ *   - setup-pp.sh has run (.local-dev-state has PROVIDER_URL)
  *
  * Env (set by setup-pay.sh wrapper):
  *   PAY_ADMIN_PK              required
@@ -53,14 +54,19 @@ const FRIENDBOT_URL = Deno.env.get("FRIENDBOT_URL") ??
 const STATE_FILE = Deno.env.get("STATE_FILE") ??
   new URL("./.local-dev-state", import.meta.url).pathname;
 
+interface CouncilState {
+  id: string;
+  name: string;
+  channel: string;
+  jurisdictions: string[];
+}
+
 interface State {
-  COUNCIL_ID: string;
-  CHANNEL_ID: string;
   ASSET_ID: string;
   NETWORK_PASSPHRASE: string;
   COUNCIL_URL: string;
-  PP_PK: string;
   PROVIDER_URL: string;
+  councils: CouncilState[];
 }
 
 async function loadState(): Promise<State> {
@@ -81,13 +87,11 @@ async function loadState(): Promise<State> {
     env[trimmed.slice(0, eqIdx).trim()] = trimmed.slice(eqIdx + 1).trim();
   }
   const required = [
-    "COUNCIL_ID",
-    "CHANNEL_ID",
     "ASSET_ID",
     "NETWORK_PASSPHRASE",
     "COUNCIL_URL",
-    "PP_PK",
     "PROVIDER_URL",
+    "COUNCIL_COUNT",
   ];
   for (const key of required) {
     if (!env[key]) {
@@ -96,7 +100,26 @@ async function loadState(): Promise<State> {
       );
     }
   }
-  return env as unknown as State;
+  const count = Number(env.COUNCIL_COUNT);
+  const councils: CouncilState[] = [];
+  for (let i = 1; i <= count; i++) {
+    const id = env[`COUNCIL_${i}_ID`];
+    const name = env[`COUNCIL_${i}_NAME`];
+    const channel = env[`COUNCIL_${i}_CHANNEL`];
+    const jurisdictions = (env[`COUNCIL_${i}_JURISDICTIONS`] ?? "").split(",")
+      .filter((j) => j);
+    if (!id || !name || !channel) {
+      throw new Error(`State file missing COUNCIL_${i}_* fields.`);
+    }
+    councils.push({ id, name, channel, jurisdictions });
+  }
+  return {
+    ASSET_ID: env.ASSET_ID,
+    NETWORK_PASSPHRASE: env.NETWORK_PASSPHRASE,
+    COUNCIL_URL: env.COUNCIL_URL,
+    PROVIDER_URL: env.PROVIDER_URL,
+    councils,
+  };
 }
 
 async function fundAccount(publicKey: string): Promise<void> {
@@ -152,6 +175,43 @@ async function walletAuth(keypair: Keypair): Promise<string> {
   return token;
 }
 
+async function createCouncil(
+  jwt: string,
+  state: State,
+  council: CouncilState,
+): Promise<{ id: string }> {
+  const councilRes = await fetch(`${PAY_API}/admin/councils`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${jwt}`,
+    },
+    body: JSON.stringify({
+      name: council.name,
+      channelAuthId: council.id,
+      councilUrl: state.COUNCIL_URL,
+      networkPassphrase: state.NETWORK_PASSPHRASE,
+      channels: [
+        {
+          assetCode: "XLM",
+          assetContractId: state.ASSET_ID,
+          privacyChannelId: council.channel,
+        },
+      ],
+      jurisdictions: council.jurisdictions,
+      active: true,
+    }),
+  });
+  if (!councilRes.ok) {
+    throw new Error(
+      `Create council "${council.name}" failed: ${councilRes.status} ${await councilRes
+        .text()}`,
+    );
+  }
+  const { data } = await councilRes.json();
+  return data;
+}
+
 async function main() {
   const startTime = Date.now();
 
@@ -159,12 +219,16 @@ async function main() {
 
   console.log("[1/6] Load state from setup-c + setup-pp");
   const state = await loadState();
-  console.log(`  Council ID:       ${state.COUNCIL_ID}`);
   console.log(`  Council URL:      ${state.COUNCIL_URL}`);
-  console.log(`  Privacy Channel:  ${state.CHANNEL_ID}`);
   console.log(`  XLM SAC:          ${state.ASSET_ID}`);
-  console.log(`  PP public key:    ${state.PP_PK}`);
   console.log(`  Provider URL:     ${state.PROVIDER_URL}`);
+  console.log(`  Councils:         ${state.councils.length}`);
+  for (const c of state.councils) {
+    console.log(
+      `    - ${c.name} (${c.id}) — channel ${c.channel} — [${c.jurisdictions
+        .join(",")}]`,
+    );
+  }
 
   console.log("\n[2/6] Warmup pay-platform");
   await warmupPay();
@@ -181,36 +245,15 @@ async function main() {
   const jwt = await walletAuth(payAdmin);
   console.log("  JWT acquired");
 
-  console.log("\n[5/6] Create council via POST /admin/councils");
-  const councilRes = await fetch(`${PAY_API}/admin/councils`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${jwt}`,
-    },
-    body: JSON.stringify({
-      name: "Local Council",
-      channelAuthId: state.COUNCIL_ID,
-      councilUrl: state.COUNCIL_URL,
-      networkPassphrase: state.NETWORK_PASSPHRASE,
-      channels: [
-        {
-          assetCode: "XLM",
-          assetContractId: state.ASSET_ID,
-          privacyChannelId: state.CHANNEL_ID,
-        },
-      ],
-      jurisdictions: ["US", "UY", "BR", "AR", "FR"],
-      active: true,
-    }),
-  });
-  if (!councilRes.ok) {
-    throw new Error(
-      `Create council failed: ${councilRes.status} ${await councilRes.text()}`,
-    );
+  console.log(
+    `\n[5/6] Create ${state.councils.length} councils via POST /admin/councils`,
+  );
+  const created: { id: string }[] = [];
+  for (const council of state.councils) {
+    const record = await createCouncil(jwt, state, council);
+    console.log(`  Council created: ${council.name} → ${record.id}`);
+    created.push(record);
   }
-  const { data: council } = await councilRes.json();
-  console.log(`  Council created: ${council.id}`);
 
   // Fund the PAY_SERVICE keypair so it can authenticate with provider-platform
   const payServicePk = Deno.env.get("PAY_SERVICE_PK");
@@ -224,15 +267,20 @@ async function main() {
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n=== Pay Platform setup complete in ${elapsed}s ===\n`);
-  console.log(`  Council DB ID:  ${council.id}`);
-  console.log(`  Council Auth:   ${state.COUNCIL_ID}`);
-  console.log(`  Council URL:    ${state.COUNCIL_URL}`);
-  console.log(`  PP public key:  ${state.PP_PK} (from council-platform)`);
+  console.log(`  Councils created: ${created.length}`);
+  for (let i = 0; i < state.councils.length; i++) {
+    console.log(
+      `    - ${state.councils[i].name}: DB ID ${created[i].id}, Auth ${
+        state.councils[i].id
+      }`,
+    );
+  }
+  console.log(`  Council URL:      ${state.COUNCIL_URL}`);
   console.log(
-    `  Provider URL:   ${state.PROVIDER_URL} (from council-platform)`,
+    `  Provider URL:     ${state.PROVIDER_URL} (PP data from council-platform)`,
   );
   if (payServicePk) {
-    console.log(`  Service key:    ${payServicePk}`);
+    console.log(`  Service key:      ${payServicePk}`);
   }
   console.log("");
   console.log("Pay-platform now has the council config. PP data is fetched");
