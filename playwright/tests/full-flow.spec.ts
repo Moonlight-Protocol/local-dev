@@ -352,9 +352,20 @@ test.describe("Full UC Flow", () => {
     await providerPage.fill("#pp-email", "playwright-pp@moonlight.test");
     await providerPage.click("#next-btn");
 
-    // Fund Account — wallet sends XLM to the PP's derived address
+    // Fund Account — wallet sends XLM to the PP's derived address.
+    // The PP root account is the fee-payer for every bundle provider-platform
+    // submits (executor.process.ts: feePayerPubkey = ppPublicKey). Its
+    // pre-flight OpEx check (preflight-opex-balance.ts) requires the fee-payer
+    // to HOLD at least the inclusion fee (NETWORK_FEE = 1_000_000_000 stroops =
+    // 100 XLM, canonical across every docker suite) plus the Soroban resource
+    // fee, after reserves — otherwise the bundle terminal-FAILs with
+    // "Insufficient fees on fee-payer account" and the payment never settles.
+    // The old "10" under-funded it, so Step 12's send silently failed and
+    // Step 13 saw 0 stroops. The green e2e/pos-instant suites fund the PP via
+    // friendbot (~10_000 XLM); mirror that headroom here with a UI send well
+    // above the 100 XLM floor.
     await providerPage.waitForSelector("#fund-amount", { timeout: 15_000 });
-    await providerPage.fill("#fund-amount", "10");
+    await providerPage.fill("#fund-amount", "500");
 
     await withWalletApproval(providerCtx.context, providerPage, async () => {
       await providerPage.click("#fund-btn");
@@ -364,9 +375,19 @@ test.describe("Full UC Flow", () => {
       timeout: 60_000,
     });
 
-    // Next registers the PP via API (no wallet popup), then auto-navigates to /setup/join
+    // Next registers the PP via API (no wallet popup), then auto-navigates to
+    // /setup/join. Wait for the join view's Council-URL input to actually
+    // render rather than a flaky networkidle: registerPp is a network call
+    // whose latency under docker load can outrun Step 5's checks, so
+    // networkidle can resolve while still mid-navigation — leaving Step 5 to
+    // race the in-flight nav, miss #council-url, and fall back to the fragile
+    // /home path (observed: trace shows fund → join → home, timeout). Landing
+    // deterministically on the join view is the real post-condition here.
     await providerPage.click("#next-btn");
-    await providerPage.waitForLoadState("networkidle");
+    await providerPage.waitForSelector("#council-url", {
+      state: "visible",
+      timeout: 30_000,
+    });
   });
 
   // ── Step 5: Provider requests joining council ─────────────────────
@@ -833,37 +854,43 @@ test.describe("Full UC Flow", () => {
   // ── Step 13: Merchant verifies received payment ───────────────────
 
   test("Step 13: Merchant verifies received payment", async () => {
+    // Protocol-level proof: pay-platform recorded at least one COMPLETED
+    // inbound transaction for the merchant. The DB query is authoritative
+    // (the old UI-text check accepted the "No transactions yet" placeholder).
+    //
+    // This settles ASYNCHRONOUSLY: the POS calls /pay/instant/execute, which
+    // writes the merchant's IN/COMPLETED row only AFTER the bundle settles on
+    // chain (provider-platform's executor 5s + verifier 10s ticks; the
+    // endpoint itself polls up to 120s). Step 12 returns early — it reads the
+    // mid-flight "Processing payment…" status, not the final "Payment
+    // complete!" — so the row lands well after Step 12. The old fixed
+    // waitForTimeout(5000) + single read raced that settlement and saw 0
+    // stroops. Poll the real signal until it settles instead of guessing a
+    // sleep. (No retry/skip — this is a condition-based wait on the actual
+    // projection, bounded just above the endpoint's own 120s settle cap.)
+    if (getTarget() === "local") {
+      await expect
+        .poll(
+          async () =>
+            Number(
+              await fetchCompletedInboundStroops(profiles.merchant.publicKey),
+            ),
+          {
+            timeout: 150_000,
+            intervals: [2_000],
+            message:
+              `No COMPLETED inbound tx for merchant ${profiles.merchant.publicKey} settled within 150s`,
+          },
+        )
+        .toBeGreaterThan(0);
+    }
+
+    // UI smoke — merchant home renders the (now-settled) state.
     await merchantPage.goto(`${urls.moonlightPay}/#/`);
     await merchantPage.waitForLoadState("networkidle");
-    await merchantPage.waitForTimeout(5000);
-    await merchantPage.reload();
-    await merchantPage.waitForLoadState("networkidle");
-
-    // UI smoke — merchant home renders.
-    const hasBalance = await merchantPage
-      .locator("#balance-display")
-      .isVisible()
-      .catch(() => false);
-    const hasTxList = await merchantPage
-      .locator("#tx-list")
-      .isVisible()
-      .catch(() => false);
-    expect(hasBalance || hasTxList).toBeTruthy();
-
-    // Protocol-level proof: pay-platform recorded at least one COMPLETED
-    // inbound transaction for the merchant. The previous assertion
-    // (txContent?.length > 0) accepted "No transactions yet" placeholder
-    // text, so a payment that never settled looked the same as one that
-    // did. The DB query is authoritative.
-    if (getTarget() === "local") {
-      const completed = await fetchCompletedInboundStroops(
-        profiles.merchant.publicKey,
-      );
-      expect(
-        completed > 0n,
-        `Expected at least one COMPLETED inbound tx for merchant ${profiles.merchant.publicKey}, got total ${completed} stroops`,
-      ).toBe(true);
-    }
+    await expect(
+      merchantPage.locator("#balance-display, #tx-list").first(),
+    ).toBeVisible({ timeout: 15_000 });
   });
 
   // ── Step 13b: Merchant deletes their pay-platform account ─────────
