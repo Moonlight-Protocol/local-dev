@@ -17,6 +17,14 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
 
+# Stellar quickstart pin (image tag + local-network protocol) — single source of
+# truth, shared with every compose file, infra-up.sh, provider.ts and the drift
+# alarm. Exported so the docker compose invocations below interpolate it.
+set -a
+# shellcheck source=stellar-pin.env
+. "$SCRIPT_DIR/stellar-pin.env"
+set +a
+
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
@@ -91,6 +99,8 @@ run_suite() {
   MOONLIGHT_PAY_PATH="${MOONLIGHT_PAY_PATH:-${BASE_DIR}/moonlight-pay}" \
   PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-${BASE_DIR}/provider-console}" \
   COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-${BASE_DIR}/council-console}" \
+  STELLAR_QUICKSTART_IMAGE="$STELLAR_QUICKSTART_IMAGE" \
+  STELLAR_PROTOCOL_VERSION="$STELLAR_PROTOCOL_VERSION" \
   docker compose -f "$compose_file" -p "$project_name" up -d
 
   # Stream test-runner logs and wait for it to finish

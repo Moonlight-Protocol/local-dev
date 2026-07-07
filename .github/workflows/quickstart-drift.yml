@@ -1,0 +1,71 @@
+name: Quickstart protocol drift alarm
+
+# Warns when Stellar testnet advances past the protocol our quickstart pin is
+# frozen to (STELLAR_PROTOCOL_VERSION in stellar-pin.env). While testnet is ahead
+# of the pin, this posts to Discord on EVERY scheduled run — a weekly nag, no
+# stored state — until the pin is bumped.
+#
+# Wired to secrets.DISCORD_WEBHOOK_URL but DORMANT until that secret is set
+# out-of-band: with no secret it logs the drift and posts nothing. The webhook
+# URL is read ONLY from the secret — never hardcoded, never from iac.
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Mondays 09:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drift-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compare testnet protocol to our pin
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+
+          # Our pinned protocol — single source of truth.
+          set -a
+          . ./stellar-pin.env
+          set +a
+          ours="$STELLAR_PROTOCOL_VERSION"
+
+          # Testnet's live protocol: Horizon primary, Soroban RPC fallback.
+          testnet="$(curl -sf https://horizon-testnet.stellar.org/ \
+            | jq -r '.current_protocol_version // empty' || true)"
+          if [ -z "$testnet" ]; then
+            testnet="$(curl -sf https://soroban-testnet.stellar.org \
+              -X POST -H 'Content-Type: application/json' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"getNetwork"}' \
+              | jq -r '.result.protocolVersion // empty' || true)"
+          fi
+
+          case "$testnet" in
+            ''|*[!0-9]*) echo "Could not read a numeric testnet protocol (got '$testnet'); skipping."; exit 0;;
+          esac
+          echo "Testnet protocol: $testnet | our pin: $ours"
+
+          if [ "$testnet" -le "$ours" ]; then
+            echo "Pin is current (testnet $testnet <= pin $ours). No drift."
+            exit 0
+          fi
+          echo "DRIFT: testnet ($testnet) is ahead of our pin ($ours)."
+
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL not set — alarm is dormant, not posting."
+            exit 0
+          fi
+
+          printf -v msg '%s\n%s\n%s' \
+            ":warning: **Stellar quickstart pin is behind testnet**" \
+            "Testnet is on protocol **$testnet**; local-dev is pinned to protocol **$ours**." \
+            "Bump the pin in \`local-dev/stellar-pin.env\` (STELLAR_QUICKSTART_IMAGE + STELLAR_PROTOCOL_VERSION). It feeds the docker-compose.*.yml files, e2e/lifecycle/multi-asset compose, test.sh, infra-up.sh, down.sh and lifecycle/provider.ts."
+
+          jq -n --arg content "$msg" '{content: $content}' \
+            | curl -sf -X POST -H 'Content-Type: application/json' -d @- "$DISCORD_WEBHOOK_URL" \
+            && echo "Posted drift alert to Discord."

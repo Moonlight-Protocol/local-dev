@@ -30,6 +30,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
+
+# Stellar quickstart pin (image tag + local-network protocol) — single source of
+# truth, shared with the compose files, test.sh, provider.ts and the drift alarm.
+set -a
+# shellcheck source=stellar-pin.env
+. "$SCRIPT_DIR/stellar-pin.env"
+set +a
+
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 PROVIDER_CONSOLE_PATH="${PROVIDER_CONSOLE_PATH:-$BASE_DIR/provider-console}"
 COUNCIL_CONSOLE_PATH="${COUNCIL_CONSOLE_PATH:-$BASE_DIR/council-console}"
@@ -146,13 +154,15 @@ if curl -sf "http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" -X POST \
   info "Stellar RPC on port $STELLAR_RPC_PORT is healthy (shared)."
 else
   info "Stellar RPC not running, starting local network..."
-  # Pin to v639-b1103.1-latest — see local-dev PR #120: the rolling
-  # stellar/quickstart:testing tag (default for `stellar container start`)
-  # silently rejects all WASM uploads with HostError(Context,
-  # InternalError) since 2026-06-15. PR #120 pinned the docker-compose
-  # paths; this pins the CLI path used by up.sh.
-  stellar container start local --image-tag-override v639-b1103.1-latest 2>/dev/null \
-    || stellar container start local 2>/dev/null \
+  # Image tag + protocol come from stellar-pin.env (SSOT). --protocol-version is
+  # a WORKAROUND for the quickstart image's broken default (it selects protocol
+  # 25 on an image whose stellar-core is v27, which fails every WASM upload with
+  # HostError(Context, InternalError)); remove it when a fixed image ships.
+  stellar_tag="${STELLAR_QUICKSTART_IMAGE#stellar/quickstart:}"
+  stellar container start local \
+    --image-tag-override "$stellar_tag" \
+    --protocol-version "$STELLAR_PROTOCOL_VERSION" 2>/dev/null \
+    || stellar container start local --image-tag-override "$stellar_tag" 2>/dev/null \
     || true
 
   info "Waiting for Stellar RPC to be ready..."

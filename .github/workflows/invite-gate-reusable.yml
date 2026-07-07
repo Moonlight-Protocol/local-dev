@@ -129,6 +129,14 @@ jobs:
           mkdir -p "$GITHUB_WORKSPACE/playwright/freighter-extension"
           cp -r extension/build/. "$GITHUB_WORKSPACE/playwright/freighter-extension/"
 
+      - name: Load Stellar quickstart pin (SSOT)
+        run: |
+          set -a
+          . "$GITHUB_WORKSPACE/stellar-pin.env"
+          set +a
+          echo "STELLAR_QUICKSTART_IMAGE=$STELLAR_QUICKSTART_IMAGE" >> "$GITHUB_ENV"
+          echo "STELLAR_PROTOCOL_VERSION=$STELLAR_PROTOCOL_VERSION" >> "$GITHUB_ENV"
+
       - name: Run invite-gate tests
         env:
           PROVIDER_CONSOLE_PATH: ./provider-console
