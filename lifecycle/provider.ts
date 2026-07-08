@@ -18,6 +18,35 @@ const PROVIDER_PORT = 3030;
 
 const NETWORK_PASSPHRASE = "Standalone Network ; February 2017";
 
+// Stellar quickstart pin (image tag + local-network protocol) — read from the
+// single source of truth (stellar-pin.env at the repo root) so this local-runner
+// path can't drift from the compose files / infra-up.sh. --protocol-version is a
+// WORKAROUND for the image's broken default (protocol 25 on a stellar-core v27
+// image, which fails WASM upload); remove it when a fixed image ships.
+function loadStellarPin(): { image: string; protocolVersion: string } {
+  const env = Deno.readTextFileSync(
+    new URL("../stellar-pin.env", import.meta.url),
+  );
+  const vars: Record<string, string> = {};
+  for (const line of env.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eq = trimmed.indexOf("=");
+    if (eq === -1) continue;
+    vars[trimmed.slice(0, eq).trim()] = trimmed.slice(eq + 1).trim();
+  }
+  const image = vars["STELLAR_QUICKSTART_IMAGE"];
+  const protocolVersion = vars["STELLAR_PROTOCOL_VERSION"];
+  if (!image || !protocolVersion) {
+    throw new Error(
+      "stellar-pin.env missing STELLAR_QUICKSTART_IMAGE / STELLAR_PROTOCOL_VERSION",
+    );
+  }
+  return { image, protocolVersion };
+}
+
+const STELLAR_PIN = loadStellarPin();
+
 export interface Infrastructure {
   rpcUrl: string;
   friendbotUrl: string;
@@ -58,10 +87,12 @@ export async function startStellar(): Promise<{
     STELLAR_CONTAINER,
     "-p",
     `${STELLAR_PORT}:8000`,
-    "stellar/quickstart:latest",
+    STELLAR_PIN.image,
     "--local",
     "--limits",
     "unlimited",
+    "--protocol-version",
+    STELLAR_PIN.protocolVersion,
   ]);
 
   // Wait for RPC health

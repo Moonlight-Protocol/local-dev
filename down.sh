@@ -15,6 +15,14 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BASE_DIR="${BASE_DIR:-$(dirname "$SCRIPT_DIR")}"
+
+# Stellar quickstart pin (single source of truth) — exported so the lifecycle
+# `docker compose down` below can interpolate the pinned image without warnings.
+set -a
+# shellcheck source=stellar-pin.env
+. "$SCRIPT_DIR/stellar-pin.env"
+set +a
+
 PROVIDER_PLATFORM_PATH="${PROVIDER_PLATFORM_PATH:-$BASE_DIR/provider-platform}"
 COUNCIL_PLATFORM_PATH="${COUNCIL_PLATFORM_PATH:-$BASE_DIR/council-platform}"
 NETWORK_DASHBOARD_PLATFORM_PATH="${NETWORK_DASHBOARD_PLATFORM_PATH:-$BASE_DIR/network-dashboard-platform}"

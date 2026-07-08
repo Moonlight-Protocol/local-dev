@@ -5,8 +5,11 @@
 
 services:
   stellar:
-    image: stellar/quickstart:v639-b1103.1-latest
-    command: --local --limits unlimited
+    # Pinned build + protocol come from stellar-pin.env (SSOT). --protocol-version is a
+    # WORKAROUND for the image's broken default (protocol 25 on a stellar-core v27 image),
+    # which fails contract upload; remove it when a fixed image ships. See stellar-pin.env.
+    image: ${STELLAR_QUICKSTART_IMAGE}
+    command: --local --limits unlimited --protocol-version ${STELLAR_PROTOCOL_VERSION}
     healthcheck:
       test: >
         curl -sf http://localhost:8000/soroban/rpc -X POST

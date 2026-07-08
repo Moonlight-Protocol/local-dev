@@ -84,6 +84,14 @@ jobs:
           fi
           ls -la e2e/wasms/
 
+      - name: Load Stellar quickstart pin (SSOT)
+        run: |
+          set -a
+          . "$GITHUB_WORKSPACE/stellar-pin.env"
+          set +a
+          echo "STELLAR_QUICKSTART_IMAGE=$STELLAR_QUICKSTART_IMAGE" >> "$GITHUB_ENV"
+          echo "STELLAR_PROTOCOL_VERSION=$STELLAR_PROTOCOL_VERSION" >> "$GITHUB_ENV"
+
       - name: Run Multi-Asset E2E
         env:
           PROVIDER_IMAGE: ${{ inputs.provider_image_override != '' && inputs.provider_image_override || format('{0}/{1}/provider-platform:{2}', env.REGISTRY, env.ORG, inputs.provider_version) }}
