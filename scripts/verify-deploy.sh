@@ -32,7 +32,7 @@ ENDPOINTS=(
 )
 
 OWNER="${MOONLIGHT_OWNER:-Moonlight-Protocol}"
-TIMEOUT="${VERIFY_TIMEOUT:-10}"
+TIMEOUT="${VERIFY_TIMEOUT:-30}"
 # Override the tag-fetch index for drift simulation (e.g. TAG_INDEX=1 ⇒ second-latest tag).
 TAG_INDEX="${TAG_INDEX:-0}"
 
