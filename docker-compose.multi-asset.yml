@@ -141,7 +141,7 @@ services:
       start_period: 10s
 
   test-runner:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       provider:
         condition: service_healthy
@@ -160,7 +160,7 @@ services:
       - -c
       - |
           mkdir -p multi-asset lib
-          cp /multi-asset-src/*.ts multi-asset/ && cp /multi-asset-src/deno.json multi-asset/ 2>/dev/null || true
+          cp /multi-asset-src/*.ts multi-asset/ && cp /multi-asset-src/deno.json /multi-asset-src/deno.lock multi-asset/ 2>/dev/null || true
           cp /lib-src/*.ts lib/
           cp -r /lib-src/client lib/
           cd multi-asset && deno install && cd ..
