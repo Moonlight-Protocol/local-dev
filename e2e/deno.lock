@@ -3,11 +3,11 @@
   "specifiers": {
     "jsr:@colibri/core@0.22": "0.22.0",
     "jsr:@fifo/convee@1.0.0": "1.0.0",
-    "jsr:@moonlight/moonlight-sdk@0.11": "0.11.0",
+    "jsr:@moonlight/moonlight-sdk@~0.12.1": "0.12.1",
     "jsr:@noble/curves@^1.8.0": "1.9.0",
     "jsr:@noble/hashes@1.8.0": "1.8.0",
     "jsr:@noble/hashes@^1.6.1": "1.8.0",
-    "jsr:@std/collections@^1.1.3": "1.2.0",
+    "jsr:@std/collections@^1.1.3": "1.3.0",
     "jsr:@std/toml@^1.0.11": "1.0.11",
     "npm:@opentelemetry/api@^1.9.0": "1.9.1",
     "npm:@stellar/stellar-sdk@^15.0.1": "15.1.0",
@@ -29,8 +29,8 @@
     "@fifo/convee@1.0.0": {
       "integrity": "b61bfa222b9b8a53f0f2af1f35148fd54d86afc2fc3d6b5d073d56aaa369d9a3"
     },
-    "@moonlight/moonlight-sdk@0.11.0": {
-      "integrity": "2c5595abc19e8b35e4faf56c573bb127b59b2a9e7d86dda49a180ff2263ffb11",
+    "@moonlight/moonlight-sdk@0.12.1": {
+      "integrity": "2294af5bcebb8c547fc74660fb315887954b3153abbf687fbc46a45886ec8c09",
       "dependencies": [
         "jsr:@colibri/core",
         "jsr:@noble/curves",
@@ -49,8 +49,8 @@
     "@noble/hashes@1.8.0": {
       "integrity": "b52a2fcb4d02f8d8137871564a31f1ee9e2b0d15eedabbf32d2f7333f0abc939"
     },
-    "@std/collections@1.2.0": {
-      "integrity": "47627a21d3a13138b77fd0e4d790ba9d2e603c3510b686cde6b132fe9aa98a88"
+    "@std/collections@1.3.0": {
+      "integrity": "eb36b43d784477ea0b476483ac034a14bdd182aff921c812ecf662a1fcef9498"
     },
     "@std/toml@1.0.11": {
       "integrity": "e084988b872ca4bad6aedfb7350f6eeed0e8ba88e9ee5e1590621c5b5bb8f715",
@@ -84,7 +84,8 @@
         "bignumber.js",
         "buffer",
         "sha.js"
-      ]
+      ],
+      "deprecated": true
     },
     "@stellar/stellar-sdk@15.1.0": {
       "integrity": "sha512-GsJUcWx2yboVzYdhTe/LHS3V1wVLSHkUkglC5bBoYWGJt31vzIhbSGno60NP9CdCTNkLJdnrsLJ63oA58Zvh5A==",
@@ -232,8 +233,8 @@
         "is-callable"
       ]
     },
-    "form-data@4.0.5": {
-      "integrity": "sha512-8RipRLol37bNs2bhoV67fiTEvdTrbMUYcFTiy3+wuuOnUog2QBHCZWXDRijWQfAkhBj2Uf5UnVaiWwA5vdd82w==",
+    "form-data@4.0.6": {
+      "integrity": "sha512-vKatAh4SlVfgbv+YtmhiRjhEMJsYpsG1Y2rMQtR+SVSbytsSD1YGzDIcrAJmdFec88u/+VoGmxnl+80gL1tRCQ==",
       "dependencies": [
         "asynckit",
         "combined-stream",
@@ -409,7 +410,7 @@
   "workspace": {
     "dependencies": [
       "jsr:@colibri/core@0.22",
-      "jsr:@moonlight/moonlight-sdk@0.11",
+      "jsr:@moonlight/moonlight-sdk@~0.12.1",
       "npm:@opentelemetry/api@^1.9.0",
       "npm:@stellar/stellar-sdk@^15.0.1",
       "npm:buffer@6.0.3"
