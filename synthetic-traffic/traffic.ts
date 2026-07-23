@@ -50,12 +50,19 @@ function corridorPartner(country: string): string | null {
   return null;
 }
 
+/** Clamp to 2 decimal places with a clean decimal repr — the SDK converts
+ * amounts via their string form and rejects float artifacts like
+ * 29.080000000000002 ("too many fractional digits"). */
+function money(x: number): number {
+  return Number(x.toFixed(2));
+}
+
 function pickAmount(rng: Rng, type: PlannedAction["type"]): number {
   switch (type) {
     case "deposit":
-      return Math.round(rng.lognormal(40, 0.8, 10, 400) * 100) / 100;
+      return money(rng.lognormal(40, 0.8, 10, 400));
     case "send":
-      return Math.round(rng.lognormal(5, 1.0, 0.5, 150) * 100) / 100;
+      return money(rng.lognormal(5, 1.0, 0.5, 150));
     case "withdraw":
       return 0; // caller derives from balance
   }
@@ -127,7 +134,7 @@ export function planTick(
       if (type === "send") {
         const receiver = pickReceiver(state, slots, slot, actor, rng);
         if (!receiver) continue;
-        const amount = Math.min(pickAmount(rng, "send"), balance * 0.8);
+        const amount = money(Math.min(pickAmount(rng, "send"), balance * 0.8));
         if (amount < 0.5) continue;
         actions.push({
           type,
@@ -139,7 +146,7 @@ export function planTick(
           amount,
         });
       } else if (type === "withdraw") {
-        const amount = Math.round(balance * rng.uniform(0.3, 0.8) * 100) / 100;
+        const amount = money(balance * rng.uniform(0.3, 0.8));
         if (amount < 1) continue;
         actions.push({
           type,

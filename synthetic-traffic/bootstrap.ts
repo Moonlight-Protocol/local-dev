@@ -7,7 +7,12 @@
 // lib/deploy.ts + lib/admin.ts are pinned to stellar-sdk 14.2.0 (same as the
 // setup scripts); keypairs/servers passed to them must come from that version.
 import { Keypair as Keypair14, rpc as rpc14 } from "stellar-sdk-14";
-import { getOrDeployCustomSac, getOrDeployNativeSac } from "../lib/deploy.ts";
+import { Buffer } from "node:buffer";
+import {
+  deployPrivacyChannel,
+  getOrDeployCustomSac,
+  getOrDeployNativeSac,
+} from "../lib/deploy.ts";
 import { addProvider } from "../lib/admin.ts";
 import { issueAssetTo } from "../lib/classic-asset.ts";
 import type { EngineEnv } from "./env.ts";
@@ -18,7 +23,10 @@ import type { CouncilState, EngineState, ProviderState } from "./state.ts";
 import {
   contractName,
   deployNamed,
+  fetchContractId,
+  fetchWasmHash,
   publishWasm,
+  registerContract,
   WASM_NAMES,
 } from "./registry.ts";
 import { discordAlert, friendbotFund } from "./funding.ts";
@@ -109,16 +117,57 @@ export async function bootstrapCouncil(
     await usdcIssuer(env, ring),
   );
 
+  // Channels deploy directly (deployer = admin: the privacy-channel
+  // constructor calls admin.require_auth(), which `stellar registry deploy`
+  // cannot satisfy nested in recording mode — upstream CLI limitation), then
+  // get named in the registry via register-contract.
+  const channelWasmHash = Buffer.from(
+    await fetchWasmHash(
+      env,
+      env.registrySourceSecret,
+      WASM_NAMES.channel,
+      CONTRACTS_VERSION,
+    ),
+    "hex",
+  );
   const channels: Record<string, string> = {};
   const assets: Record<string, string> = { XLM: xlmSac, USDC: usdcSac };
   for (const [code, sac] of Object.entries(assets)) {
-    channels[code] = await deployNamed(
+    const name = contractName(
+      `syntraf-${spec.key}-channel-${code.toLowerCase()}`,
+    );
+    const registered = await fetchContractId(
       env,
       env.registrySourceSecret,
-      contractName(`syntraf-${spec.key}-channel-${code.toLowerCase()}`),
-      WASM_NAMES.channel,
-      CONTRACTS_VERSION,
-      ["--admin", admin.publicKey(), "--auth_contract", authId, "--asset", sac],
+      name,
+    ).catch(() => null);
+    if (registered) {
+      channels[code] = registered;
+      console.log(`  ${code} channel (registered): ${registered}`);
+      continue;
+    }
+    const salt = Buffer.from(
+      new Uint8Array(
+        await crypto.subtle.digest(
+          "SHA-256",
+          new TextEncoder().encode(`syntraf:${spec.key}:${code}`),
+        ),
+      ),
+    );
+    channels[code] = await deployPrivacyChannel(
+      server,
+      admin14,
+      env.networkPassphrase,
+      channelWasmHash,
+      authId,
+      sac,
+      salt,
+    );
+    await registerContract(
+      env,
+      env.registrySourceSecret,
+      name,
+      channels[code],
     );
     console.log(`  ${code} channel: ${channels[code]}`);
   }

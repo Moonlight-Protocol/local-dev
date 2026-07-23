@@ -142,6 +142,53 @@ export async function deployNamed(
   return await fetchContractId(env, sourceSecret, contractName);
 }
 
+/** Hash of a published wasm (the publish uploaded the bytes on-chain). */
+export async function fetchWasmHash(
+  env: EngineEnv,
+  sourceSecret: string,
+  wasmName: string,
+  version: string,
+): Promise<string> {
+  const out = await registryCmd(env, sourceSecret, [
+    "fetch-hash",
+    wasmName,
+    "--version",
+    version,
+  ]);
+  const match = out.match(/[0-9a-f]{64}/);
+  if (!match) throw new Error(`Could not parse wasm hash from: ${out}`);
+  return match[0];
+}
+
+/**
+ * Name an existing contract in the registry. Used for contracts whose
+ * constructors call require_auth — `stellar registry deploy` cannot satisfy
+ * nested constructor auth in recording mode (upstream CLI limitation), so
+ * those deploy directly (deployer = admin) and get registered by name here.
+ */
+export async function registerContract(
+  env: EngineEnv,
+  sourceSecret: string,
+  name: string,
+  contractAddress: string,
+): Promise<void> {
+  try {
+    await registryCmd(env, sourceSecret, [
+      "register-contract",
+      "--contract-name",
+      name,
+      "--contract-address",
+      contractAddress,
+    ]);
+  } catch (err) {
+    const existing = await fetchContractId(env, sourceSecret, name).catch(
+      () => null,
+    );
+    if (existing === contractAddress) return; // already registered
+    throw err;
+  }
+}
+
 export async function fetchContractId(
   env: EngineEnv,
   sourceSecret: string,
