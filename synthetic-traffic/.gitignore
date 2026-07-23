@@ -1,0 +1,5 @@
+wasms/
+.syntraf-state.json
+.syntraf-state.json.*
+.env
+node_modules/
