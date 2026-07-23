@@ -31,7 +31,7 @@ import {
   providerSlots,
   virtualDays,
 } from "./timeline.ts";
-import { COUNCILS } from "./scenario.ts";
+import { COUNCILS, usdcEligible } from "./scenario.ts";
 import { bootstrapCouncil, bootstrapProvider } from "./bootstrap.ts";
 import {
   actDeposit,
@@ -39,7 +39,6 @@ import {
   actWithdraw,
   connectEntity,
   registerEntityActor,
-  usdcEligible,
 } from "./actors.ts";
 import { describeDrop, firstDepositGateFactory, planTick } from "./traffic.ts";
 import { discordAlert, ensureRunway } from "./funding.ts";

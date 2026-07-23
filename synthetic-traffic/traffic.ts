@@ -9,6 +9,7 @@ import {
   DOMESTIC_SHARE,
   PEAK_RATE_BY_TIER,
   tierOf,
+  usdcEligible,
 } from "./scenario.ts";
 import {
   adoptionFactor,
@@ -100,8 +101,15 @@ export function planTick(
       const gateOpen = firstDepositGate(slot.key, actor.index);
       const xlm = actor.balances["XLM"] ?? 0;
       const usdc = actor.balances["USDC"] ?? 0;
-      // Asset mix: mostly XLM; USDC when the actor actually holds some.
-      const assetCode = usdc > 5 && rng.random() < 0.25 ? "USDC" : "XLM";
+      // Asset mix: mostly XLM; USDC once in-channel, and USDC-capable actors
+      // occasionally make their FIRST USDC deposit from their classic balance.
+      let assetCode = usdc > 5 && rng.random() < 0.25 ? "USDC" : "XLM";
+      if (
+        assetCode === "XLM" && usdc <= 5 && usdcEligible(actor.index) &&
+        rng.random() < 0.15
+      ) {
+        assetCode = "USDC";
+      }
       const balance = assetCode === "USDC" ? usdc : xlm;
 
       let type: PlannedAction["type"];

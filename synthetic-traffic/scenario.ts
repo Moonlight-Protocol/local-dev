@@ -377,6 +377,11 @@ const NAME_REGION_BY_COUNTRY: Record<string, keyof typeof NAMES> = {
   SA: "gulf",
 };
 
+/** Share of the roster that holds USDC (local grants / testnet treasury). */
+export function usdcEligible(index: number): boolean {
+  return index % 10 < 3;
+}
+
 export function namePool(country: string): { first: string[]; last: string[] } {
   return NAMES[NAME_REGION_BY_COUNTRY[country] ?? "anglo"];
 }

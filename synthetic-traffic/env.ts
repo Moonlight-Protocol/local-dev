@@ -22,6 +22,10 @@ export interface EngineEnv {
   masterSecret: string;
   /** Registry contract the CLI deploys through. */
   registryContractId: string;
+  /** Key that signs registry operations — the registry's manager. Locally
+   * that's the admin setup-registry.sh deployed with; on the shared testnet
+   * registry it's the moonlight/ sub-registry manager key. */
+  registrySourceSecret: string;
   /** Where compiled channel wasms live (fetch-wasms.sh). */
   wasmDir: string;
   stateFile: string;
@@ -98,6 +102,12 @@ export function loadEngineEnv(): EngineEnv {
     ),
     masterSecret: req("SYNTRAF_MASTER_SECRET"),
     registryContractId: req("STELLAR_REGISTRY_CONTRACT_ID"),
+    registrySourceSecret: req(
+      "SYNTRAF_REGISTRY_SOURCE_SECRET",
+      isLocal
+        ? "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74"
+        : undefined,
+    ),
     wasmDir: req(
       "SYNTRAF_WASM_DIR",
       new URL("./wasms", import.meta.url).pathname,

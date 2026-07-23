@@ -15,7 +15,12 @@ import type { KeyRing } from "./keys.ts";
 import type { CouncilSpec } from "./scenario.ts";
 import type { ProviderSlot } from "./timeline.ts";
 import type { CouncilState, EngineState, ProviderState } from "./state.ts";
-import { deployNamed, publishWasm, WASM_NAMES } from "./registry.ts";
+import {
+  contractName,
+  deployNamed,
+  publishWasm,
+  WASM_NAMES,
+} from "./registry.ts";
 import { discordAlert, friendbotFund } from "./funding.ts";
 import {
   addCouncilChannel,
@@ -77,12 +82,12 @@ export async function bootstrapCouncil(
   const admin = await ring.councilAdmin(spec.key);
   await friendbotFund(env, admin.publicKey());
 
-  await ensureWasmsPublished(env, state, admin.secret());
+  await ensureWasmsPublished(env, state, env.registrySourceSecret);
 
   const authId = await deployNamed(
     env,
-    admin.secret(),
-    `syntraf-${spec.key}-council`,
+    env.registrySourceSecret,
+    contractName(`syntraf-${spec.key}-council`),
     WASM_NAMES.council,
     CONTRACTS_VERSION,
     ["--admin", admin.publicKey()],
@@ -109,8 +114,8 @@ export async function bootstrapCouncil(
   for (const [code, sac] of Object.entries(assets)) {
     channels[code] = await deployNamed(
       env,
-      admin.secret(),
-      `syntraf-${spec.key}-channel-${code.toLowerCase()}`,
+      env.registrySourceSecret,
+      contractName(`syntraf-${spec.key}-channel-${code.toLowerCase()}`),
       WASM_NAMES.channel,
       CONTRACTS_VERSION,
       ["--admin", admin.publicKey(), "--auth_contract", authId, "--asset", sac],

@@ -38,11 +38,11 @@ bookkeeping, not identities.
   explicitly rejected. Funding is friendbot-only — a mechanism that does not
   exist on mainnet.
 - **Registry-first deploys.** All contract deployments go through
-  `stellar registry publish` / `deploy` (wasm names default to
-  `unverified/moonlight-council` + `unverified/moonlight-privacy-channel`; set
-  `SYNTRAF_REGISTRY_NS=moonlight/` once the sub-registry exists). The registry
-  contract itself is the one documented bootstrap exception
-  (`setup-registry.sh`).
+  `stellar registry publish` / `deploy` (`moonlight-council` +
+  `moonlight-privacy-channel`, versioned). Locally the engine publishes to the
+  root registry it manages (`setup-registry.sh` deploys it — the one documented
+  bootstrap exception); on the shared testnet registry set
+  `SYNTRAF_REGISTRY_NS=moonlight/` once the sub-registry exists.
 - **Reset-aware.** A ledger-sequence regression (testnet wipe, local recreate)
   archives state, alerts, and re-bootstraps from a fresh genesis.
 - **Dead-man alerting.** Silent in normal operation; the Discord webhook fires
@@ -96,7 +96,7 @@ namespace arrive via Chad (publish under `unverified/` until then).
 | `SYNTRAF_TICK_MS`                                   | `300000`                | engine tick (jittered ±15%)              |
 | `SYNTRAF_MAX_ACTIONS_PER_TICK`                      | `40`                    | catch-up bound; drops are logged         |
 | `SYNTRAF_CONTRACTS_VERSION`                         | `0.5.0`                 | soroban-core release to publish/deploy   |
-| `SYNTRAF_REGISTRY_NS`                               | `unverified/`           | registry namespace prefix                |
+| `SYNTRAF_REGISTRY_NS`                               | (empty = root)          | registry namespace prefix                |
 | `SYNTRAF_DISCORD_WEBHOOK_URL`                       | unset (log-only)        | dead-man alert channel                   |
 | `SYNTRAF_AGGREGATORS`                               | `false`                 | pay-platform aggregator driver (pending) |
 | `SYNTRAF_STATE_FILE`                                | `./.syntraf-state.json` | progress bookkeeping                     |

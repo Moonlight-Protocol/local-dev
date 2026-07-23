@@ -59,9 +59,6 @@ export function clientConfig(
   };
 }
 
-/** Share of local entities that also hold USDC (get a grant at connect). */
-const LOCAL_USDC_SHARE = 0.3;
-
 export async function connectEntity(
   env: EngineEnv,
   ring: KeyRing,
@@ -90,12 +87,6 @@ export async function connectEntity(
   };
   state.entities[key] = entity;
   return entity;
-}
-
-export function usdcEligible(index: number): boolean {
-  // Deterministic slice of the roster holds USDC (local grants; on testnet a
-  // Circle-faucet treasury takes this role — README).
-  return (index % 10) / 10 < LOCAL_USDC_SHARE;
 }
 
 export async function registerEntityActor(

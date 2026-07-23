@@ -36,8 +36,10 @@ if [[ ! -d "$WORK_DIR/contracts" ]]; then
   git clone --depth 1 "$REGISTRY_REPO" "$WORK_DIR/contracts"
 fi
 
-echo "[setup-registry] building registry wasm (profile contracts)"
-(cd "$WORK_DIR/contracts" && stellar contract build --profile contracts)
+echo "[setup-registry] building registry wasm"
+# The repo's [profile.release] is its size-optimized wasm profile (upstream's
+# `--profile contracts` alias only exists under `stellar scaffold build`).
+(cd "$WORK_DIR/contracts" && stellar contract build --package registry)
 
 WASM="$(find "$WORK_DIR/contracts/target" -name 'registry*.wasm' -path '*release*' | head -1)"
 if [[ -z "$WASM" ]]; then
@@ -69,7 +71,7 @@ CONTRACT_ID="$(
     --network-passphrase "$NETWORK_PASSPHRASE" \
     -- \
     --admin "$ADMIN_PUBLIC" \
-    --manager "$ADMIN_PUBLIC"
+    --manager "\"$ADMIN_PUBLIC\""
 )"
 
 echo
