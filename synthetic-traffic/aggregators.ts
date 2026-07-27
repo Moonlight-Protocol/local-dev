@@ -22,10 +22,10 @@ import type { EngineEnv } from "./env.ts";
 import type { KeyRing } from "./keys.ts";
 import type { EngineState } from "./state.ts";
 import { friendbotFund } from "./funding.ts";
-import type { AggregatorSpec } from "./scenario.ts";
+import { type AggregatorSpec, COUNCILS } from "./scenario.ts";
+import { registerEntity } from "../lib/client/register-entity.ts";
 
 const CUSTOMER_POOL = 25;
-const RECEIVE_UTXOS = 20;
 
 async function payAuth(env: EngineEnv, kp: Keypair): Promise<string> {
   const ch = await (await fetch(`${env.payUrl}/api/v1/auth/challenge`, {
@@ -80,20 +80,43 @@ export async function ensurePayMirror(
     (((await listRes.json()).data ?? []) as Array<{ channelAuthId: string }>)
       .map((c) => c.channelAuthId),
   );
+  // The PP verifies bundle submitters: pay-platform's service key must be a
+  // registered entity with every PP it submits through.
+  const paySvc = Keypair.fromSecret(env.payServiceSecret);
+  await friendbotFund(env, paySvc.publicKey());
+  for (const p of Object.values(state.providers)) {
+    if (!p.membershipActive) continue;
+    try {
+      await registerEntity(
+        env.providerUrl,
+        p.publicKey,
+        paySvc,
+        "Moonlight Pay",
+        [
+          p.country,
+        ],
+      );
+    } catch { /* 409 already-approved is fine */ }
+  }
+
   for (const c of Object.values(state.councils)) {
     if (existing.has(c.authId)) continue;
     const providers = Object.values(state.providers)
       .filter((p) => p.councilKey === c.key && p.membershipActive)
       .map((p) => ({
         publicKey: p.publicKey,
-        providerUrl: env.providerUrl,
+        providerUrl: env.providerInternalUrl,
         label: p.key,
       }));
-    const jurisdictions = providers.map((p) => p.label.split(":")[1]);
+    // Jurisdictions from the scenario spec, NOT from currently-active
+    // providers — late joiners' countries must match at prepare time.
+    const jurisdictions = COUNCILS.find((s) =>
+      s.key === c.key
+    )?.jurisdictions ?? [];
     const res = await payApi(env, jwt, "POST", "/admin/councils", {
       name: c.key,
       channelAuthId: c.authId,
-      councilUrl: env.councilUrl,
+      councilUrl: env.councilInternalUrl,
       active: true,
       channels: Object.entries(c.channels).map(([assetCode, channelId]) => ({
         assetCode,
@@ -154,15 +177,21 @@ export async function setupMerchant(
   });
   if (!res.ok) throw new Error(`pay opex: ${res.status} ${await res.text()}`);
 
-  const utxos = [];
-  for (let i = 0; i < RECEIVE_UTXOS; i++) {
-    utxos.push({
-      utxoPublicKey: await randomP256PubkeyB64(),
-      derivationIndex: i,
-    });
+  // Delegated root: the platform derives merchant receive-UTXO keys itself
+  // from a registered 32-byte root (deterministic from the merchant key, so
+  // nothing to store).
+  const utxoRoot = new Uint8Array(
+    await crypto.subtle.digest(
+      "SHA-256",
+      new Uint8Array(wallet.rawSecretKey()),
+    ),
+  );
+  res = await payApi(env, jwt, "POST", "/account/delegation-key", {
+    utxoRoot: Buffer.from(utxoRoot).toString("base64"),
+  });
+  if (!res.ok) {
+    throw new Error(`pay delegation-key: ${res.status} ${await res.text()}`);
   }
-  res = await payApi(env, jwt, "POST", "/utxo/receive", { utxos });
-  if (!res.ok) throw new Error(`pay utxos: ${res.status} ${await res.text()}`);
   console.log(`[aggregator] merchant ready: ${spec.name} ${country}`);
 }
 
@@ -217,7 +246,9 @@ export async function aggregatorPayment(
     merchantWallet: merchant.publicKey(),
     amountStroops: prep.amountStroops,
     assetCode: "XLM",
-    merchantUtxoIds: prep.merchantUtxos.map((u: { id: string }) => u.id),
+    merchantUtxoIndexes: prep.merchantUtxos.map(
+      (u: { derivationIndex: number }) => u.derivationIndex,
+    ),
   });
   if (!execRes.ok) {
     throw new Error(`execute: ${execRes.status} ${await execRes.text()}`);

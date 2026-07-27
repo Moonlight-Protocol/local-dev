@@ -208,7 +208,8 @@ export async function submitJoinRequest(
     label,
     contactEmail: `${jurisdiction.toLowerCase()}-pp@synthetic.moonlight.test`,
     jurisdictions: [jurisdiction],
-    callbackEndpoint: providerUrl,
+    callbackEndpoint: Deno.env.get("SYNTRAF_PROVIDER_INTERNAL_URL") ??
+      providerUrl,
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, kp);
   const res = await fetch(

@@ -229,7 +229,7 @@ export async function bootstrapProvider(
   await registerPp(env.providerUrl, dashboardJwt, kp, slot.index, slot.name);
   await submitJoinRequest(
     env.providerUrl,
-    env.councilUrl,
+    env.councilInternalUrl,
     dashboardJwt,
     kp,
     council.authId,

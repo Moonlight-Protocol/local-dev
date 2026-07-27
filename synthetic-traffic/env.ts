@@ -45,6 +45,12 @@ export interface EngineEnv {
   /** Wallet allowed on pay-platform admin routes (mirror seeding). Local
    * dev-mode skips the allowlist, so any funded wallet works there. */
   payAdminSecret: string;
+  /** URLs as seen from INSIDE platform containers (isolated compose stack);
+   * default to the public URLs (host-process stacks). */
+  councilInternalUrl: string;
+  /** pay-platform's PAY_SERVICE key — must be KYC-registered with each PP. */
+  payServiceSecret: string;
+  providerInternalUrl: string;
   /** Aggregator (pay-platform) driver toggle; off until that driver lands. */
   aggregatorsEnabled: boolean;
   isLocal: boolean;
@@ -130,6 +136,16 @@ export function loadEngineEnv(): EngineEnv {
     discordWebhookUrl: Deno.env.get("SYNTRAF_DISCORD_WEBHOOK_URL") ?? "",
     usdcTreasurySecret: Deno.env.get("SYNTRAF_USDC_TREASURY_SECRET") ?? "",
     payUrl: req("PAY_URL", isLocal ? "http://localhost:3025" : undefined),
+    payServiceSecret: req(
+      "SYNTRAF_PAY_SERVICE_SECRET",
+      isLocal
+        ? "SAV7Z6BV2FLTJBP5TGJDI3PAAL5SWX6DDOCU5J3GGYYQ5FGJ6J5CGMUQ"
+        : undefined,
+    ),
+    councilInternalUrl: Deno.env.get("SYNTRAF_COUNCIL_INTERNAL_URL") ??
+      Deno.env.get("COUNCIL_URL") ?? "http://localhost:3015",
+    providerInternalUrl: Deno.env.get("SYNTRAF_PROVIDER_INTERNAL_URL") ??
+      Deno.env.get("PROVIDER_URL") ?? "http://localhost:3010",
     payAdminSecret: req(
       "SYNTRAF_PAY_ADMIN_SECRET",
       isLocal
