@@ -23,9 +23,12 @@ import type { EngineState, EntityState } from "./state.ts";
 import { entityKey } from "./state.ts";
 
 export interface PlannedAction {
-  type: "deposit" | "send" | "withdraw" | "fail";
+  type: "deposit" | "send" | "withdraw" | "fail" | "agg-payment";
   providerKey: string;
   entityIdx: number;
+  /** agg-payment only */
+  aggKey?: string;
+  aggCountry?: string;
   /** send only */
   receiverProviderKey?: string;
   receiverIdx?: number;

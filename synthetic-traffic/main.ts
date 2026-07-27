@@ -43,6 +43,13 @@ import {
 } from "./actors.ts";
 import { describeDrop, firstDepositGateFactory, planTick } from "./traffic.ts";
 import { discordAlert, ensureRunway } from "./funding.ts";
+import {
+  aggregatorPayment,
+  ensurePayMirror,
+  setupMerchant,
+} from "./aggregators.ts";
+import { AGGREGATORS } from "./scenario.ts";
+import { Rng } from "./rng.ts";
 import { archiveState, detectReset } from "./reset.ts";
 import { warmupService } from "./platform.ts";
 
@@ -133,19 +140,28 @@ async function reconcileRoster(
     console.log(`[reconcile] connected ${connects} new entities`);
   }
 
-  // Aggregators: scheduled in the timeline, driver lands behind
-  // SYNTRAF_AGGREGATORS (pay-platform instant flow) — until then just surface
-  // when one becomes due so the gap is visible, not silent.
-  if (!env.aggregatorsEnabled) {
-    for (const { spec, entryDay } of aggregatorEntries(seed)) {
-      if (entryDay <= nowDay && !state.aggregators[spec.key]) {
-        console.log(
-          `[reconcile] aggregator "${spec.name}" is due (day ${
-            entryDay.toFixed(1)
-          }) — driver disabled (SYNTRAF_AGGREGATORS=false)`,
-        );
-      }
+  // Aggregators (pay-platform instant flow), behind SYNTRAF_AGGREGATORS.
+  for (const { spec, entryDay } of aggregatorEntries(seed)) {
+    if (entryDay > nowDay || state.aggregators[spec.key]) continue;
+    if (!env.aggregatorsEnabled) {
+      console.log(
+        `[reconcile] aggregator "${spec.name}" is due — driver disabled ` +
+          `(SYNTRAF_AGGREGATORS=false)`,
+      );
+      continue;
     }
+    await ensurePayMirror(env, state);
+    const accounts: Record<string, { created: boolean }> = {};
+    for (const country of spec.countries) {
+      await setupMerchant(env, ring, spec, country);
+      accounts[country] = { created: true };
+    }
+    state.aggregators[spec.key] = {
+      key: spec.key,
+      accounts,
+      enteredAtDay: nowDay,
+    };
+    saveState(env.stateFile, state);
   }
 }
 
@@ -234,6 +250,49 @@ async function runTraffic(
     }
     // Organic pacing inside the tick.
     await new Promise((r) => setTimeout(r, 500 + Math.random() * 2000));
+  }
+
+  // Aggregator end-user payments (small, frequent, POS/P2P-shaped).
+  if (env.aggregatorsEnabled) {
+    for (const spec of AGGREGATORS) {
+      const agg = state.aggregators[spec.key];
+      if (!agg) continue;
+      for (const country of spec.countries) {
+        if (!agg.accounts[country]?.created) continue;
+        const rng = new Rng(
+          ring.rngSeed,
+          `agg:${spec.key}:${country}:${Math.floor(nowDay * 288)}`,
+        );
+        const perUser = spec.endUsers / spec.countries.length;
+        const lambda = Math.min(3, perUser * 0.002);
+        const n = rng.poisson(lambda);
+        for (let k = 0; k < n; k++) {
+          const amount = Number(rng.lognormal(1.2, 0.6, 0.5, 3).toFixed(2));
+          try {
+            await aggregatorPayment(
+              env,
+              ring,
+              state,
+              spec,
+              country,
+              amount,
+              rng.int(0, 1000),
+            );
+            console.log(
+              `[traffic] agg-payment ${amount} XLM @ ${spec.key}:${country}`,
+            );
+          } catch (err) {
+            failures++;
+            console.error(
+              `[traffic] agg-payment @ ${spec.key}:${country} failed: ${
+                (err as Error).message
+              }`,
+            );
+          }
+          await new Promise((r) => setTimeout(r, 500 + Math.random() * 1500));
+        }
+      }
+    }
   }
 
   if (batch.length > 0 && failures === batch.length) {

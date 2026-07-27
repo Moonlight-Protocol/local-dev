@@ -40,6 +40,11 @@ export interface EngineEnv {
   /** Testnet only: account holding Circle-faucet USDC to hand entities.
    * Empty = testnet runs XLM-only (logged). Local runs self-issue instead. */
   usdcTreasurySecret: string;
+  /** pay-platform base URL (aggregator driver). */
+  payUrl: string;
+  /** Wallet allowed on pay-platform admin routes (mirror seeding). Local
+   * dev-mode skips the allowlist, so any funded wallet works there. */
+  payAdminSecret: string;
   /** Aggregator (pay-platform) driver toggle; off until that driver lands. */
   aggregatorsEnabled: boolean;
   isLocal: boolean;
@@ -124,6 +129,13 @@ export function loadEngineEnv(): EngineEnv {
     maxActionsPerTick: Number(req("SYNTRAF_MAX_ACTIONS_PER_TICK", "40")),
     discordWebhookUrl: Deno.env.get("SYNTRAF_DISCORD_WEBHOOK_URL") ?? "",
     usdcTreasurySecret: Deno.env.get("SYNTRAF_USDC_TREASURY_SECRET") ?? "",
+    payUrl: req("PAY_URL", isLocal ? "http://localhost:3025" : undefined),
+    payAdminSecret: req(
+      "SYNTRAF_PAY_ADMIN_SECRET",
+      isLocal
+        ? "SAQCGLJ2JISI67QGG457IBN2DY6YW5GGS2OMQU5KNLXB3TWVUIR2RD74"
+        : undefined,
+    ),
     aggregatorsEnabled:
       (Deno.env.get("SYNTRAF_AGGREGATORS") ?? "false").toLowerCase() === "true",
     isLocal,

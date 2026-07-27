@@ -42,6 +42,24 @@ export class KeyRing {
     return deriveKeypair(this.seed, `syntraf-agg:${aggKey}:${country}`, 0);
   }
 
+  /** Aggregator per-country custodial OpEx account. */
+  aggregatorOpex(aggKey: string, country: string): Promise<Keypair> {
+    return deriveKeypair(this.seed, `syntraf-agg-opex:${aggKey}:${country}`, 0);
+  }
+
+  /** Invisible end-user wallet from the aggregator's customer pool. */
+  aggregatorUser(
+    aggKey: string,
+    country: string,
+    index: number,
+  ): Promise<Keypair> {
+    return deriveKeypair(
+      this.seed,
+      `syntraf-agg-user:${aggKey}:${country}`,
+      index,
+    );
+  }
+
   /** USDC issuer/treasury for local runs (testnet uses Circle's issuer). */
   usdcIssuer(): Promise<Keypair> {
     return deriveKeypair(this.seed, "syntraf-usdc-issuer", 0);
