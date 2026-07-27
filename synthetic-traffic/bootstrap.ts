@@ -14,7 +14,9 @@ import {
   getOrDeployNativeSac,
 } from "../lib/deploy.ts";
 import { addProvider } from "../lib/admin.ts";
-import { issueAssetTo } from "../lib/classic-asset.ts";
+import { establishTrustline, issueAssetTo } from "../lib/classic-asset.ts";
+import { submitClassicTx } from "../lib/soroban.ts";
+import { Asset as Asset14, Operation as Operation14 } from "stellar-sdk-14";
 import type { EngineEnv } from "./env.ts";
 import type { KeyRing } from "./keys.ts";
 import type { CouncilSpec } from "./scenario.ts";
@@ -269,28 +271,48 @@ export async function bootstrapProvider(
 }
 
 /**
- * Local-only: hand an entity classic USDC so USDC deposits are possible
- * (testnet USDC comes from a Circle-faucet-funded treasury instead — see
- * README; when no treasury is configured the engine stays XLM-only).
+ * Hand an entity classic USDC so USDC deposits are possible. Locally the
+ * engine's derived issuer self-issues; on testnet a Circle-faucet-funded
+ * treasury account (SYNTRAF_USDC_TREASURY_SECRET) pays real testnet USDC.
+ * No treasury configured on testnet → no-op (engine stays XLM-only, logged
+ * once at startup by main.ts).
  */
-export async function grantLocalUsdc(
+export async function grantUsdc(
   env: EngineEnv,
   ring: KeyRing,
   entitySecret: string,
   amount: number,
 ): Promise<void> {
-  if (!env.isLocal) return;
-  const issuer = Keypair14.fromSecret((await ring.usdcIssuer()).secret());
   const entity = Keypair14.fromSecret(entitySecret);
   const server = server14(env);
-  await friendbotFund(env, issuer.publicKey());
-  // issueAssetTo = trustline + issuer payment in one step.
-  await issueAssetTo(
+  if (env.isLocal) {
+    const issuer = Keypair14.fromSecret((await ring.usdcIssuer()).secret());
+    await friendbotFund(env, issuer.publicKey());
+    // issueAssetTo = trustline + issuer payment in one step.
+    await issueAssetTo(
+      server,
+      issuer,
+      entity,
+      env.networkPassphrase,
+      "USDC",
+      String(amount),
+    );
+    return;
+  }
+  if (!env.usdcTreasurySecret) return;
+  const treasury = Keypair14.fromSecret(env.usdcTreasurySecret);
+  await establishTrustline(
     server,
-    issuer,
     entity,
     env.networkPassphrase,
     "USDC",
-    String(amount),
+    CIRCLE_TESTNET_USDC_ISSUER,
   );
+  await submitClassicTx(server, treasury, env.networkPassphrase, [
+    Operation14.payment({
+      destination: entity.publicKey(),
+      asset: new Asset14("USDC", CIRCLE_TESTNET_USDC_ISSUER),
+      amount: String(amount),
+    }),
+  ]);
 }

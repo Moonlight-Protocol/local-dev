@@ -37,6 +37,9 @@ export interface EngineEnv {
   maxActionsPerTick: number;
   /** Existing Discord webhook; empty = log-only (local proving). */
   discordWebhookUrl: string;
+  /** Testnet only: account holding Circle-faucet USDC to hand entities.
+   * Empty = testnet runs XLM-only (logged). Local runs self-issue instead. */
+  usdcTreasurySecret: string;
   /** Aggregator (pay-platform) driver toggle; off until that driver lands. */
   aggregatorsEnabled: boolean;
   isLocal: boolean;
@@ -120,6 +123,7 @@ export function loadEngineEnv(): EngineEnv {
     tickMs: Number(req("SYNTRAF_TICK_MS", "300000")),
     maxActionsPerTick: Number(req("SYNTRAF_MAX_ACTIONS_PER_TICK", "40")),
     discordWebhookUrl: Deno.env.get("SYNTRAF_DISCORD_WEBHOOK_URL") ?? "",
+    usdcTreasurySecret: Deno.env.get("SYNTRAF_USDC_TREASURY_SECRET") ?? "",
     aggregatorsEnabled:
       (Deno.env.get("SYNTRAF_AGGREGATORS") ?? "false").toLowerCase() === "true",
     isLocal,

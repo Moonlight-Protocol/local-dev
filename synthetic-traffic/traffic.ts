@@ -23,7 +23,7 @@ import type { EngineState, EntityState } from "./state.ts";
 import { entityKey } from "./state.ts";
 
 export interface PlannedAction {
-  type: "deposit" | "send" | "withdraw";
+  type: "deposit" | "send" | "withdraw" | "fail";
   providerKey: string;
   entityIdx: number;
   /** send only */
@@ -63,8 +63,8 @@ function pickAmount(rng: Rng, type: PlannedAction["type"]): number {
       return money(rng.lognormal(40, 0.8, 10, 400));
     case "send":
       return money(rng.lognormal(5, 1.0, 0.5, 150));
-    case "withdraw":
-      return 0; // caller derives from balance
+    default:
+      return 0; // withdraw/fail: caller derives or ignores
   }
 }
 
@@ -125,9 +125,11 @@ export function planTick(
         type = "deposit";
       } else {
         type = rng.weighted<PlannedAction["type"]>([
-          ["send", 0.75],
+          ["send", 0.74],
           ["deposit", 0.15],
-          ["withdraw", 0.10],
+          ["withdraw", 0.09],
+          // Occasional organic-looking failure (overspend bundle).
+          ["fail", 0.02],
         ]);
       }
 
@@ -144,6 +146,14 @@ export function planTick(
           receiverIdx: receiver.index,
           assetCode,
           amount,
+        });
+      } else if (type === "fail") {
+        actions.push({
+          type,
+          providerKey: slot.key,
+          entityIdx: actor.index,
+          assetCode: "XLM",
+          amount: 0,
         });
       } else if (type === "withdraw") {
         const amount = money(balance * rng.uniform(0.3, 0.8));

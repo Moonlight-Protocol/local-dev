@@ -14,12 +14,13 @@ import { deposit } from "../lib/client/deposit.ts";
 import { prepareReceive } from "../lib/client/receive.ts";
 import { send } from "../lib/client/send.ts";
 import { withdraw } from "../lib/client/withdraw.ts";
+import { injectFailingBundle } from "../lib/client/fail-inject.ts";
 import type { EngineEnv } from "./env.ts";
 import type { KeyRing } from "./keys.ts";
 import type { CouncilState, EngineState, EntityState } from "./state.ts";
 import { entityKey } from "./state.ts";
 import { friendbotFund } from "./funding.ts";
-import { grantLocalUsdc } from "./bootstrap.ts";
+import { grantUsdc } from "./bootstrap.ts";
 
 /**
  * lib/client Config for (council, asset, pp) — built directly instead of via
@@ -70,8 +71,8 @@ export async function connectEntity(
 ): Promise<EntityState> {
   const kp = await ring.entity(providerKey, index);
   await friendbotFund(env, kp.publicKey());
-  if (wantsUsdc && env.isLocal) {
-    await grantLocalUsdc(env, ring, kp.secret(), 500);
+  if (wantsUsdc && (env.isLocal || env.usdcTreasurySecret)) {
+    await grantUsdc(env, ring, kp.secret(), 500);
   }
   const key = entityKey(providerKey, index);
   const entity: EntityState = {
@@ -160,6 +161,21 @@ export async function actSend(
   receiver.balances[assetCode] = (receiver.balances[assetCode] ?? 0) + amount;
   sender.sends++;
   state.totals.sends++;
+  state.totals.bundles++;
+}
+
+/** Submit a deliberately failing (overspend) bundle — dashboard seasoning. */
+export async function actFail(
+  env: EngineEnv,
+  ring: KeyRing,
+  state: EngineState,
+  entity: EntityState,
+  council: CouncilState,
+  ppPublicKey: string,
+): Promise<void> {
+  const config = clientConfig(env, council, "XLM", ppPublicKey);
+  const { kp, jwt } = await sessionFor(ring, entity, config);
+  await injectFailingBundle(kp.secret(), jwt, config);
   state.totals.bundles++;
 }
 

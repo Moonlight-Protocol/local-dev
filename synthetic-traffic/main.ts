@@ -35,6 +35,7 @@ import { COUNCILS, usdcEligible } from "./scenario.ts";
 import { bootstrapCouncil, bootstrapProvider } from "./bootstrap.ts";
 import {
   actDeposit,
+  actFail,
   actSend,
   actWithdraw,
   connectEntity,
@@ -206,6 +207,8 @@ async function runTraffic(
           a.assetCode,
           a.amount,
         );
+      } else if (a.type === "fail") {
+        await actFail(env, ring, state, actor, council, provider.publicKey);
       } else {
         await actWithdraw(
           env,
