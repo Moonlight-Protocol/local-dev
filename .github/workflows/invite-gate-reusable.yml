@@ -179,5 +179,20 @@ jobs:
           docker compose -f docker-compose.invite-gate.yml logs moonlight-pay
           echo "--- test-runner logs ---"
           docker compose -f docker-compose.invite-gate.yml logs test-runner
+          # Copy Playwright results (error-context.md, screenshots, traces with
+          # console logs) out of the stopped test-runner before down removes it,
+          # so failures can be diagnosed from the uploaded artifact instead of
+          # log archaeology.
+          docker compose -f docker-compose.invite-gate.yml cp \
+            test-runner:/app/test-results ./invite-gate-test-results || true
           docker compose -f docker-compose.invite-gate.yml down
           exit $EXIT_CODE
+
+      - name: Upload Playwright test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: invite-gate-test-results
+          path: invite-gate-test-results/
+          if-no-files-found: ignore
+          retention-days: 14
