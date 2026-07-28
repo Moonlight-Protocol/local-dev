@@ -6,6 +6,7 @@
 |--------|-------|----------------|---------------|----------------|
 | soroban-core | Auto-tag + release (WASMs) | Local script | `Cargo.toml` | GitHub Releases |
 | provider-platform | Auto-tag + release + testnet deploy | Automated (Fly.io after E2E) | `deno.json` | GHCR Docker image |
+| council-platform | Auto-tag + release + deploys on main push | Automated (Fly.io) | `deno.json` | GHCR Docker image |
 | browser-wallet | None | Manual | `manifest.json` | Chrome Web Store |
 | moonlight-sdk | Auto-publish to JSR on version bump | N/A | `deno.json` | JSR (@moonlight/moonlight-sdk) |
 | colibri | Auto-publish to JSR on version bump | N/A | `deno.json` | JSR (@colibri/core) |
@@ -128,25 +129,27 @@ Uses `E2E_TRIGGER_TOKEN` (PAT) with `persist-credentials: true` so the tag push 
 
 **Testnet deploy**: Automated via blue/green. After E2E passes, the release workflow runs `fly deploy`, which uses Fly.io's built-in blue/green strategy. Contract IDs and secrets are configured in Fly.io env vars — these change rarely and are set manually when contracts are redeployed.
 
-**Blue/green deploy** (`fly.toml` sets `strategy = "bluegreen"`):
+**Rolling deploy** (`fly.toml` sets `strategy = "rolling"`; single machine):
 
-1. Fly.io starts new machines with the new image alongside the old ones
-2. New machines run migrations (via entrypoint script) and start serving
-3. Fly.io health-checks the new machines (hits `/api/v1/stellar/auth`)
-4. If healthy: traffic cuts over to new machines, old machines stop
-5. If unhealthy: new machines are stopped, old machines keep serving — zero downtime
+Since 2026-07-28 the provider and council backends run exactly ONE machine per
+app (task theahaco-submodule-0015). Machine count is controlled by the deploy
+workflows and `fly deploy` behavior — `min_machines_running = 1` is an autostop
+floor, not a cap. The old workflow reconciliation/clone steps that minted second
+machines were removed.
 
-This is a single app, single URL. No DNS changes, no second app, no wallet config changes. Rollback is automatic on health check failure, or manual via `fly deploy --image <previous-image>`.
+1. Fly.io updates the single machine in place with the new image
+2. The machine restarts and runs migrations via its entrypoint
+3. Health checks confirm the new version (hits the health endpoint)
+4. Rollback is manual: `fly deploy --image <previous-image>`
 
-**Requirements**:
-- `min_machines_running = 1` — at least one machine must be running for blue/green to have something to fall back to (no auto-scale to zero)
-- Health check configured in `fly.toml` under `[http_service.checks]`
-- Database migrations must be backward-compatible — old and new machines coexist briefly during cutover
+Rolling implies a brief restart window during each deploy. Blue/green was
+retired with the single-machine change: it spins up a second machine mid-deploy
+by design, which contradicts the one-machine topology.
 
-**Migration discipline** (required by blue/green):
+**Migration discipline** (still required):
 - Adding columns/tables: safe
-- Removing columns/tables: two-step deploy (stop using it first, remove next release)
-- Renaming: two-step (add new name, migrate data, remove old name next release)
+- Removing/renaming: two-step deploys remain the rule — a failed deploy can
+  leave the previous image running against the migrated schema
 
 ### browser-wallet
 
@@ -230,7 +233,19 @@ cd ~/repos/provider-platform && fly secrets set CHANNEL_CONTRACT_ID=C... CHANNEL
 
 ## Mainnet
 
-Not on the horizon. No config, infrastructure, or automation exists. Revisit when the protocol is production-ready.
+Live since 2026-05 (the "silent flip"). The full mainnet platform stack runs on
+Fly.io (`moonlight-mainnet-provider`, `moonlight-mainnet-council`,
+`moonlight-mainnet-pay`, `moonlight-mainnet-network-dashboard`) with frontends
+at the bare subdomains of `moonlightprotocol.io`. See the private
+`Moonlight-Protocol/infra-docs` repo for the canonical instance inventory.
+
+- Each platform repo carries a `deploy-mainnet.yml` that deploys on push to
+  `main` (`fly.mainnet.toml`, same rolling strategy).
+- Contracts are NOT statically deployed on mainnet: they instantiate at
+  Council/Provider creation through the consoles, which bundle wasms downloaded
+  from the soroban-core GitHub release at build time.
+- Mainnet console onboarding is allowlist-gated (`MAINNET_ALLOWLIST` secrets on
+  the console repos).
 
 ## Key Decisions
 
@@ -240,7 +255,7 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 - **No staging environment.** `main` → testnet is the only deploy target. Revisit when team or workstreams grow.
 - **E2E gate is mandatory.** Every release must pass cross-repo E2E before reaching testnet.
 - **Contracts don't use CI for deploy.** Deploys are stateful and infrequent — a local script is the right tool.
-- **Provider-platform uses CI for deploy.** Stateless server, Docker image, Fly.io — straightforward to automate.
+- **Provider-platform and council-platform use CI for deploy.** Stateless servers, Docker images, Fly.io — straightforward to automate. One machine per app, rolling strategy (2026-07-28).
 - **Browser wallet has no CI.** Low change frequency doesn't justify it. The E2E tests validate the SDK path the wallet uses.
 - **Console apps use Tigris for hosting.** Static files deployed to public S3-compatible buckets — no server needed.
 
@@ -252,7 +267,12 @@ Not on the horizon. No config, infrastructure, or automation exists. Revisit whe
 | soroban-core | `release.yml` | Tag push (`v*`) | Builds WASMs, publishes GitHub Release, dispatches E2E |
 | provider-platform | `auto-tag.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
 | provider-platform | `release.yml` | Tag push (`v*`) | Builds Docker image, pushes to GHCR, dispatches E2E, deploys to Fly.io |
-| provider-platform | `deploy-testnet.yml` | Push to `main` | Auto-deploys to Fly.io (testnet) via blue/green |
+| provider-platform | `deploy-testnet.yml` | Push to `main` | Auto-deploys to Fly.io (testnet), rolling |
+| provider-platform | `deploy-mainnet.yml` | Push to `main` | Auto-deploys to Fly.io (mainnet), rolling |
+| council-platform | `auto-tag.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
+| council-platform | `release.yml` | Tag push (`v*`) | Builds Docker image, pushes to GHCR |
+| council-platform | `deploy-testnet.yml` | Push to `main` | Auto-deploys to Fly.io (testnet), rolling |
+| council-platform | `deploy-mainnet.yml` | Push to `main` | Auto-deploys to Fly.io (mainnet), rolling |
 | local-dev | `e2e.yml` | Repository dispatch from soroban-core or provider-platform | Runs Docker Compose E2E with resolved versions |
 | local-dev | `release-stellar-cli.yml` | Tag push (`stellar-cli-v*`) | Publishes stellar-cli Docker image to GHCR |
 | provider-console | `auto-version.yml` | Push to `main` modifying `deno.json` | Creates semver tag |
