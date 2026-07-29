@@ -96,7 +96,7 @@ export async function setupFreighterForKyc(
   opts: {
     secretKey: string;
     password: string;
-    network?: "local" | "testnet";
+    network?: "local" | "testnet" | "mainnet";
   },
 ): Promise<{ extensionId: string }> {
   const extensionId = await findFreighterExtensionId(context);
@@ -107,9 +107,11 @@ export async function setupFreighterForKyc(
   const network = opts.network ?? "local";
   if (network === "local") {
     await addLocalNetwork(page);
-  } else {
+  } else if (network === "testnet") {
     await switchToTestnet(page);
   }
+  // mainnet: leave Freighter on its default Public network — mirrors the
+  // createUserContext path, which also does not switch for mainnet.
   await page.close();
   return { extensionId };
 }

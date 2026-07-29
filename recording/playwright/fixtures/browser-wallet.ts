@@ -466,24 +466,24 @@ export async function addProviderAndConnect(
  */
 export async function followKycLinkOut(
   page: Page,
-  opts: { kycEntityName: string; password: string },
+  opts: { kycEntityName: string; password: string; kycUrl: string },
 ): Promise<void> {
   await page.bringToFront();
-  await clickWithPause(page.locator(SEL.channelPickerTrigger).first());
-  const kycLink = page.locator(SEL.submitKycLink).first();
-  await kycLink.waitFor({ timeout: 15_000 });
-  const href = await kycLink.getAttribute("href");
-  if (!href) {
-    throw new Error("Submit KYC link present but href is missing");
-  }
+  // Drive the public KYC route directly from the discovered PP pubkey
+  // (full-flow Step 6b pattern) rather than scraping the wallet's "Submit KYC"
+  // link — that link only renders when the PP record carries a
+  // kycSubmissionUrl, which console-created PPs don't.
   const kycPage = await page.context().newPage();
   try {
-    await kycPage.goto(href);
+    await kycPage.goto(opts.kycUrl);
     await kycPage.waitForLoadState("domcontentloaded");
     await completeProviderConsoleKyc(kycPage, opts.kycEntityName);
   } finally {
     await kycPage.close();
   }
+  // reconnectProvider expects the channel-picker sheet open on home.
+  await page.bringToFront();
+  await clickWithPause(page.locator(SEL.channelPickerTrigger).first());
   await reconnectProvider(page, opts.password);
   await page.keyboard.press("Escape");
   await page.waitForTimeout(500);
