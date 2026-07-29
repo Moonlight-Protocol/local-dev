@@ -1,0 +1,37 @@
+# Always-on synthetic-traffic generator (TESTNET ONLY).
+# Deploy manually from repo root:
+#   fly deploy -c synthetic-traffic/fly.testnet.toml --dockerfile synthetic-traffic/Dockerfile
+# Secrets (fly secrets set, values from Infisical testnet env):
+#   SYNTRAF_MASTER_SECRET, SYNTRAF_REGISTRY_SOURCE_SECRET (= MOONLIGHT_REGISTRY_MANAGER_SK),
+#   SYNTRAF_DISCORD_WEBHOOK_URL (= local-dev/DISCORD_WEBHOOK_URL), SYNTRAF_PAY_ADMIN_SECRET
+
+app = "moonlight-beta-synthetic-traffic"
+primary_region = "ams"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  STELLAR_NETWORK_PASSPHRASE = "Test SDF Network ; September 2015"
+  STELLAR_RPC_URL = "https://soroban-testnet.stellar.org"
+  FRIENDBOT_URL = "https://friendbot.stellar.org"
+  HORIZON_URL = "https://horizon-testnet.stellar.org"
+  COUNCIL_URL = "https://council-api-testnet.moonlightprotocol.io"
+  PROVIDER_URL = "https://provider-api-testnet.moonlightprotocol.io"
+  PAY_URL = "https://pay-api-testnet.moonlightprotocol.io"
+  STELLAR_REGISTRY_CONTRACT_ID = "CBX74KNQHIVPZCWP4NM7RLBBZYSPQUCYK7BXPSG4TNBQEEST3QHAIDTZ"
+  SYNTRAF_STATE_FILE = "/data/syntraf-state.json"
+  SYNTRAF_TIME_SCALE = "1"
+  SYNTRAF_TICK_MS = "300000"
+  SYNTRAF_AGGREGATORS = "true"
+
+[mounts]
+  source = "syntraf_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+
+[[restart]]
+  policy = "always"
