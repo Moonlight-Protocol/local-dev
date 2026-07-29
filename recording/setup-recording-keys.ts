@@ -147,6 +147,7 @@ function renderRunEnv(
 function renderWalletSeed(
   mnemonic: string,
   password: string,
+  network: string,
 ): string {
   return [
     `# Browser-wallet seed for a recording run.`,
@@ -154,7 +155,7 @@ function renderWalletSeed(
     ``,
     `SEED_PASSWORD=${password}`,
     `SEED_MNEMONIC=${mnemonic}`,
-    `SEED_NETWORK=testnet`,
+    `SEED_NETWORK=${network}`,
     `SEED_CHANNEL_CONTRACT_ID=`,
     `SEED_CHANNEL_NAME=Recording Demo Council`,
     `SEED_ASSET_CODE=XLM`,
@@ -233,6 +234,16 @@ async function main() {
   const runId = Deno.env.get("RUN_ID") || isoRunId();
 
   const friendbot = Deno.env.get("FRIENDBOT_URL") || DEFAULT_FRIENDBOT;
+
+  // Wallet seed network follows the run TARGET (same source the Playwright
+  // specs use). local maps to the wallet's "custom" (local stellar) network.
+  const target = (Deno.env.get("TARGET") || "local").toLowerCase();
+  const seedNetwork = target === "mainnet"
+    ? "mainnet"
+    : target === "testnet"
+    ? "testnet"
+    : "custom";
+
   const endpoints = {
     councilConsole: Deno.env.get("COUNCIL_CONSOLE_URL") ||
       DEFAULT_COUNCIL_CONSOLE,
@@ -286,11 +297,11 @@ async function main() {
   );
   await Deno.writeTextFile(
     `${outputDir}/.env.seed.user1`,
-    renderWalletSeed(keys.alice.mnemonic, "recording"),
+    renderWalletSeed(keys.alice.mnemonic, "recording", seedNetwork),
   );
   await Deno.writeTextFile(
     `${outputDir}/.env.seed.user2`,
-    renderWalletSeed(keys.bob.mnemonic, "recording"),
+    renderWalletSeed(keys.bob.mnemonic, "recording", seedNetwork),
   );
 
   console.log(`\n=== Run ${runId} ready ===\n`);
