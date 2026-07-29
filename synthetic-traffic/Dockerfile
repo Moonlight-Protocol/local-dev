@@ -11,7 +11,7 @@ RUN curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${STEL
 RUN cargo install --locked --git https://github.com/stellar-registry/cli stellar-registry-cli --root /usr/local
 
 FROM denoland/deno:2.7.9
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
 COPY --from=cli /usr/local/bin/stellar /usr/local/bin/stellar
 COPY --from=cli /usr/local/bin/stellar-registry /usr/local/bin/stellar-registry
 WORKDIR /app
