@@ -24,6 +24,7 @@
 import { type Page, test } from "@playwright/test";
 import { loadRunEnv, requireValue, type RunEnv } from "../helpers/run-env";
 import { getProviderName } from "../helpers/run-variants";
+import { getTarget, getUrls } from "../../../playwright/helpers/urls";
 import {
   closeWalletContext,
   launchWalletContext,
@@ -89,6 +90,10 @@ async function setupUser(opts: UserSetupOpts): Promise<UserSetup> {
   await setupFreighterForKyc(handle.context, {
     secretKey: opts.secretKey,
     password: FREIGHTER_PASSWORD,
+    // Match Freighter's active network to the run target so the SEP-53 sign
+    // popup isn't rejected ("Freighter is set to Local" vs Test Net). Single
+    // source of truth (TARGET) shared with the createUserContext path.
+    network: getTarget(),
   });
   await selectRecordingNetwork(wallet);
   await toggleToPrivateView(wallet);
@@ -138,6 +143,13 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     env.PROVIDER_PLATFORM_URL.replace(/\/$/, "")
   }/${providerPubkey}`;
 
+  // Public KYC route, built from the discovered PP pubkey (full-flow Step 6b
+  // pattern) — not read from the wallet's Submit-KYC link, which console-created
+  // PPs never surface.
+  const providerConsoleUrl = getUrls().providerConsole.replace(/\/$/, "");
+  const kycUrl =
+    `${providerConsoleUrl}/#/entities/register?provider=${providerPubkey}`;
+
   const bobSetupOpts = {
     runId: env.RUN_ID,
     mnemonic: env.BOB_MNEMONIC,
@@ -164,6 +176,7 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
   await followKycLinkOut(bobPass1.wallet, {
     kycEntityName: "Bob",
     password: RECORDING_PASSWORD,
+    kycUrl,
   });
   await closeWalletContext(bobPass1.handle);
 
@@ -191,6 +204,7 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     await followKycLinkOut(alicePass1.wallet, {
       kycEntityName: "Alice",
       password: RECORDING_PASSWORD,
+      kycUrl,
     });
     await closeWalletContext(alicePass1.handle);
 
