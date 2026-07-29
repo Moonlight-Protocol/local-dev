@@ -196,7 +196,7 @@ services:
   # both blocked (random key) and allowed (derived key) paths.
 
   provider-console:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       provider:
         condition: service_healthy
@@ -241,7 +241,7 @@ services:
       start_period: 30s
 
   council-console:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       council:
         condition: service_healthy
@@ -288,7 +288,7 @@ services:
       start_period: 60s
 
   moonlight-pay:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       pay:
         condition: service_healthy

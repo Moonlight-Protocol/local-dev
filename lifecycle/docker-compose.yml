@@ -43,7 +43,7 @@ services:
       retries: 5
 
   setup:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       stellar:
         condition: service_healthy
@@ -117,7 +117,7 @@ services:
       DATABASE_URL: postgresql://admin:devpass@db:5432/lifecycle_db
 
   test-runner:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       provider:
         condition: service_started

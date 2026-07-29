@@ -85,7 +85,7 @@ services:
       OTEL_EXPORTER_OTLP_PROTOCOL: "http/protobuf"
 
   test-runner:
-    image: denoland/deno:latest
+    image: denoland/deno:2.7.9
     depends_on:
       provider:
         condition: service_started
