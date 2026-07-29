@@ -3,7 +3,7 @@
 # The engine shells out to the stellar CLI + stellar-registry plugin, so a
 # rust stage builds those once; runtime is the pinned deno image.
 
-FROM rust:1.86-slim AS cli
+FROM rust:1.93-slim AS cli
 RUN apt-get update && apt-get install -y --no-install-recommends git curl pkg-config libssl-dev libdbus-1-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 ARG STELLAR_CLI_VERSION=23.1.4
 RUN curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${STELLAR_CLI_VERSION}/stellar-cli-${STELLAR_CLI_VERSION}-x86_64-unknown-linux-gnu.tar.gz" \
