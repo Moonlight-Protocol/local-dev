@@ -24,7 +24,13 @@ export async function deposit(
   options: DepositOptions = {},
 ): Promise<void> {
   const keypair = Keypair.fromSecret(secretKey);
-  const totalAmount = fromDecimals(amount + DEPOSIT_FEE, 7);
+  // Clamp the float sum before fromDecimals: e.g. 46.61 + 0.05 =
+  // 46.660000000000004, which trips fromDecimals' 7-decimal limit (same trap
+  // fail-inject.ts documents). Integer amounts never hit this.
+  const totalAmount = fromDecimals(
+    Number((amount + DEPOSIT_FEE).toFixed(7)),
+    7,
+  );
   const depositAmount = fromDecimals(amount, 7);
 
   // 1. Setup UTXO account and reserve 1 UTXO

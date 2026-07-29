@@ -1,0 +1,33 @@
+# Override for running an ISOLATED synthetic-traffic proving stack alongside
+# the main local-dev stack (custom host ports, dedicated compose project so
+# nothing collides with up.sh's containers):
+#
+#   STELLAR_QUICKSTART_IMAGE=<from test.sh/CI> \
+#   docker compose -p syntraf \
+#     -f docker-compose.pos-instant.yml \
+#     -f synthetic-traffic/compose-ports.yml \
+#     up -d stellar db jaeger setup provider council pay
+#
+# Engine env against this stack:
+#   STELLAR_RPC_URL=http://localhost:8100/soroban/rpc
+#   FRIENDBOT_URL=http://localhost:8100/friendbot
+#   HORIZON_URL=http://localhost:8100
+#   PROVIDER_URL=http://localhost:3110
+#   COUNCIL_URL=http://localhost:3115
+#   PAY_URL=http://localhost:3125
+services:
+  stellar:
+    ports:
+      - "8100:8000"
+  provider:
+    ports:
+      - "3110:3000"
+  council:
+    ports:
+      - "3115:8080"
+  pay:
+    ports:
+      - "3125:3025"
+  db:
+    ports:
+      - "5642:5432"
