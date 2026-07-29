@@ -222,7 +222,7 @@ services:
         echo "Installing dependencies..."
         deno install
         echo "Building..."
-        deno task build
+        deno task build -- --production
         echo "Serving on port 3020..."
         exec deno task serve
     environment:
@@ -269,7 +269,7 @@ services:
         echo "Installing dependencies..."
         deno install
         echo "Building (includes WASM download)..."
-        deno task build
+        deno task build -- --production
         echo "Serving on port 3030..."
         exec deno task serve
     environment:
@@ -315,7 +315,7 @@ services:
         echo "Installing dependencies..."
         deno install
         echo "Building..."
-        deno task build
+        deno task build -- --production
         echo "Serving on port 3050..."
         exec deno task serve
     environment:
