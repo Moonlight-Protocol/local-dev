@@ -270,20 +270,29 @@ async function main() {
 
   const keys = await deriveRecordingRunKeys(masterSecret, runId);
 
-  console.log("Funding accounts via Friendbot...");
-  Deno.env.set("FRIENDBOT_URL", friendbot);
-  const fundResults = await fundAccounts([
-    keys.admin.publicKey,
-    keys.pp.publicKey,
-    keys.alice.primary.publicKey,
-    keys.bob.primary.publicKey,
-  ]);
-  console.log(formatResults(fundResults));
+  if (target === "mainnet") {
+    // Mainnet has no Friendbot. The four deterministic accounts (admin, pp,
+    // alice, bob) must be pre-funded with real XLM out of band before the run.
+    console.log(
+      "TARGET=mainnet — skipping Friendbot funding. Ensure admin/pp/alice/bob " +
+        "are pre-funded (see keys.txt for the addresses).",
+    );
+  } else {
+    console.log("Funding accounts via Friendbot...");
+    Deno.env.set("FRIENDBOT_URL", friendbot);
+    const fundResults = await fundAccounts([
+      keys.admin.publicKey,
+      keys.pp.publicKey,
+      keys.alice.primary.publicKey,
+      keys.bob.primary.publicKey,
+    ]);
+    console.log(formatResults(fundResults));
 
-  const failed = fundResults.filter((r) => r.status === "FAILED");
-  if (failed.length > 0) {
-    console.error(`\n${failed.length} account(s) failed to fund. Aborting.`);
-    Deno.exit(1);
+    const failed = fundResults.filter((r) => r.status === "FAILED");
+    if (failed.length > 0) {
+      console.error(`\n${failed.length} account(s) failed to fund. Aborting.`);
+      Deno.exit(1);
+    }
   }
 
   await ensureDir(outputDir);
