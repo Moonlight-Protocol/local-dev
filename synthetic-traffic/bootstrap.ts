@@ -31,7 +31,7 @@ import {
   registerContract,
   WASM_NAMES,
 } from "./registry.ts";
-import { discordAlert, friendbotFund } from "./funding.ts";
+import { friendbotFund } from "./funding.ts";
 import {
   addCouncilChannel,
   addCouncilJurisdiction,
@@ -198,7 +198,6 @@ export async function bootstrapCouncil(
     formedAtDay: day,
   };
   state.councils[spec.key] = councilState;
-  await discordAlert(env, `council formed: ${spec.name} (${authId})`);
   return councilState;
 }
 
