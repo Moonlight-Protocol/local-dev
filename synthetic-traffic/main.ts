@@ -58,6 +58,12 @@ import { warmupService } from "./platform.ts";
 const MAX_ENTITY_CONNECTS_PER_TICK = 25;
 const MAX_PROVIDERS_PER_TICK = 3;
 
+/** Consecutive failed ticks before the stuck alert fires (3 ticks ~= 15 min
+ * at the deployed 5-min cadence), and how many further failed ticks between
+ * re-alerts (12 ~= hourly) so a wedged engine pages without spamming. */
+const STUCK_ALERT_TICKS = 3;
+const REALERT_TICKS = 12;
+
 async function reconcileRoster(
   env: ReturnType<typeof loadEngineEnv>,
   ring: KeyRing,
@@ -382,11 +388,36 @@ async function main() {
   const ring = await KeyRing.open(env.masterSecret);
   const once = (Deno.env.get("SYNTRAF_ONCE") ?? "false") === "true";
 
+  // A lone failed tick is routine testnet noise, but a streak means the
+  // engine is stuck (bootstrap/reconcile throws before any traffic runs and
+  // none of the batch/runway/reset alerts ever fire), so the streak itself
+  // must page: first at STUCK_ALERT_TICKS, then every REALERT_TICKS while
+  // the condition holds, and once more on recovery.
+  let failStreak = 0;
   while (true) {
     try {
       await tick(env, ring);
+      if (failStreak >= STUCK_ALERT_TICKS) {
+        await discordAlert(
+          env,
+          `engine recovered after ${failStreak} consecutive failed ticks`,
+        );
+      }
+      failStreak = 0;
     } catch (err) {
-      console.error(`[engine] tick failed: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      console.error(`[engine] tick failed: ${message}`);
+      failStreak += 1;
+      if (
+        failStreak === STUCK_ALERT_TICKS ||
+        (failStreak > STUCK_ALERT_TICKS &&
+          (failStreak - STUCK_ALERT_TICKS) % REALERT_TICKS === 0)
+      ) {
+        await discordAlert(
+          env,
+          `engine stuck: ${failStreak} consecutive ticks failed, latest: ${message}`,
+        );
+      }
     }
     if (once) break;
     const jitter = env.tickMs * (0.85 + Math.random() * 0.3);
