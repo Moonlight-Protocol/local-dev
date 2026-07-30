@@ -39,6 +39,7 @@ import { withdraw } from "../lib/client/withdraw.ts";
 import { registerEntity } from "../lib/client/register-entity.ts";
 import { sdkTracer, withE2ESpan, writeTraceIds } from "../lib/client/tracer.ts";
 import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
+import { cleanupOwnedCouncils } from "./cleanup-councils.ts";
 
 // ─── Events-capture contract ────────────────────────────────────────
 /**
@@ -663,6 +664,23 @@ export async function main() {
   // ── 12. Write trace IDs ───────────────────────────────────────────
   console.log("\n[12/12] Finalize");
   await writeTraceIds();
+
+  // ── Cleanup — de-list e2e councils ────────────────────────────────
+  // Loud but non-fatal: a failed cleanup must not turn a passed payment
+  // flow into a failed suite, but it must show in the logs.
+  console.log("\n[cleanup] De-list e2e councils");
+  try {
+    await cleanupOwnedCouncils(
+      COUNCIL_URL,
+      await walletAuth(COUNCIL_URL, "/api/v1/admin/auth", admin),
+    );
+  } catch (err) {
+    console.error(
+      `  WARNING: council cleanup failed, this run's council stays listed on the network dashboard: ${
+        (err as Error).message
+      }`,
+    );
+  }
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n✅ Testnet E2E passed in ${elapsed}s`);
