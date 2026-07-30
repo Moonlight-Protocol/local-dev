@@ -11,9 +11,16 @@ RUN curl -fsSL "https://github.com/stellar/stellar-cli/releases/download/v${STEL
 RUN cargo install --locked --git https://github.com/stellar-registry/cli stellar-registry-cli --root /usr/local
 
 FROM denoland/deno:2.7.9
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl && rm -rf /var/lib/apt/lists/*
+# libdbus-1-3: the stellar release binary links libdbus-1.so.3 (secure-store
+# support); the builder has it via libdbus-1-dev but this stage must ship it.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates curl libdbus-1-3 && rm -rf /var/lib/apt/lists/*
 COPY --from=cli /usr/local/bin/stellar /usr/local/bin/stellar
 COPY --from=cli /usr/local/bin/stellar-registry /usr/local/bin/stellar-registry
+# Both binaries must start in THIS stage, or the engine bricks at its first
+# CLI shell-out hours into runtime; a missing shared lib fails the build here.
+# `stellar registry` goes through the CLI's plugin discovery, the same path
+# the engine uses (stellar-registry has no --version flag, only subcommands).
+RUN stellar --version && stellar registry --help
 WORKDIR /app
 COPY lib/ lib/
 COPY synthetic-traffic/ synthetic-traffic/
