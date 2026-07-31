@@ -11,6 +11,7 @@ import { type BrowserContext } from "@playwright/test";
 import {
   addLocalNetwork,
   setupFreighterAccount,
+  switchToMainnet,
   switchToTestnet,
 } from "../../../playwright/fixtures/freighter";
 
@@ -109,9 +110,9 @@ export async function setupFreighterForKyc(
     await addLocalNetwork(page);
   } else if (network === "testnet") {
     await switchToTestnet(page);
+  } else if (network === "mainnet") {
+    await switchToMainnet(page);
   }
-  // mainnet: leave Freighter on its default Public network — mirrors the
-  // createUserContext path, which also does not switch for mainnet.
   await page.close();
   return { extensionId };
 }

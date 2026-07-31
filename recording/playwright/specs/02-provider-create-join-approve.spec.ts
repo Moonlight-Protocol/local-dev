@@ -77,11 +77,13 @@ test("02 — provider create + join + approve", async () => {
     await typeSlowly(providerPage.locator("#pp-email"), PROVIDER_EMAIL);
     await clickWithPause(providerPage.locator("#next-btn"));
 
-    // Beat 3 — fund PP operator. 10 XLM (the prior default) is insufficient
-    // for testnet Soroban resource fees on `transact`, which simulate to
-    // ~100 XLM per bundle. Fund 500 so the operator can pay several bundles.
+    // Beat 3 — fund the PP operator's OpEx account (demo beat). Phase 02 itself
+    // never spends the OpEx — the join/approve/add_provider beats are all
+    // admin-signed. The OpEx is only drawn on in phase 03 (bundle resource
+    // fees). On mainnet, seed a small amount here and top the OpEx up out of
+    // band before phase 03 rather than moving real XLM at testnet scale.
     await providerPage.waitForSelector("#fund-amount", { timeout: 15_000 });
-    await typeSlowly(providerPage.locator("#fund-amount"), "500");
+    await typeSlowly(providerPage.locator("#fund-amount"), "10");
     await withWalletApproval(ppCtx.context, providerPage, async () => {
       await clickWithPause(providerPage.locator("#fund-btn"));
     });
