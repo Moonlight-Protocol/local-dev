@@ -1,6 +1,6 @@
 # Recording rig — Playwright specs
 
-Per-section silent video recordings for the Tranche 2 demo. Each spec produces a
+Per-section silent video recordings for the Tranche 3 demo. Each spec produces a
 `.webm` under `recording/runs/<RUN_ID>/videos/<section>/`. Audio + subtitles are
 added in post.
 

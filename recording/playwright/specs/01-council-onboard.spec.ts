@@ -39,7 +39,7 @@ import { RECORDING_CONTEXT_OPTIONS } from "../fixtures/recording-context";
 
 const COUNCIL_NAME = getCouncilName();
 const COUNCIL_DESCRIPTION =
-  "Privacy-preserving payments council for the Tranche 2 demo recording.";
+  "Privacy-preserving payments council for the Tranche 3 demo recording.";
 const COUNCIL_EMAIL = "demo@moonlight.test";
 const JURISDICTION = getJurisdiction();
 

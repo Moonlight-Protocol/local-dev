@@ -190,7 +190,7 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
   let aliceHandle: WalletContextHandle | undefined;
 
   try {
-    const bobMlxdr = await showReceive(bob.wallet, { amount: "25" });
+    const bobMlxdr = await showReceive(bob.wallet, { amount: "15" });
     if (!bobMlxdr || bobMlxdr.trim().length === 0) {
       throw new Error("Bob's MLXDR was not captured");
     }
@@ -216,18 +216,18 @@ test("03 — private transfer (Bob receive → Alice deposit + send → Alice wi
     });
     aliceHandle = alice.handle;
 
-    await deposit(alice.wallet, { amount: "100" });
+    await deposit(alice.wallet, { amount: "20" });
 
     await send(alice.wallet, {
       receiverMlxdr: bobMlxdr,
-      amount: "25",
+      amount: "15",
     });
 
     await closeReceiveConfirmation(bob.wallet);
-    await waitForConfidentialBalance(bob.wallet, 24.99);
+    await waitForConfidentialBalance(bob.wallet, 14.99);
 
     await withdraw(bob.wallet, {
-      amount: "20",
+      amount: "10",
       destinationAddress: env.BOB_PK,
     });
 
