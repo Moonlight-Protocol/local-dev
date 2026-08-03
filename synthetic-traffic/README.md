@@ -46,7 +46,12 @@ bookkeeping, not identities.
 - **Reset-aware.** A ledger-sequence regression (testnet wipe, local recreate)
   archives state, alerts, and re-bootstraps from a fresh genesis.
 - **Dead-man alerting.** Silent in normal operation; the Discord webhook fires
-  on low funding runway, network resets, and all-actions-failed ticks.
+  on low funding runway, network resets, and all-actions-failed ticks. The
+  all-failed page needs evidence, not a ratio: a tick pages on its own only once
+  it ran `MIN_ALL_FAILED_ACTIONS` real actions, and thinner ticks page after
+  `ALL_FAILED_TICKS` consecutive all-failed ticks, then hourly while the outage
+  lasts (`alerts.ts`, unit-tested with `deno task test`). One transient on-chain
+  failure on a one-action off-peak tick is noise, not an outage.
 
 ## Local proving (before any testnet run)
 

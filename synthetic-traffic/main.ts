@@ -20,6 +20,7 @@ import {
   emptyState,
   type EngineState,
   entityKey,
+  type EntityState,
   loadState,
   saveState,
 } from "./state.ts";
@@ -43,6 +44,11 @@ import {
 } from "./actors.ts";
 import { describeDrop, firstDepositGateFactory, planTick } from "./traffic.ts";
 import { discordAlert, ensureRunway } from "./funding.ts";
+import {
+  type AllFailedState,
+  emptyAllFailedState,
+  evaluateAllFailed,
+} from "./alerts.ts";
 import {
   aggregatorPayment,
   ensurePayMirror,
@@ -171,6 +177,16 @@ async function reconcileRoster(
   }
 }
 
+/** What the tick actually ran: `attempted` counts the actions the engine got
+ * as far as executing (batch actions whose actor existed, plus aggregator
+ * payments), `failures` how many of those threw. The caller folds these into
+ * the all-failed alert policy — planned-but-skipped actions are deliberately
+ * absent from both, so the ratio describes real attempts only. */
+interface TrafficOutcome {
+  attempted: number;
+  failures: number;
+}
+
 async function runTraffic(
   env: ReturnType<typeof loadEngineEnv>,
   ring: KeyRing,
@@ -178,7 +194,7 @@ async function runTraffic(
   seed: string,
   nowDay: number,
   nowMs: number,
-): Promise<void> {
+): Promise<TrafficOutcome> {
   const slots = providerSlots(seed);
   const gate = firstDepositGateFactory(seed, slots, nowDay);
   const planned = planTick(
@@ -196,12 +212,22 @@ async function runTraffic(
   const dropNote = describeDrop(planned.length, batch.length);
   if (dropNote) console.log(`[traffic] ${dropNote}`);
 
+  let attempted = 0;
   let failures = 0;
   for (const a of batch) {
     const provider = state.providers[a.providerKey];
     const council = state.councils[provider.councilKey];
     const actor = state.entities[entityKey(a.providerKey, a.entityIdx)];
     if (!actor) continue;
+    // Resolve every skip condition before counting the attempt, so the
+    // all-failed ratio only ever describes actions the engine really ran.
+    let receiver: EntityState | undefined;
+    if (a.type === "send") {
+      receiver =
+        state.entities[entityKey(a.receiverProviderKey!, a.receiverIdx!)];
+      if (!receiver) continue;
+    }
+    attempted++;
     try {
       if (a.type === "deposit") {
         await actDeposit(
@@ -215,15 +241,12 @@ async function runTraffic(
           a.amount,
         );
       } else if (a.type === "send") {
-        const receiver =
-          state.entities[entityKey(a.receiverProviderKey!, a.receiverIdx!)];
-        if (!receiver) continue;
         await actSend(
           env,
           ring,
           state,
           actor,
-          receiver,
+          receiver!,
           council,
           provider.publicKey,
           a.assetCode,
@@ -274,6 +297,7 @@ async function runTraffic(
         const n = rng.poisson(lambda);
         for (let k = 0; k < n; k++) {
           const amount = Number(rng.lognormal(1.2, 0.6, 0.5, 3).toFixed(2));
+          attempted++;
           try {
             await aggregatorPayment(
               env,
@@ -301,12 +325,7 @@ async function runTraffic(
     }
   }
 
-  if (batch.length > 0 && failures === batch.length) {
-    await discordAlert(
-      env,
-      `every action this tick failed (${failures}/${batch.length}) — platform down or config broken?`,
-    );
-  }
+  return { attempted, failures };
 }
 
 async function runwayCheck(
@@ -330,7 +349,7 @@ async function runwayCheck(
 async function tick(
   env: ReturnType<typeof loadEngineEnv>,
   ring: KeyRing,
-): Promise<void> {
+): Promise<TrafficOutcome> {
   let state = loadState(env.stateFile);
 
   if (state && state.networkPassphrase !== env.networkPassphrase) {
@@ -366,10 +385,18 @@ async function tick(
 
   await reconcileRoster(env, ring, state, ring.rngSeed, nowDay);
   await runwayCheck(env, ring, state);
-  await runTraffic(env, ring, state, ring.rngSeed, nowDay, nowMs);
+  const outcome = await runTraffic(
+    env,
+    ring,
+    state,
+    ring.rngSeed,
+    nowDay,
+    nowMs,
+  );
 
   state.lastLedgerSeq = Math.max(state.lastLedgerSeq, 0);
   saveState(env.stateFile, state);
+  return outcome;
 }
 
 async function main() {
@@ -393,10 +420,21 @@ async function main() {
   // none of the batch/runway/reset alerts ever fire), so the streak itself
   // must page: first at STUCK_ALERT_TICKS, then every REALERT_TICKS while
   // the condition holds, and once more on recovery.
+  // The two paging paths are exclusive per tick: a tick that throws never
+  // reaches the all-failed evaluation, and a tick that completes never counts
+  // toward the stuck streak.
   let failStreak = 0;
+  let allFailed: AllFailedState = emptyAllFailedState();
   while (true) {
     try {
-      await tick(env, ring);
+      const outcome = await tick(env, ring);
+      const verdict = evaluateAllFailed(
+        allFailed,
+        outcome.attempted,
+        outcome.failures,
+      );
+      allFailed = verdict.state;
+      if (verdict.alert) await discordAlert(env, verdict.alert);
       if (failStreak >= STUCK_ALERT_TICKS) {
         await discordAlert(
           env,
