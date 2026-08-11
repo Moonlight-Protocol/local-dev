@@ -159,6 +159,7 @@ services:
       DATABASE_URL: postgresql://admin:devpass@db:5432/pay_platform_db
       PORT: "3025"
       MODE: development
+      NETWORK: local
       SERVICE_DOMAIN: pay
       SERVICE_AUTH_SECRET: test-auth-secret
       CHALLENGE_TTL: "300000"
