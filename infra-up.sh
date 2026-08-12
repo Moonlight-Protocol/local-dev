@@ -354,6 +354,7 @@ else
       NETWORK=standalone \
       NETWORK_FEE=1000000 \
       STELLAR_RPC_URL="http://localhost:${STELLAR_RPC_PORT}/soroban/rpc" \
+      STELLAR_HORIZON_URL="http://localhost:${STELLAR_RPC_PORT}" \
       TRANSACTION_EXPIRATION_OFFSET=1000 \
       SERVICE_DOMAIN=localhost \
       SERVICE_AUTH_SECRET="$STANDIN_SAS" \
