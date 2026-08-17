@@ -48,6 +48,61 @@ export function submitBundle(
   });
 }
 
+/**
+ * Polls a bundle until it reaches the expected status. Throws if it lands
+ * in a different terminal status or the timeout passes. Used by the
+ * send-loop injections to assert their bundle's deliberate outcome
+ * (FAILED / EXPIRED) before moving on.
+ */
+export function waitForBundleStatus(
+  jwt: string,
+  bundleId: string,
+  config: Config,
+  expectedStatus: "COMPLETED" | "FAILED" | "EXPIRED",
+  timeoutMs = 60_000,
+  pollIntervalMs = 2_000,
+): Promise<void> {
+  return withE2ESpan("bundle.waitStatus", async () => {
+    const start = Date.now();
+    const url = config.urlShape === "single-pp"
+      ? `${config.providerUrl}/api/v1/provider/entity/bundles/${bundleId}`
+      : `${config.providerUrl}/api/v1/providers/${config.ppPublicKey}/entity/bundles/${bundleId}`;
+
+    while (Date.now() - start < timeoutMs) {
+      const res = await fetch(url, {
+        headers: { "Authorization": `Bearer ${jwt}` },
+      });
+
+      if (res.status === 429) {
+        await res.text();
+        await new Promise((r) => setTimeout(r, pollIntervalMs));
+        continue;
+      }
+      if (!res.ok) {
+        throw new Error(
+          `Bundle poll failed: ${res.status} ${await res.text()}`,
+        );
+      }
+
+      const data = await res.json();
+      const status = data.data.status;
+      if (status === expectedStatus) return;
+      if (
+        status === "COMPLETED" || status === "FAILED" || status === "EXPIRED"
+      ) {
+        throw new Error(
+          `Bundle ${bundleId} landed ${status}, expected ${expectedStatus}`,
+        );
+      }
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+
+    throw new Error(
+      `Bundle ${bundleId} did not reach ${expectedStatus} within ${timeoutMs}ms`,
+    );
+  });
+}
+
 export function waitForBundle(
   jwt: string,
   bundleId: string,

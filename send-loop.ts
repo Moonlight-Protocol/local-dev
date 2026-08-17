@@ -3,7 +3,8 @@
  *
  * One invocation walks every country registered in .local-dev-state. For
  * each country the loop runs a full cycle: deposit → COUNT sends → one
- * FAILED bundle (overspend) → one EXPIRED bundle (force-expire) → withdraw.
+ * FAILED bundle (invalid spend signature, fails at execution) → one EXPIRED
+ * bundle (already-expired spend signature, expires at admission) → withdraw.
  *
  * Prereqs: ./up.sh → ./setup-c.sh → ./setup-pp.sh
  *
@@ -16,12 +17,13 @@
  *   STATE_FILE      default ./.local-dev-state
  */
 import { Keypair } from "stellar-sdk";
-import postgres from "postgres";
 import { authenticate } from "./lib/client/auth.ts";
+import { waitForBundleStatus } from "./lib/client/bundle.ts";
 import { loadConfig } from "./lib/client/config.ts";
 import { deposit } from "./lib/client/deposit.ts";
 import { prepareReceive } from "./lib/client/receive.ts";
 import { send } from "./lib/client/send.ts";
+import { injectExpiringBundle } from "./lib/client/expire-inject.ts";
 import { injectFailingBundle } from "./lib/client/fail-inject.ts";
 import { withdraw } from "./lib/client/withdraw.ts";
 import { registerEntity } from "./lib/client/register-entity.ts";
@@ -217,58 +219,6 @@ function loadState(): State {
   };
 }
 
-/**
- * Force-expires the given bundles by writing EXPIRED to PostgreSQL and
- * back-dating their TTL so the mempool's next TTL-check tick (default 5s)
- * sees the past TTL and evicts them from the in-process mempool via the
- * platform's own purge path. Replaces the now-deprecated admin HTTP endpoint
- * POST /api/v1/dashboard/bundles/expire — there is intentionally no HTTP
- * admin-expire surface.
- *
- * Caveats:
- *   - There is a short race window: between the UPDATE landing and the
- *     mempool's next TTL sweep, the executor may still pull the bundle from
- *     the in-memory mempool and try to settle it. On settlement success
- *     the executor's status-transition is gated on PENDING/PROCESSING so our
- *     EXPIRED stands. On settlement failure the executor's failure-handler
- *     writes FAILED unconditionally, which is the same kind of terminal
- *     non-COMPLETED state INJECT_EXPIRE is designed to produce — so for the
- *     test-injection purpose either outcome is acceptable. A clean DB-only
- *     guarantee would require in-process mempool access we deliberately
- *     don't expose over HTTP.
- *   - Connects to localhost:5442 by default (the host-side PG port from
- *     local-dev's compose). Override with DATABASE_URL.
- */
-async function forceExpireBundles(
-  bundleIds: string[],
-  _state: State,
-): Promise<void> {
-  if (bundleIds.length === 0) return;
-  const databaseUrl = Deno.env.get("DATABASE_URL") ??
-    "postgresql://admin:devpass@localhost:5442/provider_platform_db";
-  const db = postgres(databaseUrl);
-  try {
-    const updated = await db<{ id: string }[]>`
-      UPDATE operations_bundles
-         SET status = 'EXPIRED',
-             ttl = NOW() - INTERVAL '1 hour',
-             updated_at = NOW()
-       WHERE id IN ${db(bundleIds)}
-         AND status IN ('PENDING', 'PROCESSING')
-         AND deleted_at IS NULL
-      RETURNING id
-    `;
-    console.log(
-      `  [INJECT_EXPIRE] force-expired ${updated.length} of ${bundleIds.length} bundle(s) via DB ` +
-        `(TTL back-dated so the mempool TTL-check sweep purges in ≤${
-          Number(Deno.env.get("MEMPOOL_TTL_CHECK_INTERVAL_MS") ?? 5000)
-        }ms)`,
-    );
-  } finally {
-    await db.end({ timeout: 5 });
-  }
-}
-
 async function fund(friendbotUrl: string, publicKey: string): Promise<void> {
   const res = await fetch(`${friendbotUrl}?addr=${publicKey}`);
   if (!res.ok && res.status !== 400) {
@@ -352,11 +302,9 @@ async function runCycleForPp(
     [country],
   );
 
-  // Deposit covers normal sends + the expire-injection sends (which still
-  // reserve UTXOs even though the bundle is force-expired before it settles).
-  // The fail-injection bundle deliberately overspends, so we don't budget it.
-  const expireExtras = INJECT_EXPIRE ? 1 : 0;
-  const depositAmount = SEND_AMOUNT * (COUNT + expireExtras) + DEPOSIT_BUFFER;
+  // Deposit covers the normal sends. Both injections deposit their own
+  // small amounts and never draw on this balance.
+  const depositAmount = SEND_AMOUNT * COUNT + DEPOSIT_BUFFER;
   console.log(`[3/6] ${senderName} depositing ${depositAmount} XLM`);
   await deposit(alicia.secret(), depositAmount, aliciaJwt, config);
 
@@ -384,44 +332,41 @@ async function runCycleForPp(
   }
 
   if (INJECT_FAIL) {
-    // Deposit a small amount, then submit a SPEND for that UTXO with a
-    // CREATE for 1 stroop more. Server admits (UTXO exists, signatures
-    // valid), executor sim rejects because sum(SPEND) != sum(CREATE).
-    console.log("\n[5/6] Injecting one FAILED bundle (2× overspend)");
+    // Deposit a small amount, then submit a balanced SPEND signed with the
+    // wrong UTXO keypair. Admission accepts it (sums are fine, signature is
+    // present); the on-chain contract rejects the signature at execution.
+    // Wait for the FAILED landing before moving on — while this bundle is
+    // pending, anything sharing its slot would fail with it.
+    console.log("\n[5/6] Injecting one FAILED bundle (invalid signature)");
     try {
       const bundleId = await injectFailingBundle(
         alicia.secret(),
         aliciaJwt,
         config,
       );
-      console.log(`  submitted ${bundleId}, expecting FAILED at sim`);
+      console.log(`  submitted ${bundleId}, waiting for FAILED…`);
+      await waitForBundleStatus(aliciaJwt, bundleId, config, "FAILED");
+      console.log(`  landed FAILED as expected`);
     } catch (err) {
       console.log(`  fail injection raised: ${(err as Error).message}`);
     }
   }
 
   if (INJECT_EXPIRE) {
-    // Submit one extra bundle without waiting, then immediately admin-expire
-    // it via the now-deprecated POST /dashboard/bundles/expire path —
-    // currently a no-op stub, pending a DB-direct rewrite.
-    console.log("\n[5/6] Injecting one EXPIRED bundle (force-expire)");
+    // Submit a balanced bundle whose spend signature has already expired.
+    // The platform derives bundle TTL from signature expirations, so it is
+    // expired at admission through the platform's ordinary TTL path — no
+    // database access from this script.
+    console.log("\n[5/6] Injecting one EXPIRED bundle (expired signature)");
     try {
-      const receiverOps = await prepareReceive(
-        roberto.secret(),
-        SEND_AMOUNT,
-        config,
-      );
-      const bundleId = await send(
+      const bundleId = await injectExpiringBundle(
         alicia.secret(),
-        receiverOps,
-        SEND_AMOUNT,
         aliciaJwt,
         config,
-        undefined,
-        { waitForCompletion: false },
       );
-      console.log(`  submitted ${bundleId}, force-expiring…`);
-      await forceExpireBundles([bundleId], state);
+      console.log(`  submitted ${bundleId}, waiting for EXPIRED…`);
+      await waitForBundleStatus(aliciaJwt, bundleId, config, "EXPIRED", 15_000);
+      console.log(`  landed EXPIRED as expected`);
     } catch (err) {
       console.log(`  expire injection raised: ${(err as Error).message}`);
     }
