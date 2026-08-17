@@ -145,18 +145,24 @@ for d in \
   fi
 done
 
-# --- Stop the Stellar quickstart container started by `stellar container start local`.
-# This is the same container up.sh launches via the Stellar CLI. Without this
-# step, `down → up` reuses the same ledger state — which masks bugs in
-# scripts that assume a fresh ledger and breaks deterministic deploys
-# (the contracts setup-c.sh deploys at fixed addresses already exist).
-if command -v stellar >/dev/null 2>&1; then
+# --- Stop the Stellar quickstart container. Without this step, `down → up`
+# reuses the same ledger state — which masks bugs in scripts that assume a
+# fresh ledger and breaks deterministic deploys (the contracts setup-c.sh
+# deploys at fixed addresses already exist).
+#
+# The default stack's container is `stellar-local`, managed by
+# `stellar container start local`. A parallel stack (see README "Running a
+# parallel/isolated stack") runs its own quickstart under a different name
+# and MUST set STELLAR_CONTAINER to it, so this teardown never touches the
+# shared stellar-local another stack may depend on.
+STELLAR_CONTAINER="${STELLAR_CONTAINER:-stellar-local}"
+if [ "$STELLAR_CONTAINER" = "stellar-local" ] && command -v stellar >/dev/null 2>&1; then
   stellar container stop local >/dev/null 2>&1 && info "Stopped Stellar container (stellar-local)" || true
 fi
-# Belt-and-braces: also force-remove anything that matches the
-# stellar-local container name in case the CLI subcommand failed.
-if docker ps -a --format '{{.Names}}' | grep -q "^stellar-local$"; then
-  docker rm -f stellar-local >/dev/null 2>&1 && info "Force-removed stellar-local container" || true
+# Belt-and-braces: also force-remove the container by name in case the CLI
+# subcommand failed (or the container was started manually).
+if docker ps -a --format '{{.Names}}' | grep -q "^${STELLAR_CONTAINER}$"; then
+  docker rm -f "$STELLAR_CONTAINER" >/dev/null 2>&1 && info "Force-removed Stellar container ($STELLAR_CONTAINER)" || true
 fi
 
 # --- Tear down lifecycle Docker Compose if running ---

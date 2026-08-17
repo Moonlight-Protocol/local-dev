@@ -75,7 +75,7 @@ set -a; source ~/my-stack.env; set +a
 
 Playwright's `playwright/helpers/urls.ts` reads the same `*_PORT` env vars, so the override file works for tests too.
 
-**Stellar and Jaeger are shared between stacks.** `STELLAR_RPC_PORT` (8000) and `JAEGER_OTLP_PORT` (4318) default to the same values across stacks, and `infra-up.sh` reuses an already-running container at those ports instead of starting a new one. That means parallel stacks share one Stellar ledger and one Jaeger trace store. To isolate them, override `JAEGER_CONTAINER`, `JAEGER_UI_PORT`, and start your own Stellar quickstart on a different `STELLAR_RPC_PORT`.
+**Stellar and Jaeger are shared between stacks.** `STELLAR_RPC_PORT` (8000) and `JAEGER_OTLP_PORT` (4318) default to the same values across stacks, and `infra-up.sh` reuses an already-running container at those ports instead of starting a new one. That means parallel stacks share one Stellar ledger and one Jaeger trace store. To isolate them, override `JAEGER_CONTAINER`, `JAEGER_UI_PORT`, and start your own Stellar quickstart on a different `STELLAR_RPC_PORT` under your own container name — and set `STELLAR_CONTAINER` to that name in your override file, so `down.sh` tears down **your** quickstart instead of the shared `stellar-local` (which another live stack may depend on).
 
 Full list of overrides: `infra-up.sh:42-54` (ports + container names) and the jsdoc headers of `setup-c.ts`, `setup-pp.ts`, `setup-pay.ts` (URLs).
 
