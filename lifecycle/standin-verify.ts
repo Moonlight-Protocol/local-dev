@@ -58,7 +58,7 @@ import { exerciseCouncilSpans } from "../lib/exercise-cp-spans.ts";
  * Strict-order, strict-value events this script should emit on each
  * subscriber when run through `testnet/events-capture/harness.ts`.
  * Identical shape to testnet/main.ts because the bundle flow is identical;
- * only ppLabel differs ("Testnet Verify PP" vs "Testnet E2E PP").
+ * only ppLabel differs ("TheAhaCo Provider" vs "Testnet E2E PP").
  *
  * Provenance: PM-acked Phase 0 catalogue at
  * /tmp/add-events-capture-framework-1/expected/lifecycle-testnet-verify.json.
@@ -68,12 +68,12 @@ export const EXPECTED_EVENTS = {
     "$PP_PK": [
       {
         kind: "channel.provider_added",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "mempool.bundle_added",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {
           weight: 2,
           newSlot: true,
@@ -84,22 +84,22 @@ export const EXPECTED_EVENTS = {
       },
       {
         kind: "executor.transaction_submitted",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "verifier.bundle_completed",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "bundle.deposit_completed",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: { depositorAddress: "$ALICE_PK", amount: "100500000" },
       },
       {
         kind: "mempool.bundle_added",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {
           weight: 12,
           newSlot: true,
@@ -110,17 +110,17 @@ export const EXPECTED_EVENTS = {
       },
       {
         kind: "executor.transaction_submitted",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "verifier.bundle_completed",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "mempool.bundle_added",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {
           weight: 21,
           newSlot: true,
@@ -131,17 +131,17 @@ export const EXPECTED_EVENTS = {
       },
       {
         kind: "executor.transaction_submitted",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "verifier.bundle_completed",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: {},
       },
       {
         kind: "bundle.withdraw_completed",
-        scope: { ppPublicKey: "$PP_PK", ppLabel: "Testnet Verify PP" },
+        scope: { ppPublicKey: "$PP_PK", ppLabel: "TheAhaCo Provider" },
         payload: { recipientAddress: "$BOB_PK", amount: "40000000" },
       },
     ],
@@ -392,7 +392,7 @@ export async function main() {
     },
     body: JSON.stringify({
       councilId: channelAuthId,
-      name: `Testnet Verify ${new Date().toISOString().slice(0, 19)}`,
+      name: "TheAhaCo Council",
       description: "Ephemeral council created by testnet-verify.ts",
       contactEmail: "testnet-verify@moonlight.test",
     }),
@@ -437,6 +437,30 @@ export async function main() {
   }
   console.log(`  Channel added (id ${channelDbId})`);
 
+  // ── Step 7b: Admin adds the jurisdictions (same call setup-c.ts makes) ──
+  console.log("  Adding jurisdictions…");
+  for (const j of ["US", "BR", "FR", "UY"]) {
+    const jr = await fetch(
+      `${COUNCIL_URL}/api/v1/council/jurisdictions?councilId=${
+        encodeURIComponent(channelAuthId)
+      }`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${adminCouncilJwt}`,
+        },
+        body: JSON.stringify({ countryCode: j }),
+      },
+    );
+    if (!jr.ok) {
+      throw new Error(
+        `Add jurisdiction ${j} failed: ${jr.status} ${await jr.text()}`,
+      );
+    }
+    console.log(`    + ${j}`);
+  }
+
   // ── Step 8: PP operator authenticates and registers PP ─────────────
   console.log("\n[8/12] PP operator authenticates and registers PP");
   const dashboardJwt = await walletAuth(
@@ -455,8 +479,9 @@ export async function main() {
   const joinPayload = {
     publicKey: ppKeypair.publicKey(),
     councilId: channelAuthId,
-    label: "Testnet Verify PP",
+    label: "TheAhaCo Provider",
     contactEmail: "pp@testnet-verify.moonlight.test",
+    jurisdictions: ["US", "BR", "FR", "UY"],
   };
   const signedEnvelope = await signJoinEnvelope(joinPayload, ppKeypair);
 
@@ -471,8 +496,8 @@ export async function main() {
       body: JSON.stringify({
         councilUrl: COUNCIL_URL,
         councilId: channelAuthId,
-        councilName: "Testnet Verify Council",
-        label: "Testnet Verify PP",
+        councilName: "TheAhaCo Council",
+        label: "TheAhaCo Provider",
         contactEmail: "pp@testnet-verify.moonlight.test",
         signedEnvelope,
       }),
