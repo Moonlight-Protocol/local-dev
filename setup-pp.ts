@@ -1,26 +1,25 @@
 /**
  * Local Dev — Privacy Provider Setup (multi-PP)
  *
- * Registers 12 PPs, one per country across the 3 councils created by
- * setup-c.sh. Each PP goes through the full production join flow against the
- * local stack: register → join request → admin approve → add_provider on
- * chain → wait ACTIVE.
+ * Registers 12 PPs across the 3 councils created by setup-c.sh. Each PP goes
+ * through the full production join flow against the local stack: register →
+ * join request → admin approve → add_provider on chain → wait ACTIVE.
  *
- *   Mercosur (council 1):
- *     Mercado Libre Argentina Provider  (AR)
- *     Mercado Libre Brazil    Provider  (BR)
- *     Mercado Libre Uruguay   Provider  (UY)
- *     Mercado Libre Paraguay  Provider  (PY)
- *   Europe (council 2):
- *     Amazon UK      Provider  (GB)
- *     Amazon France  Provider  (FR)
- *     Amazon Germany Provider  (DE)
- *     Amazon Spain   Provider  (ES)
- *     Amazon Italy   Provider  (IT)
- *   North America (council 3):
- *     Amazon US     Provider  (US)
- *     Amazon Mexico Provider  (MX)
- *     Amazon Canada Provider  (CA)
+ *   US Banks (council 1):
+ *     JPMorgan Chase Provider   (US)
+ *     Bank of America Provider  (US)
+ *     Citibank Provider         (US)
+ *     Wells Fargo Provider      (US)
+ *   EU Banks (council 2):
+ *     BNP Paribas Provider    (FR)
+ *     Deutsche Bank Provider  (DE)
+ *     Santander Provider      (ES)
+ *     ING Provider            (NL)
+ *   Stellar Wallets (council 3):
+ *     Lobstr Provider    (US)
+ *     Freighter Provider (US)
+ *     xBull Provider     (VE)
+ *     Vibrant Provider   (US)
  *
  * Each PP gets a fresh keypair derived deterministically from PP_SECRET +
  * index so re-runs (against a fresh ledger) yield the same pubkeys.
@@ -63,37 +62,37 @@ interface ProviderSpec {
 }
 
 const PROVIDERS: ProviderSpec[] = [
-  // Mercosur
+  // US Banks
   {
-    name: "Mercado Libre Argentina Provider",
+    name: "JPMorgan Chase Provider",
     councilIndex: 0,
-    jurisdiction: "AR",
+    jurisdiction: "US",
   },
   {
-    name: "Mercado Libre Brazil Provider",
+    name: "Bank of America Provider",
     councilIndex: 0,
-    jurisdiction: "BR",
+    jurisdiction: "US",
   },
   {
-    name: "Mercado Libre Uruguay Provider",
+    name: "Citibank Provider",
     councilIndex: 0,
-    jurisdiction: "UY",
+    jurisdiction: "US",
   },
   {
-    name: "Mercado Libre Paraguay Provider",
+    name: "Wells Fargo Provider",
     councilIndex: 0,
-    jurisdiction: "PY",
+    jurisdiction: "US",
   },
-  // Europe
-  { name: "Amazon UK Provider", councilIndex: 1, jurisdiction: "GB" },
-  { name: "Amazon France Provider", councilIndex: 1, jurisdiction: "FR" },
-  { name: "Amazon Germany Provider", councilIndex: 1, jurisdiction: "DE" },
-  { name: "Amazon Spain Provider", councilIndex: 1, jurisdiction: "ES" },
-  { name: "Amazon Italy Provider", councilIndex: 1, jurisdiction: "IT" },
-  // North America
-  { name: "Amazon US Provider", councilIndex: 2, jurisdiction: "US" },
-  { name: "Amazon Mexico Provider", councilIndex: 2, jurisdiction: "MX" },
-  { name: "Amazon Canada Provider", councilIndex: 2, jurisdiction: "CA" },
+  // EU Banks
+  { name: "BNP Paribas Provider", councilIndex: 1, jurisdiction: "FR" },
+  { name: "Deutsche Bank Provider", councilIndex: 1, jurisdiction: "DE" },
+  { name: "Santander Provider", councilIndex: 1, jurisdiction: "ES" },
+  { name: "ING Provider", councilIndex: 1, jurisdiction: "NL" },
+  // Stellar Wallets
+  { name: "Lobstr Provider", councilIndex: 2, jurisdiction: "US" },
+  { name: "Freighter Provider", councilIndex: 2, jurisdiction: "US" },
+  { name: "xBull Provider", councilIndex: 2, jurisdiction: "VE" },
+  { name: "Vibrant Provider", councilIndex: 2, jurisdiction: "US" },
 ];
 
 interface CouncilState {

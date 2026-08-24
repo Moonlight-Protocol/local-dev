@@ -5,9 +5,9 @@
  * channel-auth + privacy-channel contracts, name, and accepted jurisdictions.
  * Drives the full production API surface for every council.
  *
- *   Mercado Libre Mercosur   — AR, BR, UY, PY
- *   Amazon Europe            — GB, FR, DE, ES, IT
- *   Amazon North America     — US, MX, CA
+ *   US Banks         — US
+ *   EU Banks         — FR, DE, ES, NL
+ *   Stellar Wallets  — US, VE
  *
  * Steps per council:
  *   1. Deploy Channel Auth contract (deterministic salt per council index)
@@ -73,16 +73,16 @@ interface CouncilSpec {
 
 const COUNCILS: CouncilSpec[] = [
   {
-    name: "Mercado Libre Mercosur",
-    jurisdictions: ["AR", "BR", "UY", "PY"],
+    name: "US Banks",
+    jurisdictions: ["US"],
   },
   {
-    name: "Amazon Europe",
-    jurisdictions: ["GB", "FR", "DE", "ES", "IT"],
+    name: "EU Banks",
+    jurisdictions: ["FR", "DE", "ES", "NL"],
   },
   {
-    name: "Amazon North America",
-    jurisdictions: ["US", "MX", "CA"],
+    name: "Stellar Wallets",
+    jurisdictions: ["US", "VE"],
   },
 ];
 
