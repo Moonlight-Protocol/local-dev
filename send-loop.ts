@@ -123,6 +123,17 @@ const ENTITY_NAMES_BY_COUNTRY: Record<string, string[]> = {
     "Sebastián",
   ],
   CA: ["Emma", "Liam", "Olivia", "Noah", "Ava", "Ethan", "Isabella", "Mason"],
+  NL: ["Daan", "Sanne", "Lars", "Fleur", "Bram", "Lotte", "Sem", "Julia"],
+  VE: [
+    "María",
+    "José",
+    "Luisa",
+    "Carlos",
+    "Gabriela",
+    "Andrés",
+    "Valentina",
+    "Miguel",
+  ],
 };
 
 interface CouncilEntry {
