@@ -86,7 +86,16 @@ Full list of overrides: `infra-up.sh:42-54` (ports + container names) and the js
 - `e2e/wasms/channel_auth_contract.wasm`
 - `e2e/wasms/privacy_channel.wasm`
 
-These are produced by [`soroban-core`](https://github.com/Moonlight-Protocol/soroban-core)'s release pipeline and are **not checked into local-dev**. Download them from the [soroban-core releases page](https://github.com/Moonlight-Protocol/soroban-core/releases) and place them under `e2e/wasms/`. The released WASMs are the same artifacts deployed on testnet/mainnet — they must match the release, not a local build.
+They come from [`soroban-core`](https://github.com/Moonlight-Protocol/soroban-core) and are **not checked into local-dev** — a fresh clone has no `e2e/wasms/` dir, and `setup-c.sh` fails with `NotFound: … readfile '…/e2e/wasms/channel_auth_contract.wasm'` until they are placed there.
+
+For the **local stack**, either works:
+
+- **Download** the two `.wasm` release artifacts from the soroban-core repository (Releases page), or
+- **Build** them from a soroban-core checkout (`stellar contract build`) and copy them over.
+
+Place both files under `e2e/wasms/`.
+
+For **testnet/mainnet verification** only the released artifacts are valid — they must be the same bytes deployed on those networks, not a local build. The local stack deploys the contracts fresh onto its own ledger, so either source is fine there.
 
 ## Infrastructure vs Application
 
@@ -137,6 +146,8 @@ If you only need to restart infra without regenerating keys, run `./infra-up.sh`
 ```bash
 ./setup-c.sh
 ```
+
+Requires the contract WASMs under `e2e/wasms/` — download or build them first, see [WASM contract artifacts](#wasm-contract-artifacts).
 
 Steps (all production-like — every API call is the one council-console makes):
 
@@ -191,7 +202,7 @@ Requires `setup-c.sh` and `setup-pp.sh` to have run first. Steps:
 
 ```bash
 ./up.sh                          # Keys + infra (single command)
-./setup-c.sh                     # Deploy contracts + create council
+./setup-c.sh                     # Deploy contracts + create council (needs e2e/wasms/ — see "WASM contract artifacts")
 ./setup-pp.sh                    # Register privacy provider
 ./setup-pay.sh                   # Seed pay-platform councils
 ./setup-accounts-extension.sh    # Fund browser extension wallets
